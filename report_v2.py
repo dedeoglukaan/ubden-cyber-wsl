@@ -936,6 +936,14 @@ def pdf(root, filename, meta, steps, hosts, findings, review, executive=False):
         story.append(grid_table(tcells,[doc.width*.24,doc.width*.16,doc.width*.14,doc.width*.46]))
         if len(tech['matches'])>20:
             story.append(P(f"Diğer {len(tech['matches'])-20} eşleşme UBDEN_TECH_PROFILE.json içinde.",st['SmallX']))
+    cve=json.loads((root/'UBDEN_CVE.json').read_text(encoding='utf-8')) if (root/'UBDEN_CVE.json').is_file() else {}
+    if cve and cve.get('items'):
+        story.append(P('NVD CVE adayları — analist doğrulaması gerekir',st['SubX']))
+        story.append(P(cve.get('note','')+f" Sorgulanan platform: {cve.get('queried',0)}; kritik/yüksek aday: {cve.get('critical_high_count',0)}.",st['SmallX']))
+        for it in cve['items']:
+            story.append(P(f"{it['family']} {it['version']} — {it['cve_count']} CVE adayı · {', '.join(it.get('assets',[])[:4])}",st['SmallX'],limit=200))
+            for c in it.get('cves',[])[:6]:
+                story.append(P(f"{c['id']} · CVSS {c.get('cvss') or '?'} {c.get('severity') or ''} — {c.get('summary','')}",st['SmallX'],limit=280))
     story += [P('Yönetici değerlendirmesi',st['SectionX']),P(review.get('analyst_summary') or 'Analist değerlendirmesi henüz eklenmedi. Teslim öncesi iş etkisi, öncelik ve önerilen aksiyonlar doğrulanmalıdır.',st['BodyX'])]
     story.append(P('Önerilen yaklaşım',st['SectionX']))
     story.append(P('Doğrulanmış bulguları önce iş etkisine göre önceliklendirin. Her düzeltmeden sonra aynı hedefte yeniden test yapın. Kapsam dışındaki varlıklar veya çalışmayan kontroller için ayrı çalışma planlayın.',st['BodyX']))
@@ -1193,6 +1201,18 @@ def html_report(root,meta,steps,hosts,findings,review,report_errors=None):
             ''.join('<tr><td>'+safe(m.get('family'))+'</td><td>'+safe(m.get('ip'))+'</td><td>'+safe(m.get('version') or '—')+
                     '</td><td>'+safe(m.get('confidence'))+'</td><td>'+safe(', '.join(map(str,m.get('mgmt_ports_observed',[]))) or '—')+
                     '</td><td>'+safe('; '.join(m.get('advisories',[])))+'</td></tr>' for m in tech['matches'])+'</tbody></table>')
+    cve=json.loads((root/'UBDEN_CVE.json').read_text(encoding='utf-8')) if (root/'UBDEN_CVE.json').is_file() else {}
+    cve_html=''
+    if cve and cve.get('items'):
+        cve_html=('<h2>NVD CVE adayları — analist doğrulaması gerekir</h2><p>'+safe(cve.get('note'))+
+            ' Sorgulanan platform: '+safe(cve.get('queried',0))+'; kritik/yüksek aday: '+safe(cve.get('critical_high_count',0))+
+            ' · <a href="UBDEN_CVE.json">NVD kaydı</a></p>')
+        for it in cve['items']:
+            cve_html+=('<h3>'+safe(it.get('family'))+' '+safe(it.get('version'))+' — '+safe(it.get('cve_count',0))+
+                ' CVE adayı</h3><p>Varlıklar: '+safe(', '.join(it.get('assets',[])[:8]) or '—')+' · CPE: '+safe(it.get('cpe'))+
+                '</p><table><thead><tr><th>CVE</th><th>CVSS</th><th>Şiddet</th><th>Özet</th></tr></thead><tbody>'+
+                ''.join('<tr><td>'+safe(c.get('id'))+'</td><td>'+safe(c.get('cvss') or '?')+'</td><td>'+safe(c.get('severity'))+
+                        '</td><td>'+safe(c.get('summary'))+'</td></tr>' for c in it.get('cves',[]))+'</tbody></table>')
     insights=json.loads((root/'UBDEN_INSIGHTS.json').read_text(encoding='utf-8')) if (root/'UBDEN_INSIGHTS.json').is_file() else {}
     preflight=json.loads((root/'PREFLIGHT.json').read_text(encoding='utf-8')) if (root/'PREFLIGHT.json').is_file() else {}
     preflight_html=''
@@ -1210,7 +1230,7 @@ def html_report(root,meta,steps,hosts,findings,review,report_errors=None):
             '<h3>CVSS önerileri</h3><table><thead><tr><th>Bulgu</th><th>Vektör</th><th>Taban puan</th></tr></thead><tbody>'+
             ''.join('<tr><td>'+safe(item.get('finding_id',''))+'</td><td>'+safe(item.get('vector',''))+'</td><td>'+safe(item.get('base_score',''))+'</td></tr>' for item in insights.get('cvss_suggestions',[]))+'</tbody></table>'+
             '<table><thead><tr><th>Bulgu</th><th>Varlık</th><th>Önerilen düzeltme</th></tr></thead><tbody>'+''.join('<tr><td>'+safe(', '.join(item['findings']))+'</td><td>'+safe(', '.join(item['assets'][:6]))+'</td><td>'+safe(item['recommendation'])+'</td></tr>' for item in insights.get('remediation',[]))+'</tbody></table>')
-    doc=_splice(doc,'<h2>Analist bulguları</h2>',correlation_html+tech_html+risk_html+priority_html+network_html+ad_html+coverage_html+preflight_html+insight_html+analyst_html+'<h2>Analist bulguları</h2>')
+    doc=_splice(doc,'<h2>Analist bulguları</h2>',correlation_html+tech_html+cve_html+risk_html+priority_html+network_html+ad_html+coverage_html+preflight_html+insight_html+analyst_html+'<h2>Analist bulguları</h2>')
     doc=_splice(doc,'<h2>Çalışma günlüğü</h2>',device_html+'<h2>Çalışma günlüğü</h2>')
     if (root/'STEP_AUDIT.json').is_file():
         doc=_splice(doc,'<h2>Çalışma günlüğü</h2>',
@@ -1248,6 +1268,10 @@ def main():
         temp.write_text(json.dumps(osint,ensure_ascii=False,indent=2)+'\n',encoding='utf-8')
         temp.replace(root/'UBDEN_OSINT.json')
         tech=tech_fingerprint.write(root,meta,hosts,device_inventory(root))
+        import cve_enrich
+        cached=json.loads((root/'UBDEN_CVE.json').read_text(encoding='utf-8')) if (root/'UBDEN_CVE.json').is_file() else None
+        if not cached or (not cached.get('items') and not cached.get('queried')):
+            cve_enrich.write(root,tech)  # NVD'ye canlı, best-effort; sonuç önbelleğe yazılır
         CORR.write(root,meta,hosts,findings,device_inventory(root),ad_result(root),osint=osint,tech=tech)
     except (OSError,ValueError,TypeError) as exc:
         print(f'Korelasyon/OSINT/teknoloji üretilemedi: {type(exc).__name__}: {exc}',file=sys.stderr)
