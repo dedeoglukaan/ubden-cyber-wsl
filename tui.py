@@ -130,8 +130,8 @@ class Console:
                 marker = "[x] " if multiple and index in selected else "[ ] " if multiple else ""
                 self.say(f"  {'❯' if index == cursor else ' '} {marker}{label}",
                          'cyan' if index == cursor else None)
-            self.say("  ↑/↓: gezin · Boşluk/Enter: seçin · Esc: iptal" if multiple else
-                     "  ↑/↓: gezin · Enter: seçin · Esc: iptal", "dim")
+            self.say("  ↑/↓: gezin · Boşluk/Enter: seçin · q veya Ctrl-C: iptal" if multiple else
+                     "  ↑/↓: gezin · Enter: seçin · q veya Ctrl-C: iptal", "dim")
         draw(True)
         while True:
             key = self._read_key()
@@ -139,7 +139,10 @@ class Console:
                 cursor = (cursor - 1) % len(labels)
             elif key in ("\x1b[B", "\x1bOB", "j"):
                 cursor = (cursor + 1) % len(labels)
-            elif key in ("\x03", "\x1b"):
+            elif key in ("\x03", "q", "Q"):
+                # İptal yalnızca açık bir tuşla olur. Çıplak ESC ve tanınmayan
+                # tuşlar yok sayılır: ok tuşu dizisi eksik okunsa bile (WSL/uzak
+                # terminal gecikmesi) sihirbaz yanlışlıkla iptal edilmez.
                 raise KeyboardInterrupt
             elif multiple and key in (" ", "\r", "\n"):
                 if cursor == len(labels)-1:
