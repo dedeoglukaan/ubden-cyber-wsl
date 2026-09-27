@@ -24,6 +24,20 @@ class AnalystWorkplanTests(unittest.TestCase):
             self.assertIn('192.0.2.37',scope['targets'])
             self.assertTrue(any('ikinci fiziksel test noktası' in step for step in scope['steps']))
 
+    def test_credential_card_is_guidance_only_no_tool_commands(self):
+        with TemporaryDirectory() as folder:
+            plan = build_plan(Path(folder), {"id": "x", "targets": ["10.0.0.0/24"]}, [],
+                              initial(),
+                              {"devices": [{"ip": "10.0.0.5", "confidence": "orta",
+                                            "ports": [{"port": "22"}, {"port": "445"}]}]}, [])
+            cred = next((t for t in plan["tasks"] if t["id"] == "T-21"), None)
+            self.assertIsNotNone(cred)
+            self.assertIn("10.0.0.5", cred["targets"])
+            self.assertEqual(cred["commands"], [])  # rehber; canlı kaba-kuvvet komutu yok
+            text = markdown(plan).lower()
+            for forbidden in ("hydra ", "medusa ", "ncrack "):
+                self.assertNotIn(forbidden, text)
+
     def test_observed_services_trigger_scoped_tasks_and_evidence_state(self):
         with TemporaryDirectory() as folder:
             root=Path(folder)

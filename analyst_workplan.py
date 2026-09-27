@@ -261,6 +261,25 @@ def build_plan(root: Path, meta: dict, steps: list, review: dict,
              "Doğrulanan bulgu için iş etkisi ve düzeltme adımı"],
             references=[clean(f.get('evidence'),260) for f in candidates[:20]])
 
+    auth_services = addresses({22, 21, 23, 3389, 445, 1433, 3306, 5432, 5900})
+    if auth_services:
+        service_names = {22: "SSH", 21: "FTP", 23: "Telnet", 3389: "RDP", 445: "SMB",
+                         1433: "MSSQL", 3306: "MySQL", 5432: "PostgreSQL", 5900: "VNC"}
+        observed = ", ".join(f"{service_names[p]}:{p}" for p in service_names if by_port.get(p))
+        add("T-21", "CRED", "P1", "Kimlikli oturum kontrolü — yalnız yetkili test hesabıyla, sınırlı",
+            auth_services,
+            "Kapsam içi adreslerde kimlik doğrulamalı servis portu gözlendi (" + (observed or "—") +
+            "). Açık port zayıf parola anlamına gelmez; bu kontrol yalnız müşterinin yazılı yetkilendirdiği "
+            "test hesabıyla, hesap kilitleme eşiği altında yapılır. Toplu/sözlük parola denemesi kapsam dışıdır.",
+            ["Yalnız müşterinin yazılı yetkilendirdiği test hesabını ve az sayıda (≤2) aday parolayı ayrı güvenli kanaldan alın.",
+             "Hesap kilitleme eşiğini ve gözlem penceresini önceden doğrulayın; denemeleri eşik altında tutun.",
+             "Canlı giriş ekranında sözlük veya toplu parola denemesi yapmayın; yalnız sağlanan test hesabını doğrulayın.",
+             "SSH test hesabı için UBDEN'in yerleşik, bellek içi ve parolayı saklamayan sınırlı kontrolünü kullanın (`ubden-cyber` görev akışında SSH parola modülü).",
+             "Test hesabı parolasını komut geçmişine, görev klasörüne veya rapora yazmayın; sonucu parolasız kaydedin (yalnız 'geçerli/geçersiz', hesap ve servis)."],
+            ["Test edilen hesap/servis eşlemesi (parola içermez)", "Kilitleme eşiği ve gözlem penceresi teyidi",
+             "Sonuç: geçerli/geçersiz, redakte edilmiş kanıt"],
+            request="Yazılı yetkili tek test hesabı, ≤2 aday parola (ayrı güvenli kanaldan), kilitleme eşiği ve test penceresi.")
+
     if web:
         add("T-10", "AUTH", "P1", "Web oturum ve test hesabı akışını incele", web,
             "HTTP(S) servisi görüldü; tarama oturum yaşam döngüsünü doğrulamaz.",
