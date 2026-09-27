@@ -47,6 +47,10 @@ try:
     import ai_operator
 except Exception:
     ai_operator = None
+try:
+    import wifi_scan
+except Exception:
+    wifi_scan = None
 # report_v2 is invoked as a subprocess (its main() reads sys.argv), never imported
 # here, so win_scan stays importable for tests even without reportlab installed.
 
@@ -670,6 +674,15 @@ def run_scan(form: dict, progress=None) -> dict:
             }, progress=emit)
         except Exception as exc:
             emit(f"AI operatör hatası (rapor devam ediyor): {exc}", "warn")
+
+    # Wi-Fi visibility (test machine's adapter, if any) — passive, no monitor mode.
+    if wifi_scan is not None:
+        try:
+            wdata = wifi_scan.run(root, events)
+            if wdata.get("available"):
+                emit(f"Wi-Fi: {wdata.get('network_count', 0)} SSID / {wdata.get('ap_count', 0)} BSSID görüldü", "info")
+        except Exception as exc:
+            emit(f"Wi-Fi taraması atlandı: {exc}", "warn")
 
     meta["status"] = "completed"
     meta["finished_at"] = now()

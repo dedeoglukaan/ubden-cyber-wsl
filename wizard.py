@@ -1166,8 +1166,20 @@ def run_probe_suite(target, meta, root, raw, events, assets, discovered_ports,
     if profile in ('web','full'):
         web_hosts=[ip for ip in assets if set(discovered_ports.get(ip,[])) & {80,443}]
         if not shutil.which('nikto') and web_hosts:
-            events.append({'step':'nikto_preflight','tool':'nikto','target':target,
-                           'status':'missing_tool','detail':'nikto kurulu degil'})
+            # nikto yoksa (Windows) nmap http-* NSE ile karşıla; kurulum gerekmez.
+            if shutil.which('nmap'):
+                nse_hosts=web_hosts[:12]
+                listf=raw/'nikto_nse_targets.txt'
+                listf.write_text('\n'.join(nse_hosts)+'\n',encoding='ascii')
+                ports=sorted({p for ip in nse_hosts for p in (set(discovered_ports.get(ip,[])) & {80,443,8080,8443})})
+                command('nikto_nse',["nmap"]+(['-6'] if ':' in nse_hosts[0] else [])+
+                        ["-Pn","-n","-sT","-T3","--script",
+                         "http-enum,http-headers,http-title,http-methods,http-security-headers,http-server-header",
+                         "-p",",".join(map(str,ports)) or "80,443","-oX",str(raw/'nikto_nse.xml'),"-iL",str(listf)],
+                        raw,events,min(3600,len(nse_hosts)*60+300))
+            else:
+                events.append({'step':'nikto_preflight','tool':'nikto','target':target,
+                               'status':'skipped','detail':'nikto yok; nmap http NSE de yok'})
         for ip in web_hosts[:16] if shutil.which('nikto') else []:
             ports=set(discovered_ports.get(ip,[]))
             port=443 if 443 in ports else 80

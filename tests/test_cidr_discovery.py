@@ -18,7 +18,8 @@ class CidrDiscoveryTests(unittest.TestCase):
         # These tests assert exact nmap call sequences; neutralise the environment-
         # dependent probe helpers (SQL Browser, traceroute/tracert, SNMP extras) so
         # the result is deterministic on both Kali and Windows (where tracert exists).
-        for name in ('discover_sql_browser', 'network_extras', 'snmp_extras'):
+        for name in ('discover_sql_browser', 'network_extras', 'snmp_extras', 'probe_snmp',
+                     'netbios_probe', 'web_identify'):
             probe = patch.object(wizard, name)
             probe.start()
             self.addCleanup(probe.stop)

@@ -48,14 +48,30 @@ def domain_recon(target, raw, events, command):
         ("theHarvester", ["theHarvester", "-d", target, "-b", "crtsh,hackertarget", "-l", "100"], 120,
          "Pasif OSINT: alt alan ve e-posta yüzeyi (yalnız pasif kaynaklar)"),
     )
+    # Windows'ta bulunmayan Linux araçları (dnsenum/dnstracer) nmap NSE + fierce ile
+    # karşılanır; bunları eksik-araç yerine "karşılandı" olarak işaretle.
+    nse_covered = {"dnsenum", "dnstracer"}
     for step, argv, timeout, detail in tools:
         executable = argv[0]
         if not shutil.which(executable):
-            _skip(events, f"{step}_recon", executable, target, f"{executable} kurulu değil")
+            if executable in nse_covered:
+                events.append({"step": f"{step}_recon", "tool": executable, "target": target,
+                               "status": "skipped",
+                               "detail": f"{executable} yok; nmap NSE (dns-brute) ve fierce ile karşılanıyor"})
+            else:
+                _skip(events, f"{step}_recon", executable, target, f"{executable} kurulu değil")
             continue
         result = command(f"{step}_recon", argv, raw, events, timeout)
         result["target"] = target
         result.setdefault("detail", detail + "; sonuçlar kapsam ve analist doğrulaması bekler")
+    # dnsenum yoksa nmap dns-brute NSE ile alt alan denemesi (Windows eşdeğeri).
+    if not shutil.which("dnsenum") and shutil.which("nmap"):
+        result = command("dnsbrute_recon",
+                         ["nmap", "-Pn", "-sn", "--script", "dns-brute,dns-nsid",
+                          "--script-args", f"dns-brute.domain={target}", target],
+                         raw, events, 120)
+        result["target"] = target
+        result.setdefault("detail", "nmap dns-brute/dns-nsid ile alt alan ve NSID keşfi")
 
 
 def network_extras(assets, opened: dict, raw, events, command) -> None:
