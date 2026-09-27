@@ -9,7 +9,10 @@ import ipaddress
 import json
 import math
 import os
-import pwd
+try:
+    import pwd  # Unix-only; Windows'ta içe aktarım/analiz/test için koşullu
+except ModuleNotFoundError:
+    pwd = None
 from pathlib import Path
 import re
 import shutil
