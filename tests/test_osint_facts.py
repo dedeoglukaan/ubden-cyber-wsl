@@ -112,6 +112,19 @@ class CorrelationOsintBridgeTests(unittest.TestCase):
         self.assertIn("45.33.32.10", nas["detail"])
         self.assertNotIn("10.0.0.5", nas["detail"])  # private IP internet maruziyeti sayılmaz
 
+    def test_public_db_and_remote_exposure(self):
+        hosts = [{"ip": "45.33.32.40", "ports": [{"port": "1433", "protocol": "tcp"},
+                                                 {"port": "3389", "protocol": "tcp"}]},
+                 {"ip": "10.0.0.9", "ports": [{"port": "1433", "protocol": "tcp"}]}]
+        result = correlation.build({"targets": ["45.33.32.0/24"]}, hosts, [], {"categories": {}}, {})
+        titles = [c["title"] for c in result["correlations"]]
+        self.assertTrue(any("İnternete açık veritabanı" in t for t in titles))
+        rem = next(c for c in result["correlations"] if "İnternete açık uzaktan erişim" in c["title"])
+        self.assertEqual(rem["severity"], "critical")  # RDP 3389 public
+        db = next(c for c in result["correlations"] if "İnternete açık veritabanı" in c["title"])
+        self.assertIn("45.33.32.40", db["detail"])
+        self.assertNotIn("10.0.0.9", db["detail"])  # private DB internet kuralına girmez
+
     def test_public_management_plane_is_critical(self):
         tech = {"matches": [{"family": "Fortinet FortiGate / FortiOS", "category": "firewall",
                              "ip": "45.33.32.30", "mgmt_ports_observed": [443, 10443]}]}

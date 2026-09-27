@@ -150,6 +150,36 @@ def build(meta: dict, hosts: list, findings: list, devices: dict,
                     "action": "Veritabanı dinleme arayüzünü sınırla; ağ erişim listesi + en az yetki uygula",
                     "rationale": "Doğrudan ağdan erişilebilen veritabanı yüksek etkili yüzeydir"})
 
+    # 2b) İnternete açık (public IP) veritabanı ve uzaktan erişim servisleri.
+    db_pub = sorted({f"{ip}:{port} ({name})" for ip, port, name in facts["database"] if _is_public(ip)})
+    if db_pub:
+        add("İnternete açık veritabanı servisi", "critical",
+            f"Veritabanı servisi genel (public) IP'de gözlendi: {', '.join(db_pub[:8])}. "
+            "İnternete doğrudan açık veritabanı, kimlik doğrulama zayıfsa doğrudan veri sızıntısı/fidye riskidir.",
+            chain={"name": "İnternete açık veritabanı → veri sızıntısı", "likelihood": "orta",
+                   "impact": "Yetkisiz veri erişimi / fidye",
+                   "steps": ["Servisin internetten erişilebilirliğini kapsam dışı bir noktadan doğrula",
+                             "Kimlik doğrulama modunu, varsayılan/zayıf hesabı ve sürümü kontrol et",
+                             "Dinlemeyi iç arayüzle sınırla; VPN/güvenlik grubu ve en az yetki uygula"]},
+            action={"priority": "kritik", "effort": "orta",
+                    "action": "Veritabanı servisini internetten kaldır; VPN/erişim listesi arkasına al; sürüm/yama + en az yetki",
+                    "rationale": "İnternete açık veritabanı en yüksek etkili doğrudan veri maruziyetidir"})
+    remote_pub = [(ip, port, name) for ip, port, name in facts["remote"] if _is_public(ip)]
+    if remote_pub:
+        severity = "critical" if any(port in (3389, 23) for _, port, _ in remote_pub) else "high"
+        svc = ", ".join(sorted(f"{ip}:{port} ({name})" for ip, port, name in remote_pub)[:8])
+        add("İnternete açık uzaktan erişim servisi", severity,
+            f"Uzaktan erişim servisi genel (public) IP'de gözlendi: {svc}. "
+            "İnternete açık RDP/Telnet/SSH/VNC parola püskürtme, kaba kuvvet ve istismar için birincil hedeftir.",
+            chain={"name": "İnternete açık uzaktan erişim → ilk erişim", "likelihood": "orta",
+                   "impact": "Kimlik ele geçirme ve ilk erişim",
+                   "steps": ["Servisin internetten erişilebilirliğini kapsam dışı bir noktadan doğrula",
+                             "MFA, kilitleme eşiği ve sürüm/yama durumunu doğrula",
+                             "Erişimi VPN/atlama sunucusu ve izinli IP'lerle sınırla"]},
+            action={"priority": "kritik" if severity == "critical" else "yüksek", "effort": "orta",
+                    "action": "Uzaktan erişimi internetten kaldır; VPN/bastion + MFA; kilitleme eşiği; Telnet'i kapat",
+                    "rationale": "İnternete açık RDP/SSH/Telnet en sık istismar edilen ilk erişim vektörlerindendir"})
+
     # 3) AD ortamı + AD kimlik bulgusu.
     if facts["ad_present"] and facts["ad_cred"]:
         add("Active Directory kimlik bilgisi zinciri", "high",
