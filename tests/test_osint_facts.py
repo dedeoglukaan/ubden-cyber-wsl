@@ -98,6 +98,26 @@ class CorrelationOsintBridgeTests(unittest.TestCase):
         # confirmed critical (18) düşer; CVE korelasyonu scored=False → çift sayılmaz.
         self.assertEqual(result["exposure_index"]["score"], 82)
 
+    def test_public_nas_and_camera_internet_exposure(self):
+        tech = {"matches": [
+            {"family": "Synology DSM", "category": "nas", "ip": "45.33.32.10", "mgmt_ports_observed": [5000]},
+            {"family": "Dahua kamera/NVR", "category": "camera", "ip": "45.33.32.20", "mgmt_ports_observed": [37777]},
+            {"family": "QNAP QTS", "category": "nas", "ip": "10.0.0.5", "mgmt_ports_observed": [8080]},
+        ]}
+        result = correlation.build({"targets": ["45.33.32.0/24"]}, [], [], {"categories": {}}, {}, tech=tech)
+        titles = [c["title"] for c in result["correlations"]]
+        self.assertTrue(any("İnternete açık NAS" in t for t in titles))
+        self.assertTrue(any("İnternete açık kamera" in t for t in titles))
+        nas = next(c for c in result["correlations"] if "İnternete açık NAS" in c["title"])
+        self.assertIn("45.33.32.10", nas["detail"])
+        self.assertNotIn("10.0.0.5", nas["detail"])  # private IP internet maruziyeti sayılmaz
+
+    def test_private_nas_camera_no_internet_exposure(self):
+        tech = {"matches": [{"family": "QNAP QTS", "category": "nas", "ip": "10.0.0.5", "mgmt_ports_observed": [8080]},
+                            {"family": "Dahua kamera/NVR", "category": "camera", "ip": "192.168.1.9", "mgmt_ports_observed": [37777]}]}
+        result = correlation.build({"targets": ["10.0.0.0/8"]}, [], [], {"categories": {}}, {}, tech=tech)
+        self.assertFalse(any("İnternete açık" in c["title"] for c in result["correlations"]))
+
     def test_no_osint_means_no_phishing(self):
         result = correlation.build({"targets": ["10.0.0.1"]},
                                    [{"ip": "10.0.0.5", "ports": [{"port": "3389", "protocol": "tcp"}]}],

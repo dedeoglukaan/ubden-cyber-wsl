@@ -12,9 +12,18 @@ zafiyet iddiası değildir. OSINT katmanı ileride `osint` argümanıyla ekleneb
 """
 from __future__ import annotations
 
+import ipaddress
 import json
 import re
 from pathlib import Path
+
+
+def _is_public(ip: str) -> bool:
+    """Adres genel (internetten yönlendirilebilir) mi? RFC1918/özel değilse True."""
+    try:
+        return ipaddress.ip_address(str(ip)).is_global
+    except ValueError:
+        return False
 
 _CVE_RE = re.compile(r"CVE-\d{4}-\d{4,}", re.I)
 
@@ -230,6 +239,35 @@ def build(meta: dict, hosts: list, findings: list, devices: dict,
                 action={"priority": "yüksek", "effort": "orta",
                         "action": "Yönetim düzlemi arayüzlerini ayrı yönetim ağına al; MFA + güncel yama uygula",
                         "rationale": "Yönetim düzlemi tek noktadan geniş erişim sağlar; sürüm/yama kritiktir"})
+        # NAS / kamera internet maruziyeti: platform genel (public) IP'de gözlendiyse.
+        nas_pub = sorted({m.get("ip", "") for m in tech.get("matches", [])
+                          if m.get("category") == "nas" and _is_public(m.get("ip", ""))})
+        cam_pub = sorted({m.get("ip", "") for m in tech.get("matches", [])
+                          if m.get("category") == "camera" and _is_public(m.get("ip", ""))})
+        if nas_pub:
+            add("İnternete açık NAS platformu", "critical",
+                f"NAS yönetim/servis arayüzü genel (public) IP'de gözlendi: {', '.join(nas_pub[:8])}. "
+                "İnternete açık NAS, fidye kampanyaları (DeadBolt/eCh0raix) ve veri sızıntısı için yüksek hedeftir.",
+                chain={"name": "İnternete açık NAS → veri/fidye", "likelihood": "orta",
+                       "impact": "Veri sızıntısı ve/veya fidye şifrelemesi",
+                       "steps": ["NAS'ın internetten erişilebilirliğini kapsam dışı bir noktadan doğrula",
+                                 "Firmware sürümünü bilinen fidye kampanyalarına ve üretici danışmalarına karşı kontrol et",
+                                 "Yönetim/servis arayüzünü VPN veya izinli IP'lerle sınırla"]},
+                action={"priority": "kritik", "effort": "orta",
+                        "action": "NAS yönetim/servis arayüzünü internetten kaldır; VPN arkasına al; güncel firmware + MFA + varsayılan hesap kapat",
+                        "rationale": "İnternete açık NAS aktif fidye kampanyalarının birincil hedefidir"})
+        if cam_pub:
+            add("İnternete açık kamera/NVR", "high",
+                f"Kamera/NVR arayüzü genel (public) IP'de gözlendi: {', '.join(cam_pub[:8])}. "
+                "İnternete açık kameralar varsayılan kimlik bilgisi, botnet (Mirai) ve mahremiyet riski taşır.",
+                chain={"name": "İnternete açık kamera → ele geçirme/botnet", "likelihood": "orta",
+                       "impact": "Kamera ele geçirme, mahremiyet ihlali, botnet katılımı",
+                       "steps": ["Web arayüzü ve RTSP'nin internetten erişilebilirliğini doğrula",
+                                 "Varsayılan/zayıf kimlik bilgisini yalnız yetkili test hesabıyla kontrol et",
+                                 "Firmware sürümünü OEM danışmalarıyla karşılaştır; arayüzü internetten kaldırıp VPN arkasına al"]},
+                action={"priority": "yüksek", "effort": "orta",
+                        "action": "Kamera/NVR arayüzlerini internetten kaldır; VPN/izinli IP; varsayılan parolayı değiştir; firmware güncelle",
+                        "rationale": "İnternete açık kameralar varsayılan kimlik bilgisi ve botnet için yaygın hedeftir"})
 
     # Analistçe DOĞRULANMIŞ CVE'leri görünür kıl (NVD adayları değil; adaylar
     # UBDEN_CVE.json'da kalır ve maruziyeti düşürmez). Bu bulgular zaten
