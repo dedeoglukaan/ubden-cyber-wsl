@@ -169,6 +169,32 @@ border-left:3px solid var(--teal);border-radius:8px;padding:11px 16px;color:var(
 <label class="adapters" style="margin-top:12px"><input type="checkbox" id="defcred"> Varsayilan kimlik denemesi (opt-in, sinirli, kilitlenme-farkinda)</label>
 <div id="adapters" class="adapters"><label>Ag adaptorleri yukleniyor...</label></div>
 <div class="hint">Adaptor secimi kapsam guvenligi icindir: yalniz secilen adaptorden erisilebilen IP'ler taranir (tek host hedeflerinde). Yonetici yetkisi + Npcap ARP/MAC icin gereklidir.</div>
+<details style="margin-top:14px"><summary style="cursor:pointer;color:var(--teal);font-family:'IBM Plex Mono',monospace">▸ Kimlikli / kurumsal testler (opsiyonel) — AD/LDAP · Web/Swagger · SSH</summary>
+<div style="margin-top:12px">
+<div class="eyebrow">Active Directory / LDAP</div>
+<div class="row">
+<div><label>Alan adı (domain)</label><input id="ad_domain" placeholder="ornek.local"></div>
+<div><label>DC IP / ad</label><input id="ad_dc" placeholder="10.0.0.5"></div>
+</div><div class="row">
+<div><label>LDAP kullanıcı (salt-okunur)</label><input id="ad_user" placeholder="okuma@ornek.local"></div>
+<div><label>LDAP parola</label><input id="ad_pass" type="password" placeholder="••••••"></div>
+</div>
+<button class="sec" type="button" onclick="testConn('ldap')">LDAP bağlantı testi</button> <span id="t_ldap" class="dim"></span>
+<div class="eyebrow" style="margin-top:16px">Web uygulaması / API</div>
+<div class="row">
+<div><label>Giriş adresi (base URL)</label><input id="web_url" placeholder="https://uygulama.ornek.com"></div>
+<div><label>Swagger / OpenAPI URL</label><input id="swagger_url" placeholder="https://.../swagger.json"></div>
+</div>
+<button class="sec" type="button" onclick="testConn('http')">Web bağlantı testi</button> <span id="t_http" class="dim"></span>
+<div class="eyebrow" style="margin-top:16px">SSH (opsiyonel)</div>
+<div class="row">
+<div><label>SSH host</label><input id="ssh_host" placeholder="10.0.0.20"></div>
+<div><label>SSH kullanıcı</label><input id="ssh_user" placeholder="test"></div>
+<div><label>SSH parola</label><input id="ssh_pass" type="password" placeholder="••••••"></div>
+</div>
+<button class="sec" type="button" onclick="testConn('ssh')">SSH bağlantı testi</button> <span id="t_ssh" class="dim"></span>
+<div class="hint">Parolalar yalnız bu yerel oturumda bellekte kullanılır; rapora veya görev dosyasına yazılmaz. AD host domain'e üyeyse kimlik bilgisiz de yerel AD envanteri çekilir.</div>
+</div></details>
 <div style="margin-top:16px"><button id="go">YETKILIYIM &mdash; Taramayi baslat</button></div>
 </div>
 <div class="card" id="progress" style="display:none">
@@ -215,6 +241,9 @@ async function start(){
  tester:c("tester"),targets:lines(v("targets")),exclusions:lines(v("exclusions")),
  profile:v("profile"),top_ports:v("top_ports"),max_rate:v("max_rate"),lanes:v("lanes"),
  default_cred_test:document.getElementById("defcred").checked,
+ ad_domain:c("ad_domain"),ad_dc:c("ad_dc"),ad_user:c("ad_user"),ad_pass:v("ad_pass"),
+ web_url:c("web_url"),swagger_url:c("swagger_url"),
+ ssh_host:c("ssh_host"),ssh_user:c("ssh_user"),ssh_pass:v("ssh_pass"),
  selected_interfaces:[...document.querySelectorAll(".adpk:checked")].map(x=>x.value)};
  if(!body.targets.length){alert("En az bir hedef girin.");return;}
  document.getElementById("go").disabled=true;
@@ -287,6 +316,18 @@ function deviceTable(devs){
 }
 function toast(msg){const t=document.createElement("div");t.className="toast";t.textContent=msg;
  document.body.appendChild(t);setTimeout(()=>t.remove(),4200);}
+async function testConn(kind){
+ const out=document.getElementById("t_"+kind);out.textContent="test ediliyor…";out.style.color="";
+ let body={};
+ if(kind==="ldap")body={dc:c("ad_dc"),domain:c("ad_domain"),user:c("ad_user"),password:v("ad_pass")};
+ else if(kind==="http")body={url:c("web_url")||c("swagger_url")};
+ else if(kind==="ssh")body={host:c("ssh_host"),user:c("ssh_user"),password:v("ssh_pass")};
+ try{const r=await fetch("/api/test/"+kind+"?t="+T,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});
+ const d=await r.json();
+ out.textContent=(d.ok?"✔ ":"✕ ")+(d.detail||(d.ok?"başarılı":"başarısız"));
+ out.style.color=d.ok?"var(--green)":"var(--red)";
+ }catch(e){out.textContent="✕ istek hatası";out.style.color="var(--red)";}
+}
 async function openFolder(){await fetch("/api/open?t="+T+"&job="+JOB,{method:"POST"});}
 function v(id){return document.getElementById(id).value;}
 function c(id){return document.getElementById(id).value.trim();}
@@ -364,6 +405,14 @@ class Handler(BaseHTTPRequestHandler):
                 except OSError:
                     pass
             return self._send(200, json.dumps({"ok": True}))
+        if parsed.path.startswith("/api/test/"):
+            length = int(self.headers.get("Content-Length", "0") or "0")
+            try:
+                body = json.loads(self.rfile.read(length).decode("utf-8")) if length else {}
+            except (ValueError, UnicodeDecodeError):
+                return self._send(400, json.dumps({"ok": False, "detail": "bad_json"}))
+            kind = parsed.path[len("/api/test/"):]
+            return self._send(200, json.dumps(win_scan.test_connection(kind, body if isinstance(body, dict) else {})))
         return self._send(404, json.dumps({"error": "not_found"}))
 
     def _serve_report(self, parsed, query):

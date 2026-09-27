@@ -106,6 +106,80 @@ def windows_inventory() -> dict:
             "default_routes": []}
 
 
+def _looks_ip(value: str) -> bool:
+    try:
+        ipaddress.ip_address(value)
+        return True
+    except ValueError:
+        return False
+
+
+def test_connection(kind: str, body: dict) -> dict:
+    """Read-only connection tests for the UI's 'bağlantı testi' buttons.
+
+    LDAP bind (ad_assessment), HTTP HEAD/GET, and a single SSH auth attempt. All
+    bounded, short-timeout, no scanning; secrets stay in memory (never written).
+    """
+    kind = (kind or "").lower()
+    if kind == "ldap":
+        dc = (body.get("dc") or "").strip()
+        domain = (body.get("domain") or "").strip()
+        user = (body.get("user") or "").strip()
+        pw = body.get("password") or ""
+        if not (dc and domain and user and pw):
+            return {"ok": False, "detail": "DC / alan adı / kullanıcı / parola gerekli"}
+        try:
+            import ad_assessment
+            res = ad_assessment.inspect(dc, domain, user, pw, dc if _looks_ip(dc) else None)
+            ok = res.get("status") == "ok"
+            return {"ok": ok, "detail": (res.get("reason") or res.get("source") or
+                                         ("bağlandı, dizin okunabildi" if ok else "başarısız"))[:120]}
+        except Exception as exc:
+            return {"ok": False, "detail": f"{type(exc).__name__}: {exc}"[:120]}
+    if kind == "http":
+        import ssl
+        import urllib.request
+        url = (body.get("url") or "").strip()
+        if not url:
+            return {"ok": False, "detail": "URL gerekli"}
+        if not url.startswith(("http://", "https://")):
+            url = "https://" + url
+        ctx = ssl.create_default_context()
+        ctx.check_hostname = False
+        ctx.verify_mode = ssl.CERT_NONE
+        for method in ("HEAD", "GET"):
+            try:
+                req = urllib.request.Request(url, method=method, headers={"User-Agent": "UBDEN-uPenetrator"})
+                with urllib.request.urlopen(req, timeout=8, context=ctx) as resp:
+                    server = resp.headers.get("Server", "")
+                    return {"ok": True, "detail": f"HTTP {resp.status}" + (f" · {server}" if server else "")}
+            except Exception as exc:
+                last = f"{type(exc).__name__}: {exc}"
+        return {"ok": False, "detail": last[:120]}
+    if kind == "ssh":
+        host = (body.get("host") or "").strip()
+        user = (body.get("user") or "").strip()
+        pw = body.get("password") or ""
+        if not (host and user and pw):
+            return {"ok": False, "detail": "host / kullanıcı / parola gerekli"}
+        try:
+            import paramiko
+        except Exception:
+            return {"ok": False, "detail": "paramiko kurulu değil"}
+        client = paramiko.SSHClient()
+        client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+        try:
+            client.connect(host, port=22, username=user, password=pw, timeout=8,
+                           allow_agent=False, look_for_keys=False)
+            client.close()
+            return {"ok": True, "detail": "kimlik doğrulandı"}
+        except paramiko.AuthenticationException:
+            return {"ok": False, "detail": "kimlik doğrulama reddedildi (bağlantı kuruldu)"}
+        except Exception as exc:
+            return {"ok": False, "detail": f"{type(exc).__name__}"[:80]}
+    return {"ok": False, "detail": "bilinmeyen test türü"}
+
+
 def _is_real_neighbor(ip: str, mac: str) -> bool:
     """Drop multicast/broadcast ARP ghosts (224/4, 255.*, 01:00:5E/33:33/FF, I-G bit)."""
     try:
@@ -238,6 +312,7 @@ def build_meta(form: dict, host_snapshot: dict) -> dict:
         max_rate = min(max(int(form.get("max_rate", 100)), 1), 500)
     except (TypeError, ValueError):
         max_rate = 100
+    ad = _ad_spec(form, host_snapshot)
     enabled = ["nmap-service", "device-inventory"]
     if profile in ("network", "full"):
         enabled += ["nse-audit", "snmp", "sql-browser", "rootdse", "network-extras", "snmp-extras"]
@@ -247,6 +322,8 @@ def build_meta(form: dict, host_snapshot: dict) -> dict:
         enabled += ["web-headers", "tls", "nikto"]
     if profile in ("external", "full"):
         enabled += ["dns-osint"]
+    if ad.get("mode") != "disabled":
+        enabled += ["ad"]
     return {
         "schema": 8, "id": str(uuid.uuid4()),
         "client": (form.get("client") or "").strip() or "Belirtilmedi",
@@ -262,7 +339,9 @@ def build_meta(form: dict, host_snapshot: dict) -> dict:
         "profile": profile,
         "enabled_modules": enabled, "allowed_techniques": enabled,
         "auth_probes": [], "role_scenarios": [], "password_probes": [],
-        "ad": {"mode": "disabled"},
+        "ad": ad,
+        "web": {"base": (form.get("web_url") or "").strip(),
+                "swagger": (form.get("swagger_url") or "").strip()},
         "browser_enabled": False,
         "default_cred_test": bool(form.get("default_cred_test")),
         "wireless": {"enabled": False},
@@ -280,6 +359,19 @@ def build_meta(form: dict, host_snapshot: dict) -> dict:
 # --------------------------------------------------------------------------- #
 # Scan
 # --------------------------------------------------------------------------- #
+def _ad_spec(form: dict, host_snapshot: dict) -> dict:
+    """Build meta['ad']: supplied (LDAP creds given), joined (host is domain member),
+    else disabled. The password is NOT stored here — it is passed separately."""
+    dc = (form.get("ad_dc") or "").strip()
+    domain = (form.get("ad_domain") or "").strip()
+    user = (form.get("ad_user") or "").strip()
+    if dc and domain and user and (form.get("ad_pass") or ""):
+        return {"mode": "supplied", "dc": dc, "domain": domain, "account": user}
+    if isinstance(host_snapshot, dict) and host_snapshot.get("part_of_domain"):
+        return {"mode": "joined", "domain": host_snapshot.get("domain", "")}
+    return {"mode": "disabled"}
+
+
 def _ports_arg(meta: dict) -> list:
     if meta["profile"] == "web":
         return ["-p", "80,443,8080,8443"]
@@ -542,6 +634,16 @@ def run_scan(form: dict, progress=None) -> dict:
         summary = {"host_count": 0, "mac_count": 0}
         events.append({"step": "device_inventory", "status": "error", "detail": str(exc)})
         emit(f"Cihaz envanteri hatasi: {exc}", "warn")
+
+    # Active Directory assessment (joined = local domain via bridge; supplied = LDAP
+    # bind). Password passed in-memory only, never written to meta/report.
+    if meta.get("ad", {}).get("mode") != "disabled":
+        emit("Active Directory değerlendirmesi", "info")
+        try:
+            wizard.run_ad_module(root, meta, {"password": form.get("ad_pass") or ""}, events)
+        except Exception as exc:
+            events.append({"step": "ad_assessment", "status": "error", "detail": str(exc)})
+            emit(f"AD değerlendirme hatası: {exc}", "warn")
 
     meta["status"] = "completed"
     meta["finished_at"] = now()
