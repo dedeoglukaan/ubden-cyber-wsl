@@ -91,6 +91,7 @@ class Console:
 
     @staticmethod
     def _read_key():
+        import select
         import termios
         import tty
         fd = sys.stdin.fileno()
@@ -99,11 +100,12 @@ class Console:
             tty.setraw(fd)
             key = sys.stdin.read(1)
             if key == "\x1b":
-                next_key = sys.stdin.read(1)
-                if next_key in ("[", "O"):
-                    key += next_key + sys.stdin.read(1)
-                else:
-                    key += next_key
+                if select.select([sys.stdin], [], [], .08)[0]:
+                    next_key = sys.stdin.read(1)
+                    if next_key in ("[", "O") and select.select([sys.stdin], [], [], .08)[0]:
+                        key += next_key + sys.stdin.read(1)
+                    else:
+                        key += next_key
             return key
         finally:
             termios.tcsetattr(fd, termios.TCSADRAIN, previous)
@@ -119,7 +121,8 @@ class Console:
                 marker = "[x] " if multiple and index in selected else "[ ] " if multiple else ""
                 self.say(f"  {'❯' if index == cursor else ' '} {marker}{label}",
                          'cyan' if index == cursor else None)
-            self.say("  ↑/↓: gezin · Boşluk/Enter: seçin" if multiple else "  ↑/↓: gezin · Enter: seçin", "dim")
+            self.say("  ↑/↓: gezin · Boşluk/Enter: seçin · Esc: iptal" if multiple else
+                     "  ↑/↓: gezin · Enter: seçin · Esc: iptal", "dim")
         draw(True)
         while True:
             key = self._read_key()
@@ -127,7 +130,7 @@ class Console:
                 cursor = (cursor - 1) % len(labels)
             elif key in ("\x1b[B", "\x1bOB", "j"):
                 cursor = (cursor + 1) % len(labels)
-            elif key == "\x03":
+            elif key in ("\x03", "\x1b"):
                 raise KeyboardInterrupt
             elif multiple and key in (" ", "\r", "\n"):
                 if cursor == len(labels)-1:

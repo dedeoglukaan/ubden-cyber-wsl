@@ -29,6 +29,13 @@ class WizardInterfaceTests(unittest.TestCase):
         with patch.object(sys.stdin, 'isatty', return_value=True), patch.object(ui, '_read_key', return_value='\r'):
             self.assertEqual(ui.choose_many('Adaptörler', [(35, 'Wi-Fi'), (117, 'WSL')], defaults={35}), [35])
 
+    def test_escape_cancels_menu_without_selecting_a_module(self):
+        ui = Console(stream=io.StringIO(), no_color=True)
+        ui.tty = True
+        with patch.object(sys.stdin, 'isatty', return_value=True), patch.object(ui, '_read_key', return_value='\x1b'):
+            with self.assertRaises(KeyboardInterrupt):
+                ui.menu('AD', [('0', 'Atla'), ('2', 'Verilen DC')])
+
     def test_only_active_addressed_adapters_are_selectable(self):
         snapshot = {'adapters': [
             {'name': 'Wi-Fi', 'index': 35, 'status': 'Up', 'addresses': [{'address': '192.168.0.8'}]},

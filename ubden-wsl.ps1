@@ -771,6 +771,6 @@ try {
     }
 }
 catch {
-    Write-Error $_
+    Write-Host ("UBDEN: " + $_.Exception.Message) -ForegroundColor Red
     exit 1
 }

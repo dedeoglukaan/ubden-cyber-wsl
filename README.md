@@ -88,16 +88,16 @@ UBDEN Cyber Security Systems test ekibi
 PowerShell:
 
 ```powershell
-irm 'https://raw.githubusercontent.com/ubden/ubden-cyber-wsl/v4.8.3-wsl.5/bootstrap.ps1' | iex
+irm 'https://raw.githubusercontent.com/ubden/ubden-cyber-wsl/v4.8.3-wsl.6/bootstrap.ps1' | iex
 ```
 
 CMD:
 
 ```cmd
-powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "irm 'https://raw.githubusercontent.com/ubden/ubden-cyber-wsl/v4.8.3-wsl.5/bootstrap.ps1' | iex"
+powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "irm 'https://raw.githubusercontent.com/ubden/ubden-cyber-wsl/v4.8.3-wsl.6/bootstrap.ps1' | iex"
 ```
 
-Komut [sürüm etiketli başlangıç betiğini](https://github.com/ubden/ubden-cyber-wsl/blob/v4.8.3-wsl.5/bootstrap.ps1) çalıştırır. Betik kaynak paketini indirir, mevcut Kali WSL kurulumunu kullanır veya eksikse kurar, bağımlılıkları hazırlar ve görev sihirbazını açar. Windows yeniden başlatması gerekirse işlem sonraki oturumda devam eder. Kurulum yönetici izni isteyebilir.
+Komut [sürüm etiketli başlangıç betiğini](https://github.com/ubden/ubden-cyber-wsl/blob/v4.8.3-wsl.6/bootstrap.ps1) çalıştırır. Betik kaynak paketini indirir, mevcut Kali WSL kurulumunu kullanır veya eksikse kurar, bağımlılıkları hazırlar ve görev sihirbazını açar. Windows yeniden başlatması gerekirse işlem sonraki oturumda devam eder. Kurulum yönetici izni isteyebilir.
 
 Kurulum önce mirrored ağı ve DNS tünellemeyi dener. Mirrored yapılandırması bilgisayardaki **tüm WSL 2 dağıtımlarını** etkiler. Mirrored başlatılamazsa Kali IPv4 adresi ve varsayılan rota doğrulanarak NAT ağında devam edilir. IP tabanlı LAN testlerinde Windows adaptör rotası ve Kali rotası her hedef için ayrıca denetlenir; hedefe erişim doğrulanmadan test başarılı sayılmaz. NAT modunda Kali fiziksel Windows ağ kartlarını doğrudan görmez. Ham katman-2, yayın trafiği, pasif fiziksel ağ yakalama ve bazı VPN yolları için ayrı uygunluk denetimi gerekir. Kullanılan ağ modu görev raporuna yazılır.
 
@@ -108,11 +108,11 @@ Mirrored WSL `0x8007054f` hatası verirse ve Windows'un IPv4/IPv6 TCP dinamik po
 ## Bir görev nasıl yürür?
 
 1. **Kapsam belirleme:** Sihirbazda müşteri, yetki referansı ve test ekibi girilir. IP/CIDR hedefleri ile domain/FQDN hedefleri ayrı alanlarda, hariçler de aynı ayrımla yazılır. Adaptör alt ağları yalnızca öneri olarak gösterilir.
-2. **Ön kontrol:** Seçilen adaptör, DNS çözümlemesi, rapor diski, Nmap ve Kali varsayılan rotası kontrol edilir. Sonuç `PREFLIGHT.json` dosyasına kaydedilir; engelleyici sorun varsa hedef taraması başlamaz. Hedef erişimi sonraki rota ve servis adımlarında doğrulanır. Kapsam ve FQDN adresleri görev için sabitlenir.
+2. **Ön kontrol:** Seçilen adaptör, DNS çözümlemesi, rapor diski, gerekli araçlar, AD test bağlamı ve Kali varsayılan rotası kontrol edilir. Sonuç `PREFLIGHT.json` dosyasına kaydedilir; engelleyici sorun varsa hedef taraması başlamaz. Operatör sorunu düzelterek ön kontrolü yeniden çalıştırabilir veya tarama yapmadan ön kontrol raporuyla görevi durdurabilir. Hedef erişimi sonraki rota ve servis adımlarında doğrulanır. Kapsam ve FQDN adresleri görev için sabitlenir.
 3. **Kontroller:** Seçilen profile ve bulunan servislere uygun modüller çalışır. Kapsam dışı yönlendirmeler izlenmez; eksik araçlar ve erişilemeyen hedefler adım günlüğüne işlenir.
 4. **İnceleme ve teslim:** Otomatik gözlemler, cihaz envanteri ve kanıtlar raporlanır. Analist doğruladığı bulguları ve manuel test sonuçlarını görev kaydına ekler.
 
-Etkileşimli terminalde adaptör listesinde **↑/↓** ile gezilir, **Boşluk veya Enter** ile seçim açılıp kapatılır, en alttaki **Devam et** üzerinde Enter ile ilerlenir. Wi‑Fi gibi varsayılan rotadaki adaptör önceden işaretlenir; seçim hedef kapsamına adres eklemez. Diğer seçim menülerinde ↑/↓ ve Enter kullanılır. Etkileşimsiz terminalde ekranda görünen **sıra numaraları** girilir; Windows `ifIndex` değeri yazılmaz.
+Etkileşimli terminalde adaptör listesinde **↑/↓** ile gezilir, **Boşluk veya Enter** ile seçim açılıp kapatılır, en alttaki **Devam et** üzerinde Enter ile ilerlenir. Wi‑Fi gibi varsayılan rotadaki adaptör önceden işaretlenir; seçim hedef kapsamına adres eklemez. Diğer seçim menülerinde ↑/↓ ve Enter kullanılır; Esc sihirbazı iptal eder. Etkileşimsiz terminalde ekranda görünen **sıra numaraları** girilir; Windows `ifIndex` değeri yazılmaz. Hatalı alanlar aynı adımda yeniden sorulur.
 
 ### Çalışma profilleri
 
@@ -124,6 +124,10 @@ Etkileşimli terminalde adaptör listesinde **↑/↓** ile gezilir, **Boşluk v
 | `full` | Birleşik ağ ve web akışı; sağlanan test hesaplarıyla isteğe bağlı kimlikli ve rol karşılaştırmaları. |
 
 AD, Windows test tarayıcısı, SSH test hesabı, kablosuz değerlendirme ve Claude AI analist yorumu görevde ayrıca seçilir. AI yorumu ve otomatik eşleşmeler taslak olarak işaretlenir; doğrulanmış güvenlik bulgusu analist kaydıyla oluşturulur.
+
+**Kimlikli HTTPS kontrolü (yalnız `full` profili):** Belirlediğiniz tekil web hedefinin seçtiğiniz salt okunur yolunda, örneğin `app.example.com` üzerindeki `/hesabim` sayfasında, anonim ve müşteri tarafından sağlanan test hesabıyla yapılan HTTPS HEAD isteklerinin durum kodları karşılaştırılır. İki farklı test hesabı ve örnek test kaynağı sağlanırsa isteğe bağlı GET rol/IDOR karşılaştırması da tanımlanabilir. `HTTP Basic` uygulama bunu kullanıyorsa, `Bearer` API test tokenı varsa seçilir. **Cookie**, uygulamanın form girişini sizin test hesabınızla tarayıcıda tamamladıktan sonra elde ettiğiniz geçici test oturumunu yalnız seçilen hedefte kullanır; sihirbaz form kullanıcı adı ve parolasını alıp otomatik giriş yapmaz. Bu kontrolü istemiyorsanız **Atla / tamamla** seçilir. Test sırları görev dosyasına veya rapora yazılmaz.
+
+Windows oturumu etki alanına bağlı değilse bağlı oturumla AD incelemesi seçeneği gösterilmez. Müşterinin sağladığı alan adı, DC ve yetkili test hesabı varsa LDAPS incelemesi seçilebilir; yoksa AD adımı atlanır. Tarama adımındaki hata veya zaman aşımı ilgili hedef/modül için kaydedilir; sonraki uygun hedefler çalışmaya devam eder ve rapor tamamlanmamış kontrolleri açıkça gösterir.
 
 Claude AI seçildiğinde dış hizmete gönderilecek veri düzeyi ayrıca belirlenir ve aktarım için sihirbazda onay alınır.
 
@@ -174,10 +178,10 @@ Resmî Kali `wordlists` paketi WSL kurulumuna dahildir. Sözlükler yalnız mü�
 
 ## Kurulum ve ortam yönetimi
 
-Tek satırlık kurulumdan sonra Windows giriş betiği `%LOCALAPPDATA%\Programs\UBDEN-Cyber\v4.8.3-wsl.5\ubden-wsl.ps1` konumundadır:
+Tek satırlık kurulumdan sonra Windows giriş betiği `%LOCALAPPDATA%\Programs\UBDEN-Cyber\v4.8.3-wsl.6\ubden-wsl.ps1` konumundadır:
 
 ```powershell
-$ubden = Join-Path $env:LOCALAPPDATA 'Programs\UBDEN-Cyber\v4.8.3-wsl.5\ubden-wsl.ps1'
+$ubden = Join-Path $env:LOCALAPPDATA 'Programs\UBDEN-Cyber\v4.8.3-wsl.6\ubden-wsl.ps1'
 & $ubden -Action status
 & $ubden -Action run
 ```
@@ -187,6 +191,6 @@ $ubden = Join-Path $env:LOCALAPPDATA 'Programs\UBDEN-Cyber\v4.8.3-wsl.5\ubden-ws
 **Tam WSL imhası:** `destroy`, raporları WSL dışındaki seçilen klasöre SHA-256 ile doğrulayarak aktarır ve açık son onaydan sonra **bilgisayardaki tüm WSL dağıtımlarını**, Ubuntu dahil, kalıcı olarak kaldırır. Bu işlem yalnız tüm WSL ortamının kaldırılması istendiğinde kullanılmalıdır.
 
 ```powershell
-$ubden = Join-Path $env:LOCALAPPDATA 'Programs\UBDEN-Cyber\v4.8.3-wsl.5\ubden-wsl.ps1'
+$ubden = Join-Path $env:LOCALAPPDATA 'Programs\UBDEN-Cyber\v4.8.3-wsl.6\ubden-wsl.ps1'
 & $ubden -Action destroy -ExportTo 'D:\UBDEN-Rapor-Devir'
 ```

@@ -29,7 +29,8 @@ from device_inventory import build_inventory
 from tool_catalog import CATALOG, inventory as catalog_inventory, version as package_version
 from host_bridge import invoke as windows_invoke, screenshot_path
 from ad_assessment import inspect as inspect_ad
-from wireless_assessment import run as run_wireless, validate as validate_wireless
+from wireless_assessment import (run as run_wireless, validate as validate_wireless,
+                                 MAC as WIFI_MAC, IFACE as WIFI_IFACE, BUSID as WIFI_BUSID)
 from supplemental_scans import run as run_supplemental
 from credential_assessment import run_ssh as run_ssh_passwords
 from sql_discovery import discover as discover_sql_browser
@@ -70,6 +71,30 @@ def ask(label, default="", required=False):
         if val or not required:
             return val
         UI.say("  Bu alan zorunlu.", "yellow")
+
+
+class WizardCancelled(Exception):
+    """The operator chose to leave the wizard before target traffic started."""
+
+
+class PreflightBlocked(Exception):
+    """The operator stopped after a blocked, recorded preflight."""
+
+
+def ask_checked(label, parse, default=""):
+    """Repeat a single invalid field without discarding the rest of the wizard."""
+    while True:
+        raw = ask(label, default, required=True)
+        try:
+            return parse(raw)
+        except (ValueError, TypeError) as exc:
+            UI.say(f"  {exc} Lütfen bu alanı yeniden girin.", "yellow")
+
+
+def require(value, predicate, message):
+    if not predicate(value):
+        raise ValueError(message)
+    return value
 
 def parse_target(raw):
     raw = raw.strip().lower().rstrip(".")
@@ -142,10 +167,7 @@ def freeze_scope(meta):
     if dc and not is_ip(dc):
         try: frozen[dc]=resolve(dc)
         except socket.gaierror: frozen[dc]=[]
-    try:
-        meta['address_budget']=validate_task_address_budget(meta['targets'],frozen)
-    except ValueError as exc:
-        raise SystemExit(str(exc)) from exc
+    meta['address_budget']=validate_task_address_budget(meta['targets'],frozen)
     meta['exclusions']=list(dict.fromkeys(expanded))
     meta['frozen_dns']=frozen
     meta['scope_frozen_at']=now()
@@ -310,11 +332,12 @@ def scenario_path(value):
 
 def private_value(label):
     if not sys.stdin.isatty():
-        raise SystemExit("Gizli bilgi girişi için etkileşimli terminal gerekir.")
-    value = getpass.getpass(f"  > {label}: ")
-    if not value or any(ord(c) < 32 or ord(c) == 127 for c in value):
-        raise SystemExit("Gizli değer boş olamaz ve kontrol karakteri içeremez.")
-    return value
+        raise WizardCancelled("Gizli bilgi girişi için etkileşimli terminal gerekir.")
+    while True:
+        value = getpass.getpass(f"  > {label}: ")
+        if value and not any(ord(c) < 32 or ord(c) == 127 for c in value):
+            return value
+        UI.say("  Gizli değer boş olamaz veya kontrol karakteri içeremez; yeniden girin.", "yellow")
 
 def collect_credentials(targets, exclusions):
     """Keep secrets in memory only; return public descriptors separately."""
@@ -322,35 +345,35 @@ def collect_credentials(targets, exclusions):
     if not candidates:
         UI.say("  Tekil web hedefi yok; kimlik doğrulamalı adım atlanıyor.", "yellow")
         return [], []
-    UI.say("  İsteğe bağlı HTTPS erişim kontrolü; boş bırakılırsa kimliksiz devam eder.", "dim")
-    UI.say("  Form girişinde tarayıcıdan alınan geçici test oturumu çerezini kullanabilirsiniz.", "dim")
+    UI.say("  Kimlikli HTTPS kontrolü yalnız seçtiğiniz kapsam içi web hedefi ve salt okunur yol içindir.", "cyan")
+    UI.say("  Her test rolü için aynı yola bir anonim ve bir kimlikli HEAD isteği gönderilir; yalnız HTTP durumları kaydedilir.", "dim")
+    UI.say("  İki test hesabı verilirse, ayrıca sizin belirlediğiniz test kaynağı için GET yetki karşılaştırması seçilebilir.", "dim")
+    UI.say("  Form girişi otomatik yapılmaz. Müşterinin test hesabıyla açtığınız oturumun geçici Cookie başlığını", "dim")
+    UI.say("  yalnız bu hedefte kullanmak isterseniz Cookie seçin. Basic veya Bearer ise uygulama/API bunları destekliyorsa seçilir.", "dim")
+    UI.say("  Kimlikli kontrol istemiyorsanız 'Atla / tamamla' seçin; sırlar dosyaya ve rapora yazılmaz.", "dim")
     public, secrets = [], []
     for slot in range(4):
         method=UI.menu("Kimlik yöntemi",[("0","Atla / tamamla"),("1","HTTP Basic: kullanıcı + parola"),("2","Bearer: API token"),("3","Cookie: mevcut test oturumu")],"0")
         if method == "0": break
-        target=ask("Yetkili tekil hedef (FQDN/IP)",candidates[0],required=True)
-        if target not in candidates:
-            raise SystemExit("Kimlik hedefi kapsam içindeki tekil FQDN/IP olmalı.")
-        role=ask("Test hesabının rol etiketi (ör. standart_kullanici)",required=True)
-        if not re.fullmatch(r"[A-Za-z0-9_-]{1,40}",role):
-            raise SystemExit("Rol etiketi 1-40 karakter; harf, rakam, _ veya - kullanın.")
-        if any(c["target"]==target and c["role"]==role for c in public):
-            raise SystemExit("Aynı hedef ve rol için yinelenen giriş var.")
-        port_text=ask("HTTPS portu", "443")
-        if not port_text.isdecimal() or not 1 <= int(port_text) <= 65535:
-            raise SystemExit("Geçerli bir HTTPS portu girin.")
-        port=int(port_text)
-        try: path=auth_path(ask("Korumalı, salt okunur yol", "/",required=True))
-        except ValueError as exc: raise SystemExit(str(exc)) from exc
+        target=candidates[int(UI.menu("Bu kimlik hangi web hedefine ait?",
+            [(str(i),name) for i,name in enumerate(candidates,1)],"1"))-1]
+        role=ask_checked("Test hesabının rol etiketi (örn. standart_kullanici)",
+            lambda value: require(value,
+                lambda v: bool(re.fullmatch(r"[A-Za-z0-9_-]{1,40}",v)) and
+                not any(c["target"]==target and c["role"]==v for c in public),
+                "Rol 1-40 harf/rakam/_/- içermeli ve aynı hedefte benzersiz olmalı."))
+        port=int(ask_checked("Bu uygulamanın HTTPS portu", lambda value: require(value,
+            lambda v: v.isdecimal() and 1<=int(v)<=65535,"1-65535 arasında HTTPS portu girin."),"443"))
+        path=ask_checked("Bu rolde erişilmesi gereken salt okunur yol (örn. /hesabim)",auth_path,"/")
         secret={"method":{"1":"basic","2":"bearer","3":"cookie"}[method]}
         if method == "1":
-            username=ask("Test kullanıcı adı",required=True)
-            if ":" in username or any(ord(c)<32 or ord(c)==127 for c in username):
-                raise SystemExit("Kullanıcı adı ':' veya kontrol karakteri içeremez.")
+            username=ask_checked("Bu hedef için test kullanıcı adı",lambda value: require(value,
+                lambda v: ':' not in v and not any(ord(c)<32 or ord(c)==127 for c in v),
+                "Kullanıcı adı ':' veya kontrol karakteri içeremez."))
             secret["username"]=username
-            secret["value"]=private_value("Test parolası (gizli)")
+            secret["value"]=private_value("Bu test hesabının parolası (gizli)")
         else:
-            secret["value"]=private_value("API token (gizli)" if method=="2" else "Cookie başlığı değeri (gizli)")
+            secret["value"]=private_value("Bu hedefin API tokenı (gizli)" if method=="2" else "Bu hedefin geçici test Cookie başlığı (gizli)")
         public.append({"target":target,"role":role,"method":secret["method"],"port":port,"path":path})
         secrets.append(secret)
     return public, secrets
@@ -361,23 +384,28 @@ def collect_ssh_passwords(targets, exclusions):
     UI.say('  SSH parola modülü isteğe bağlıdır; yalnız yetkili test hesabı kullanılır.','dim')
     public,secret=[],[]
     for slot in range(4):
-        value=ask('SSH test hesabı IP (boş=bitir)')
+        while True:
+            value=ask('SSH test hesabı IP (boş=bitir)')
+            if not value: break
+            try:
+                ip=str(ipaddress.ip_address(value))
+                permitted=any(ip==target if is_ip(target) else
+                              ipaddress.ip_address(ip) in ipaddress.ip_network(target)
+                              if is_network(target) else False for target in targets)
+                if not permitted or excluded(ip,exclusions):
+                    raise ValueError('SSH test IP açık hedef veya CIDR içinde ve hariç dışında olmalı')
+                break
+            except ValueError as exc:
+                UI.say(f'  {exc} Yeniden girin veya boş bırakarak atlayın.','yellow')
         if not value: break
-        try: ip=str(ipaddress.ip_address(value))
-        except ValueError as exc: raise SystemExit('SSH test hostu sayısal IP olmalı') from exc
-        permitted=any(ip==target if is_ip(target) else
-                      ipaddress.ip_address(ip) in ipaddress.ip_network(target)
-                      if is_network(target) else False for target in targets)
-        if not permitted or excluded(ip,exclusions):
-            raise SystemExit('SSH test IP açık hedef veya CIDR içinde ve hariç dışında olmalı')
-        username=ask('Yalnız test hesabı kullanıcı adı',required=True)
-        if not re.fullmatch(r'[A-Za-z0-9_.@\\-]{1,80}',username):
-            raise SystemExit('SSH test hesabı adı geçersiz')
-        if any(x['target_ip']==ip and x['username']==username for x in public):
-            raise SystemExit('Aynı SSH test hesabı yinelenemez')
-        fingerprint=ask('Önceden doğrulanmış SSH sunucu anahtarı SHA256 parmak izi',required=True)
-        if not re.fullmatch(r'SHA256:[A-Za-z0-9+/]{43}',fingerprint):
-            raise SystemExit('SSH anahtar parmak izi SHA256: biçiminde olmalı')
+        username=ask_checked('Yalnız test hesabı kullanıcı adı',lambda value: require(value,
+            lambda v: bool(re.fullmatch(r'[A-Za-z0-9_.@\\-]{1,80}',v)) and
+            not any(x['target_ip']==ip and x['username']==v for x in public),
+            'Hesap adı geçersiz veya bu IP için zaten girildi.'))
+        fingerprint=ask_checked('Önceden doğrulanmış SSH sunucu anahtarı SHA256 parmak izi',
+            lambda value: require(value,
+                lambda v: bool(re.fullmatch(r'SHA256:[A-Za-z0-9+/]{43}',v)),
+                'Parmak izi SHA256: ile başlamalı ve 43 Base64 karakteri içermeli.'))
         count=UI.menu('En fazla iki parola adayı', [('1','Tek aday'),('2','İki aday')],'1')
         values=[private_value(f'SSH parola adayı {i+1} (gizli)') for i in range(int(count))]
         public.append({'target_ip':ip,'username':username,'port':22,
@@ -388,7 +416,14 @@ def collect_ssh_passwords(targets, exclusions):
 def collect_role_scenarios(credentials):
     """Pre-authorized, read-only role/IDOR scenarios; no AI may add a URL."""
     choices=[spec for spec,_ in credentials]
-    if len(choices)<2 or UI.menu("Rol/IDOR testi",[("0","Atla"),("1","Test hesaplarıyla GET karşılaştırması")],"0")=="0":
+    compatible={i for i,item in enumerate(choices) if any(
+        j!=i and (other['target'],other['port'])==(item['target'],item['port'])
+        for j,other in enumerate(choices))}
+    if len(compatible)<2:
+        if choices:
+            UI.say('  Rol/IDOR karşılaştırması için aynı hedef ve HTTPS portunda iki farklı test hesabı gerekir; bu adım atlandı.','yellow')
+        return []
+    if UI.menu("Rol/IDOR testi",[("0","Atla"),("1","Test hesaplarıyla GET karşılaştırması")],"0")=="0":
         return []
     UI.say("  Her test için aynı hedef/HTTPS portunda iki test hesabı seçin.","dim")
     UI.say("  IDOR: ilk hesabın kendi test nesnesi; ikinci hesap o nesneye erişmemeli.","dim")
@@ -400,17 +435,21 @@ def collect_role_scenarios(credentials):
                                    ("2","IDOR: sahip/başka test hesabı"),
                                    ("3","Salt okunur iş kuralı: yetkisiz profile kapalı kaynak")],"0")
         if kind=="0": break
-        a=ask("Kaynak sahibi/yetkili hesabın sıra numarası",required=True)
-        b=ask("Erişimi reddedilmesi beklenen hesabın sıra numarası",required=True)
-        if not a.isdecimal() or not b.isdecimal() or not 1<=int(a)<=len(choices) or not 1<=int(b)<=len(choices) or a==b:
-            raise SystemExit("İki farklı geçerli test hesabı seçin.")
-        owner,challenger=choices[int(a)-1],choices[int(b)-1]
-        if (owner['target'],owner['port'])!=(challenger['target'],challenger['port']):
-            raise SystemExit("Hesaplar aynı hedef ve HTTPS portunda olmalı.")
-        try: path=scenario_path(ask("Salt okunur test kaynağı yolu veya ?id=test_nesnesi",required=True))
-        except ValueError as exc: raise SystemExit(str(exc)) from exc
-        if len(path)>256 or any(x['target']==owner['target'] and x['path']==path and x['owner']==owner['role'] and x['challenger']==challenger['role'] for x in scenarios):
-            raise SystemExit("Yol uzun veya senaryo tekrarlı.")
+        a=int(UI.menu("Kaynak sahibi/yetkili test hesabı",
+            [(str(i+1),f"{choices[i]['target']}:{choices[i]['port']} / {choices[i]['role']}")
+             for i in sorted(compatible)],str(min(compatible)+1)))-1
+        owner=choices[a]
+        matching=[i for i,item in enumerate(choices) if i!=a and
+                  (item['target'],item['port'])==(owner['target'],owner['port'])]
+        b=int(UI.menu("Erişimi reddedilmesi beklenen test hesabı",
+            [(str(i+1),f"{choices[i]['target']}:{choices[i]['port']} / {choices[i]['role']}")
+             for i in matching],str(matching[0]+1)))-1
+        challenger=choices[b]
+        path=ask_checked("Salt okunur test kaynağı yolu veya ?id=test_nesnesi",
+            lambda value: require(scenario_path(value),
+                lambda v: len(v)<=256 and not any(x['target']==owner['target'] and
+                x['path']==v and x['owner']==owner['role'] and x['challenger']==challenger['role']
+                for x in scenarios),"Yol uzun veya aynı hesap çifti için zaten girildi."))
         rule=ask("Beklenen iş kuralı (kısa, sır içermeyen açıklama)",required=True) if kind=='3' else ''
         scenarios.append({'id':f"AC-{slot+1:02d}",'kind':{'1':'role','2':'idor','3':'logic'}[kind],
                           'target':owner['target'],'port':owner['port'],'path':path,
@@ -421,9 +460,10 @@ def configure_ai():
     if UI.menu("Claude AI analist",[("0","Kapalı"),("1","Aç: isteğe bağlı rapor incelemesi ve sınırlı ek kontrol")],"0")=="0":
         return None
     UI.say("  API anahtarı bellekte tutulur; rapora, dosyaya ve komut satırına yazılmaz.","dim")
-    model=ask("Claude model kimliği",'claude-sonnet-4-6')
-    if not re.fullmatch(r'[A-Za-z0-9._-]{1,80}',model):
-        raise SystemExit("Geçersiz model kimliği.")
+    model=ask_checked("Claude model kimliği",lambda value: require(value,
+        lambda v: bool(re.fullmatch(r'[A-Za-z0-9._-]{1,80}',v)),
+        "Model kimliğinde yalnız harf, rakam, nokta, alt çizgi veya tire olabilir."),
+        'claude-sonnet-4-6')
     raw=UI.menu("Claude'ye gönderilecek içerik",[("1","Sadece anonimleştirilmiş adım/bulgu özeti"),
                       ("2","Özet + sınırlı ham kanıt/rapor metni (müşteri verisi içerebilir)")],"1")=="2"
     UI.say("  Aktarım: Anthropic API. Ham mod müşteri/kişisel veri içerebilir; yalnızca paylaşım yetkiniz varsa seçin.","yellow")
@@ -1147,24 +1187,28 @@ def collect_ad(snapshot):
     joined=bool(snapshot.get('part_of_domain')) if isinstance(snapshot,dict) else False
     if joined:
         UI.say(f"  Windows etki alanına bağlı: {snapshot.get('domain','?')}",'cyan')
-    choice=UI.menu('AD / Domain kontrolü',
-        [('0','Atla'),('1','Bağlı Windows etki alanını salt okunur incele'),
-         ('2','Verilen DC ve test hesabıyla LDAPS incele')], '1' if joined else '0')
+    else:
+        UI.say('  Windows oturumu etki alanına bağlı değil. AD testi için müşteri DC, alan adı ve test hesabı sağlamalıdır.','dim')
+    options=[('0','AD kontrolünü atla')]
+    if joined:
+        options.append(('1','Bağlı Windows etki alanını salt okunur incele'))
+    options.append(('2','Verilen DC ve test hesabıyla LDAPS incele'))
+    choice=UI.menu('AD / Domain kontrolü',options, '1' if joined else '0')
     if choice=='0': return {'mode':'disabled'},None
     if choice=='1':
-        if not joined:
-            raise SystemExit('Windows etki alanına bağlı değil; DC ve test hesabı seçin.')
         return {'mode':'joined','domain':snapshot.get('domain','')},None
-    try:
-        domain=parse_target(ask('Yetkili AD alan adı',required=True))
-        dc=parse_target(ask('Yetkili domain controller FQDN/IP',required=True))
-        if is_network(domain) or is_ip(domain) or is_network(dc):
-            raise ValueError('AD alanı FQDN, DC ise tekil FQDN veya IP olmalı')
-    except ValueError as exc:
-        raise SystemExit(str(exc)) from exc
-    account=ask('AD test hesabı (UPN veya DOMAIN\\user)',required=True)
-    if len(account)>160 or any(ord(c)<32 for c in account):
-        raise SystemExit('AD test hesabı geçersiz')
+    domain=ask_checked('Yetkili AD alan adı (örn. kurum.example)',
+        lambda value: require(parse_target(value),
+            lambda v: not is_network(v) and not is_ip(v),
+            'AD alanı IP/CIDR değil, alan adı olmalı.'))
+    dc=ask_checked('Yetkili domain controller FQDN veya tekil IP',
+        lambda value: require(parse_target(value),
+            lambda v: not is_network(v),
+            'DC tekil FQDN veya IP olmalı; CIDR kabul edilmez.'))
+    account=ask_checked('AD test hesabı (UPN veya DOMAIN\\user)',
+        lambda value: require(value,
+            lambda v: len(v)<=160 and not any(ord(c)<32 for c in v),
+            'AD test hesabı geçersiz.'))
     secret=private_value('AD test parolası (gizli)')
     return {'mode':'supplied','domain':domain,'dc':dc,'account':account},{'password':secret}
 
@@ -1178,18 +1222,27 @@ def collect_wireless():
         for line in usb.get('lines',[])[:24]: UI.say('  '+str(line),'dim')
     else:
         UI.say('  USB geçişi: '+str(usb.get('reason','aygıt listesi alınamadı')),'yellow')
-    spec={'enabled':True,'ssid':ask('Yetkili SSID',required=True),
-          'bssid':ask('Yetkili AP BSSID',required=True),
-          'channel':ask('Kanal',required=True),
-          'interface':ask('Kali monitor arayüzü (örn. wlan0mon)',required=True),
-          'busid':ask('WSL içine geçirilecek USB BusID (zaten Kali’deyse boş)'),
-          'test_station':ask('Yetkili test istemcisi MAC',required=True),
-          'test_station_ip':ask('Test istemcisi IP (aktif adım sağlık kontrolü)',required=True),
-          'wordlist':ask('Yetkili çevrimdışı kelime listesi (isteğe bağlı)')}
-    try:
-        return {'enabled':True,**validate_wireless(spec)}
-    except (ValueError,TypeError) as exc:
-        raise SystemExit(str(exc)) from exc
+    ssid=ask_checked('Yetkili SSID',lambda value: require(value,
+        lambda v: len(v)<=64,'SSID en fazla 64 karakter olabilir.'))
+    bssid=ask_checked('Yetkili AP BSSID (AA:BB:CC:DD:EE:FF)',lambda value: require(value,
+        lambda v: bool(WIFI_MAC.fullmatch(v)),'BSSID altı oktetli MAC biçiminde olmalı.'))
+    channel=ask_checked('Kanal (1-196)',lambda value: require(value,
+        lambda v: v.isdecimal() and 1<=int(v)<=196,'Kanal 1-196 arasında olmalı.'))
+    interface=ask_checked('Kali monitor arayüzü (örn. wlan0mon)',lambda value: require(value,
+        lambda v: bool(WIFI_IFACE.fullmatch(v)),'Kali arayüz adı geçersiz.'))
+    while True:
+        busid=ask('WSL içine geçirilecek USB BusID (zaten Kali’deyse boş)')
+        if not busid or WIFI_BUSID.fullmatch(busid):
+            break
+        UI.say('  USB BusID beklenen biçimde değil (örn. 1-2); yeniden girin veya boş bırakın.','yellow')
+    station=ask_checked('Yetkili test istemcisi MAC',lambda value: require(value,
+        lambda v: bool(WIFI_MAC.fullmatch(v)),'Test istemcisi MAC adresi geçersiz.'))
+    station_ip=ask_checked('Test istemcisi IP (aktif adım sağlık kontrolü)',
+                           lambda value: str(ipaddress.ip_address(value)))
+    wordlist=ask('Yetkili çevrimdışı kelime listesi (isteğe bağlı)')
+    return {'enabled':True,**validate_wireless({'ssid':ssid,'bssid':bssid,'channel':channel,
+        'interface':interface,'busid':busid,'test_station':station,
+        'test_station_ip':station_ip,'wordlist':wordlist})}
 
 
 def run_ad_module(root,meta,secret,events):
@@ -1321,14 +1374,18 @@ def collect_meta(args):
     auth=ask("Yazılı yetki/sözleşme referansı",required=True)
     tester=ask("Tester / test ekibi adı", required=True)
     UI.section(2,5,"Kapsam","Hedefleri ve hariç tutulan adresleri açıkça tanımlayın")
-    host_snapshot=windows_invoke('inventory',timeout=20)
-    show_windows_network(host_snapshot)
-    if os.environ.get('UBDEN_WINDOWS_BRIDGE') and host_snapshot.get('status')!='ok':
-        raise SystemExit('Windows adaptör köprüsü doğrulanamadı; WSL operasyonu başlatılmadı')
-    choices=selectable_adapters(host_snapshot) if host_snapshot.get('status')=='ok' else []
+    while True:
+        host_snapshot=windows_invoke('inventory',timeout=20)
+        show_windows_network(host_snapshot)
+        choices=selectable_adapters(host_snapshot) if host_snapshot.get('status')=='ok' else []
+        if not os.environ.get('UBDEN_WINDOWS_BRIDGE') or (host_snapshot.get('status')=='ok' and choices):
+            break
+        reason=host_snapshot.get('reason','Kullanılabilir ve adresli Windows adaptörü bulunamadı')
+        UI.say(f'  Windows ağ ön kontrolü: {reason}','yellow')
+        if UI.menu('Ağ durumunu düzelttikten sonra',
+                   [('1','Adaptörleri yeniden kontrol et'),('0','Görevi iptal et')],'1')=='0':
+            raise WizardCancelled('Windows ağ ön kontrolü tamamlanmadı.')
     selected_interfaces=[]
-    if os.environ.get('UBDEN_WINDOWS_BRIDGE') and not choices:
-        raise SystemExit('Kullanılabilir Windows ağ adaptörü yok; WSL operasyonu başlatılmadı')
     if choices:
         defaults={route.get('interface_index') for route in host_snapshot.get('default_routes',[])
                   if isinstance(route,dict) and route.get('destination')=='0.0.0.0/0'}
@@ -1363,25 +1420,35 @@ def collect_meta(args):
     named_exclusions=collect_scope_entries('Hariç domain/FQDN adresleri (varsa)','named')
     exclusions=list(dict.fromkeys(numeric_exclusions+named_exclusions))
     UI.section(3,5,"Test profili","Üretim ortamı için kontrollü hız ve süre limitleri")
-    profile_choice=UI.menu("Tarama kapsamı",[("1","External: dış yüzey, DNS/WHOIS, servis, HTTP/TLS"),("2","Web: web portları, başlıklar, yöntemler ve TLS"),("3","Network: servisler + seçilmiş NSE güvenlik kontrolleri"),("4","Full: tüm otomatik modüller + isteğe bağlı kimlikli erişim kontrolü")],"4")
+    profile_options=[("1","External: dış yüzey, DNS/WHOIS, servis, HTTP/TLS"),("2","Web: web portları, başlıklar, yöntemler ve TLS"),("3","Network: servisler + seçilmiş NSE güvenlik kontrolleri"),("4","Full: tüm otomatik modüller + isteğe bağlı kimlikli erişim kontrolü")]
+    if args.nuclei_templates:
+        UI.say('  Özel Nuclei şablonu yalnız Web veya Full profilinde kullanılabilir.','dim')
+        profile_options=[row for row in profile_options if row[0] in ('2','4')]
+    profile_choice=UI.menu("Tarama kapsamı",profile_options,"4")
     profile={"1":"external","2":"web","3":"network","4":"full"}[profile_choice]
-    if args.nuclei_templates and profile not in ("web","full"):
-        raise SystemExit("Nuclei şablonları yalnızca Web veya Full profiliyle kullanılabilir.")
     template_dir=""
     nuclei_profile="disabled"
     if profile in ("web","full"):
-        selected="0" if args.no_nuclei else str(args.nuclei_templates or ask("Nuclei şablonu: Enter=UBDEN varsayılan, 0=atla, /dizin=özel")).strip()
-        if selected != "0":
-            nuclei_profile="custom" if selected else "baseline"
-            template_dir=selected or str(BASELINE)
-            candidate=Path(template_dir).expanduser().resolve()
-            if not candidate.is_dir() or not any(p.is_file() and p.suffix.lower() in ('.yaml','.yml') for p in candidate.rglob('*')):
-                raise SystemExit("Nuclei şablon dizini bulunamadı veya YAML içermiyor.")
+        preset=str(args.nuclei_templates) if args.nuclei_templates else None
+        while True:
+            selected="0" if args.no_nuclei else str(preset if preset is not None else
+                ask("Nuclei şablonu: Enter=UBDEN varsayılan, 0=atla, /dizin=özel")).strip()
+            preset=None
+            if selected == "0":
+                break
+            candidate=Path(selected or BASELINE).expanduser().resolve()
             try:
+                if not candidate.is_dir() or not any(p.is_file() and p.suffix.lower() in ('.yaml','.yml') for p in candidate.rglob('*')):
+                    raise ValueError('Şablon dizini bulunamadı veya YAML içermiyor')
                 template_inventory(candidate)
-            except ValueError as exc:
-                raise SystemExit(f'Nuclei şablonları kapsam sınırına uymuyor: {exc}') from exc
+            except (OSError,ValueError) as exc:
+                UI.say(f'  Nuclei şablonları: {exc}. Dizini düzeltin veya 0 ile atlayın.','yellow')
+                if args.no_nuclei:
+                    break
+                continue
+            nuclei_profile="custom" if selected else "baseline"
             template_dir=str(candidate)
+            break
     auth_specs, auth_secrets=collect_credentials(targets,exclusions) if profile=="full" else ([],[])
     credentials=list(zip(auth_specs,auth_secrets))
     role_scenarios=collect_role_scenarios(credentials) if profile=='full' else []
@@ -1406,16 +1473,33 @@ def collect_meta(args):
     if profile in ("external","full"): required += ["dig","whois"]
     if template_dir and not shutil.which("nuclei"):
         UI.say("  Nuclei kurulu değil; diğer adımlar çalışır, Nuclei adımı eksik olarak raporlanır.","yellow")
-    missing=[tool for tool in required if not shutil.which(tool)]
-    if missing:
-        raise SystemExit("Eksik araç: " + ", ".join(missing) + ". Kurulumu tamamlayın.")
-    if UI.prompt("Yazılı izin ve kapsamı kontrol ettim. Başlatmak için YETKILIYIM yazın") != "YETKILIYIM":
-        raise SystemExit("Başlatılmadı.")
+    while True:
+        missing=[tool for tool in required if not shutil.which(tool)]
+        if not missing:
+            break
+        UI.say("  Gerekli araç eksik: " + ", ".join(missing) + ". Kurulumu düzelttikten sonra kontrolü tekrarlayın.","yellow")
+        if UI.menu('Araç ön kontrolü', [('1','Yeniden kontrol et'),('0','Görevi iptal et')],'1')=='0':
+            raise WizardCancelled('Gerekli araçlar hazır değil.')
+    while True:
+        approval=UI.prompt("Yazılı izin ve kapsamı kontrol ettim. Başlatmak için YETKILIYIM, çıkmak için IPTAL yazın")
+        if approval == "YETKILIYIM":
+            break
+        if approval == "IPTAL":
+            raise WizardCancelled('Operatör görevi başlatmadan iptal etti.')
+        UI.say('  Başlatma onayı alınmadı. YETKILIYIM veya IPTAL yazın.','yellow')
     return meta,credentials,ai_config,ad_secret,ssh_tests
 
 def run(args):
-    meta,credentials,ai_config,ad_secret,ssh_tests=collect_meta(args)
-    freeze_scope(meta)
+    while True:
+        meta,credentials,ai_config,ad_secret,ssh_tests=collect_meta(args)
+        try:
+            freeze_scope(meta)
+            break
+        except ValueError as exc:
+            UI.say(f'  DNS çözümlemesi sonrası kapsam sınırı aşıldı: {exc}','yellow')
+            if UI.menu('Görev kapsamı', [('1','Sihirbazda hedefleri düzelt'),
+                                       ('0','Görevi iptal et')],'1')=='0':
+                raise WizardCancelled('Kapsam sınırı doğrulanamadı.')
     os.umask(0o077)
     base,owner=choose_run_base(args.runs)
     root=base / f"{safe_filename(meta['client'])}_{dt.datetime.now(dt.timezone.utc):%Y%m%d_%H%M%S}_{meta['id'][:8]}"
@@ -1430,32 +1514,60 @@ def run(args):
     (root/"MANUEL_TEST_PLANI.md").write_text(MANUAL_PLAN,encoding="utf-8")
     events=[]
     try:
-        preflight=inspect_environment(meta,root)
-        atomic_json(root/'PREFLIGHT.json',preflight)
-        events.append({'step':'environment_preflight',
-                       'status':'blocked' if preflight['status']=='blocked' else 'ok',
-                       'preflight_status':preflight['status'],
-                       'detail':preflight['note'],'output':'PREFLIGHT.json',
-                       'sha256':hashlib.sha256((root/'PREFLIGHT.json').read_bytes()).hexdigest()})
-        for check in preflight['checks']:
-            UI.say(f"  Ön kontrol [{check['status']}]: {check['name']} — {check['detail']}",
-                   'red' if check['status']=='blocked' else 'yellow' if check['status']=='warning' else 'dim')
-        if preflight['status']=='blocked':
-            raise RuntimeError('Ön kontrol başarısız; hedef taraması başlatılmadı')
+        attempt=0
+        while True:
+            attempt+=1
+            preflight=inspect_environment(meta,root)
+            check_file=root/f'PREFLIGHT_{attempt:02d}.json'
+            atomic_json(check_file,preflight)
+            atomic_json(root/'PREFLIGHT.json',preflight)
+            events.append({'step':'environment_preflight',
+                           'status':'blocked' if preflight['status']=='blocked' else 'ok',
+                           'preflight_status':preflight['status'],
+                           'detail':preflight['note'],'output':check_file.name,
+                           'sha256':hashlib.sha256(check_file.read_bytes()).hexdigest()})
+            for check in preflight['checks']:
+                UI.say(f"  Ön kontrol [{check['status']}]: {check['name']} — {check['detail']}",
+                       'red' if check['status']=='blocked' else 'yellow' if check['status']=='warning' else 'dim')
+            if preflight['status']!='blocked':
+                for event in events:
+                    if event.get('step')=='environment_preflight' and event.get('status')=='blocked':
+                        event['status']='recovered'
+                        event['detail']='İlk ön kontrol engeli sonraki denetimde giderildi; önceki kayıt kanıtta korunuyor'
+                break
+            UI.say('  Ön kontrol engeli nedeniyle hedef trafiği başlamadı. Sorunu düzelttikten sonra yeniden denetleyebilirsiniz.','yellow')
+            if UI.menu('Ön kontrol', [('1','Yeniden denetle'),
+                                      ('0','Görevi durdur ve ön kontrol raporunu oluştur')],'1')=='0':
+                raise PreflightBlocked()
         for index,target in enumerate(meta["targets"],1):
             if excluded(target,meta["exclusions"]):
                 events.append({"step":"scope","target":target,"status":"excluded"})
                 continue
-            scan_target(target,meta,root,events,credentials,index,len(meta["targets"]),ssh_tests)
+            try:
+                scan_target(target,meta,root,events,credentials,index,len(meta["targets"]),ssh_tests)
+            except Exception as exc:
+                events.append({'step':'target_error','target':target,'status':'error',
+                               'detail':f'{type(exc).__name__}; bu hedefte kalan adımlar durduruldu'})
+                UI.say(f'  {target}: {type(exc).__name__} kaydedildi; sıradaki hedefe geçiliyor.','yellow')
             UI.target_done(index,len(meta['targets']))
         record_exploit_gate(root,events)
-        run_ad_module(root,meta,ad_secret,events)
+        try:
+            run_ad_module(root,meta,ad_secret,events)
+        except Exception as exc:
+            events.append({'step':'ad_assessment','status':'error',
+                           'detail':f'{type(exc).__name__}; AD adımı tamamlanamadı'})
+            UI.say(f'  AD adımı tamamlanamadı ({type(exc).__name__}); diğer modüller devam ediyor.','yellow')
         for item in ssh_tests:
             if not item['used']:
                 events.append({'step':'ssh_password_preflight','tool':'paramiko',
                                'target':item['target_ip'],'status':'skipped',
                                'detail':'Kapsam icinde acik SSH portu dogrulanmadi'})
-        run_browser_module(root,meta,credentials,events)
+        try:
+            run_browser_module(root,meta,credentials,events)
+        except Exception as exc:
+            events.append({'step':'browser','status':'error',
+                           'detail':f'{type(exc).__name__}; test tarayıcısı tamamlanamadı'})
+            UI.say(f'  Test tarayıcısı tamamlanamadı ({type(exc).__name__}); diğer modüller devam ediyor.','yellow')
         if meta.get('wireless',{}).get('enabled'):
             wireless_raw=root/'targets'/'authorized_wireless'/'raw'
             busid=meta['wireless'].get('busid')
@@ -1464,10 +1576,21 @@ def run(args):
                 events.append({'step':'wireless_usb_attach','status':attached.get('status','error'),
                                'detail':attached.get('reason',attached.get('detail',''))})
             if not busid or attached.get('status')=='ok':
-                run_wireless(meta['wireless'],wireless_raw,events,command)
+                try:
+                    run_wireless(meta['wireless'],wireless_raw,events,command)
+                except Exception as exc:
+                    events.append({'step':'wireless','status':'error',
+                                   'detail':f'{type(exc).__name__}; kablosuz adım tamamlanamadı'})
+                    UI.say(f'  Kablosuz adım tamamlanamadı ({type(exc).__name__}); kanıt kaydı korunuyor.','yellow')
+            else:
+                events.append({'step':'wireless_preflight','status':'skipped',
+                               'detail':'Seçilen USB aygıtı Kali içine geçirilemedi; ham Wi-Fi testleri başlamadı'})
         else:
             events.append({'step':'wireless','status':'skipped',
                            'detail':'Ham Wi-Fi modülü görevde seçilmedi'})
+    except PreflightBlocked:
+        meta["status"]="preflight_blocked"
+        UI.say('  Ön kontrol raporu oluşturuluyor; hedef taraması yapılmadı.','yellow')
     except KeyboardInterrupt:
         meta["status"]="interrupted"
         UI.say("\n  Durduruldu; eldeki çıktılardan rapor oluşturuluyor.","yellow")
@@ -1479,9 +1602,8 @@ def run(args):
     else:
         scanned=any((str(e.get('step','')).startswith('nmap_') or e.get('step')=='port_discovery')
                     and e.get('status')=='ok' for e in events)
-        meta["status"]=("no_data" if not scanned
-                        else "completed_with_errors" if any(e.get("status") in ("error","timeout","missing_tool","blocked","no_hosts","partial") for e in events)
-                        else "completed")
+        has_errors=any(e.get("status") in ("error","timeout","missing_tool","blocked","no_hosts","partial") for e in events)
+        meta["status"]=("completed_with_errors" if has_errors else "no_data" if not scanned else "completed")
     finally:
         meta["finished_at"]=now()
         try:
@@ -1497,22 +1619,28 @@ def run(args):
         try:
             result=subprocess.run([sys.executable,str(ROOT/"report_v2.py"),str(root)],check=False)
             if ai_config:
-                def replay(scenario):
-                    target=scenario['target']
-                    raw=root/'targets'/safe_filename(target)/'raw'
-                    if is_ip(target):
-                        ips=[target]
-                    else:
-                        recorded=json.loads((raw/'dns_resolution.json').read_text())['addresses']
-                        if set(resolve(target))!=set(recorded):
-                            raise ValueError('DNS kapsamı değişti; AI ek kontrolü engellendi')
-                        ips=recorded
-                    for ip in ips[:1]:
-                        matching=[pair for pair in credentials if pair[0]['target']==target]
-                        role_probe(root,scenario,ip,matching,events,attempt=2)
-                outcome=analyze_run(root,meta,events,ai_config,replay)
-                UI.say(f"  Claude AI analist: {outcome['status']}; ek kontrol: {len(outcome['checks_executed'])}",
-                       'green' if outcome['status']=='completed' else 'yellow')
+                try:
+                    def replay(scenario):
+                        target=scenario['target']
+                        raw=root/'targets'/safe_filename(target)/'raw'
+                        if is_ip(target):
+                            ips=[target]
+                        else:
+                            recorded=json.loads((raw/'dns_resolution.json').read_text())['addresses']
+                            if set(resolve(target))!=set(recorded):
+                                raise ValueError('DNS kapsamı değişti; AI ek kontrolü engellendi')
+                            ips=recorded
+                        for ip in ips[:1]:
+                            matching=[pair for pair in credentials if pair[0]['target']==target]
+                            role_probe(root,scenario,ip,matching,events,attempt=2)
+                    outcome=analyze_run(root,meta,events,ai_config,replay)
+                    UI.say(f"  Claude AI analist: {outcome['status']}; ek kontrol: {len(outcome['checks_executed'])}",
+                           'green' if outcome['status']=='completed' else 'yellow')
+                except Exception as exc:
+                    events.append({'step':'ai_analysis','status':'error',
+                                   'detail':f'{type(exc).__name__}; AI incelemesi tamamlanamadı'})
+                    meta['status']='completed_with_errors'
+                    UI.say(f'  AI incelemesi tamamlanamadı ({type(exc).__name__}); otomatik kanıtlar raporlanıyor.','yellow')
                 atomic_json(root/'steps.json',events)
                 result=subprocess.run([sys.executable,str(ROOT/"report_v2.py"),str(root)],check=False)
         finally:
@@ -1582,4 +1710,11 @@ def main():
         run(args)
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except WizardCancelled as exc:
+        UI.say(f'  Görev başlatılmadı: {exc}','yellow')
+    except EOFError:
+        UI.say('  Giriş akışı kapandı; hedef trafiği başlatılmadı.','yellow')
+    except KeyboardInterrupt:
+        UI.say('\n  Operatör sihirbazı iptal etti.','yellow')
