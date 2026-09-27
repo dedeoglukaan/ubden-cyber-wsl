@@ -198,6 +198,8 @@ def role_candidates(ports, vendor, gateway=False):
         add('Dosya/paylaşım sunucusu adayı','SMB veya NFS servisi görüldü')
     if numbers & {80,443,8080,8443}:
         add('Web veya yönetim arayüzü adayı','HTTP(S) portu görüldü')
+    if 1723 in numbers:
+        add('PPTP/VPN uç noktası adayı','TCP/1723 açık görüldü; tünel veya cihaz kimliği ayrıca doğrulanmalı')
     if gateway:
         add('Ağ geçidi','Windows varsayılan rota kaydı ile eşleşti','orta')
     explicit=' '.join([vendor,product]).lower()

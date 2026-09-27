@@ -88,6 +88,8 @@ class AnalystWorkplanTests(unittest.TestCase):
         self.assertIn('SQL Server adayı',names)
         self.assertIn('Ağ geçidi',names)
         self.assertNotIn('Güvenlik duvarı ürünü adayı',names)
+        vpn=role_candidates([{"port":"1723"}],"Bilinmiyor")
+        self.assertEqual(vpn[0]['role'],'PPTP/VPN uç noktası adayı')
 
     def test_ieee_refresh_rejects_invalid_response_and_preserves_cache(self):
         with TemporaryDirectory() as folder:

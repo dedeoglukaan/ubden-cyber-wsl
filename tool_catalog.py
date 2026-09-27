@@ -136,7 +136,7 @@ def inventory(events: list[dict] | None = None) -> dict:
     for event in events:
         executable = event.get("tool", "")
         name = STEP_ALIASES.get(executable, executable)
-        if executable and event.get("status") in ("ok", "error", "timeout", "interrupted", "auth_failed"):
+        if executable and event.get("status") in ("ok", "warning", "partial", "no_response", "error", "timeout", "interrupted", "auth_failed"):
             by_tool.setdefault(name, []).append(str(event.get("step", "")))
             if event.get("status") == "ok":
                 successful.setdefault(name, []).append(str(event.get("step", "")))

@@ -35,6 +35,7 @@ class WslPlatformTests(unittest.TestCase):
             data = tool_catalog.inventory([
                 {"tool": "fping", "step": "fping_001", "status": "ok"},
                 {"tool": "nmap", "step": "nmap_001", "status": "timeout"},
+                {"tool": "nuclei", "step": "nuclei_001", "status": "warning"},
                 {"tool": "hping3", "step": "hping3_001", "status": "missing_tool"},
             ])
         rows = {item["name"]: item for item in data["tools"]}
@@ -43,6 +44,8 @@ class WslPlatformTests(unittest.TestCase):
         self.assertEqual(rows["fping"]["successful_steps"], ["fping_001"])
         self.assertEqual(rows["nmap"]["steps"], ["nmap_001"])
         self.assertEqual(rows["nmap"]["successful_steps"], [])
+        self.assertTrue(rows["nuclei"]["executed"])
+        self.assertEqual(rows["nuclei"]["successful_steps"], [])
         self.assertFalse(rows["hping3"]["executed"])
         self.assertFalse(rows["curl"]["executed"])
 

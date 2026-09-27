@@ -191,7 +191,8 @@ def tool_rows(root, steps):
         return []
     data=json.loads(path.read_text(encoding='utf-8'))
     if isinstance(data.get('tools'),list):
-        ran={str(step.get('tool','')).lower() for step in steps if step.get('status')=='ok'}
+        ran={str(step.get('tool','')).lower() for step in steps if step.get('status') in
+             ('ok','warning','partial','no_response','error','timeout','interrupted','auth_failed')}
         rows=[]
         for item in data['tools']:
             name=str(item.get('name',''))
@@ -219,7 +220,9 @@ def tool_rows(root, steps):
     rows=[]
     for group in ('automatic_candidates','manual_only'):
         for name,available in data.get(group,{}).items():
-            executed=any(any(str(s.get('step','')).startswith(prefix) for prefix in used.get(name,())) and s.get('status')=='ok' for s in steps)
+            executed=any(any(str(s.get('step','')).startswith(prefix) for prefix in used.get(name,())) and
+                         s.get('status') in ('ok','warning','partial','no_response','error','timeout','interrupted','auth_failed')
+                         for s in steps)
             category,url=info.get(name,('Uzman aracı',''))
             rows.append((name,'Kurulu' if available else 'Eksik', 'Çalıştırıldı' if executed else 'Çalıştırılmadı',category,url))
     return sorted(rows,key=lambda item:(item[2]!='Çalıştırıldı',item[0]))
@@ -267,6 +270,27 @@ def platform_lines(root, meta, steps):
     stopped=[s for s in steps if s.get('status') in ('blocked','timeout','interrupted')]
     if stopped:
         lines.append('Sınır veya ön koşul nedeniyle duran adımlar: '+', '.join(str(s.get('step','?')) for s in stopped[:25]))
+    for path in sorted((root/'targets').glob('*/raw/audit_*.xml'))[:20]:
+        try:
+            tree=ET.parse(path)
+        except (ET.ParseError,OSError):
+            continue
+        for host in tree.findall('./host'):
+            ip=next((a.get('addr','') for a in host.findall('./address')
+                     if a.get('addrtype') in ('ipv4','ipv6')),path.parent.parent.name)
+            for port in host.findall('./ports/port'):
+                script=next((s for s in port.findall('./script') if s.get('id')=='ssl-cert'),None)
+                if script is None:
+                    continue
+                output=script.get('output','')
+                subject=re.search(r'^Subject:\s*(.+)$',output,re.M)
+                validity=re.search(r'^Not valid after:\s*(.+)$',output,re.M)
+                if subject:
+                    lines.append(f"TLS sertifikası {ip}:{port.get('portid','?')}: {subject.group(1)[:150]}"
+                                 +(f"; bitiş {validity.group(1)[:40]}" if validity else '')
+                                 +f"; kanıt {path.relative_to(root)}. Sertifika HTTP yanıtını doğrulamaz.")
+    if (root/'STEP_AUDIT.json').is_file():
+        lines.append('Önceki adım durumları ham kanıta göre yeniden değerlendirildi; steps.json korundu. Ayrıntı: STEP_AUDIT.json')
     return lines
 
 def styles():
@@ -543,6 +567,49 @@ def read_data(root):
         findings.append(finding)
     findings.sort(key=lambda f:(list(SEVERITIES).index(f['severity']),f['id']))
     return meta,steps,hosts,findings,review
+
+
+def audit_recorded_steps(root, steps):
+    """Correct old zero-exit tool failures in reports; preserve the original log."""
+    corrected=[]
+    changes=[]
+    base=root.resolve()
+    for original in steps:
+        if not isinstance(original,dict):
+            corrected.append(original)
+            continue
+        item=dict(original)
+        output=str(item.get('output',''))
+        relative=Path(output)
+        path=base/relative
+        sample=''
+        if (output and not relative.is_absolute() and '..' not in relative.parts and
+                path.resolve().is_relative_to(base) and path.is_file() and not path.is_symlink()):
+            with path.open('rb') as handle:
+                sample=handle.read(65536).decode('utf-8','replace')
+        tool=item.get('tool')
+        if tool=='nikto' and item.get('status')=='ok' and (
+                'invalid for option' in sample.lower() or 'unknown option' in sample.lower()):
+            item.update(status='error',detail='Nikto secenek hatasi; onceki sifir cikis kodu testi tamamlamadi')
+        elif tool=='nuclei' and item.get('status')=='ok':
+            errors=[line for line in sample.splitlines() if re.search(r'\bERR\b',
+                re.sub(r'\x1b\[[0-9;]*m','',line))]
+            if errors:
+                config_only=all('Could not read nuclei-ignore file' in line for line in errors)
+                item.update(status='warning' if config_only else 'partial',
+                    detail='Nuclei ignore dosyasi eksik; sablonlar calisti' if config_only
+                    else 'Nuclei hata satirlari verdi; cikti incelenmeli')
+        elif tool=='fping' and item.get('status')=='error' and item.get('exit_code')==1:
+            item.update(status='no_response',detail='ICMP yaniti yok; TCP servis bulgulari bundan etkilenmez')
+        elif tool=='curl' and item.get('exit_code') in (52,60) and not item.get('detail'):
+            item['detail']=('TLS sertifikasi istenen IP/alan adiyla eslesmiyor' if
+                item['exit_code']==60 else 'Baglanti kuruldu fakat HTTP yaniti bos')
+        if (item.get('status'),item.get('detail'))!=(original.get('status'),original.get('detail')):
+            changes.append({'step':str(item.get('step','')),'original_status':original.get('status'),
+                'report_status':item.get('status'),'reason':item.get('detail'),
+                'evidence':output,'evidence_sha256':item.get('sha256','')})
+        corrected.append(item)
+    return corrected,changes
 
 def footer(canvas,doc):
     canvas.saveState()
@@ -966,6 +1033,9 @@ def html_report(root,meta,steps,hosts,findings,review,report_errors=None):
             '<table><thead><tr><th>Bulgu</th><th>Varlık</th><th>Önerilen düzeltme</th></tr></thead><tbody>'+''.join('<tr><td>'+safe(', '.join(item['findings']))+'</td><td>'+safe(', '.join(item['assets'][:6]))+'</td><td>'+safe(item['recommendation'])+'</td></tr>' for item in insights.get('remediation',[]))+'</tbody></table>')
     doc=doc.replace('<h2>Analist bulguları</h2>',risk_html+priority_html+network_html+ad_html+coverage_html+preflight_html+insight_html+analyst_html+'<h2>Analist bulguları</h2>')
     doc=doc.replace('<h2>Çalışma günlüğü</h2>',device_html+'<h2>Çalışma günlüğü</h2>')
+    if (root/'STEP_AUDIT.json').is_file():
+        doc=doc.replace('<h2>Çalışma günlüğü</h2>',
+            '<p class="notice">Önceki adım durumları ham kanıta göre yeniden değerlendirildi. Orijinal steps.json korunmuştur. <a href="STEP_AUDIT.json">Yeniden değerlendirme kaydı</a></p><h2>Çalışma günlüğü</h2>')
     doc=doc.replace('</style></head>', '.riskbars{max-width:700px}.riskrow{display:grid;grid-template-columns:70px 1fr 32px;gap:12px;align-items:center;margin:7px 0}.risktrack{height:12px;background:#edf1f6;border-radius:7px}.risktrack i{height:12px;display:block;border-radius:7px}</style></head>')
     doc=doc.replace('Kimlik doğrulamalı iş akışları ve manuel istismar doğrulaması bu çıktıda yer almaz.', 'Otomatik kimlikli erişim kontrolü yalnızca durum kodlarını karşılaştırır. İnsan tarafından yapılan testler yalnızca yukarıdaki manuel test kayıtlarıyla belgelenmişse bu rapora dahildir.')
     if not (root/'MANUEL_TEST_PLANI.md').is_file():
@@ -979,6 +1049,11 @@ def main():
     if len(sys.argv)!=2: raise SystemExit('Kullanım: python3 report_v2.py RUN_DIZINI')
     root=Path(sys.argv[1]).resolve()
     meta,steps,hosts,findings,review=read_data(root)
+    steps,audit=audit_recorded_steps(root,steps)
+    if audit:
+        (root/'STEP_AUDIT.json').write_text(json.dumps({'schema':1,
+            'note':'Orijinal steps.json ve ham kanitlar degistirilmedi; raporda bu duzeltilmis durumlar kullanildi.',
+            'changes':audit},ensure_ascii=False,indent=2)+'\n',encoding='utf-8')
     if not (root/'DEVICE_INVENTORY.json').is_file() and hosts:
         try:
             # An old run has no reliable current neighbour cache: use saved XML only.

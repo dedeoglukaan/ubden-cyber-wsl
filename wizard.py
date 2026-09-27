@@ -837,6 +837,26 @@ def command(name, argv, folder, events, timeout=900, stop_on=()):
                         record.update(status="timeout", detail=f"{timeout} saniye aşıldı")
                 else:
                     record.update(status="ok" if code == 0 else "error", exit_code=code)
+                    if argv[0]=='curl' and code==60:
+                        record['detail']='TLS sertifikasi istenen IP/alan adiyla eslesmiyor; TCP ve TLS erisimi ayri degerlendirilir'
+                    elif argv[0]=='curl' and code==52:
+                        record['detail']='Baglanti kuruldu fakat HTTP yaniti bos; acik port atlanmis sayilmaz'
+                    elif argv[0]=='fping' and code==1:
+                        record.update(status='no_response',detail='ICMP yaniti yok; TCP servis bulgulari bundan etkilenmez')
+                    elif argv[0] in ('nikto','nuclei') and code==0:
+                        with path.open('rb') as output:
+                            excerpt=output.read(65536).decode('utf-8','replace')
+                        if argv[0]=='nikto' and ('invalid for option' in excerpt.lower() or
+                                'unknown option' in excerpt.lower()):
+                            record.update(status='error',detail='Nikto secenek hatasi; test gercekten calismadi')
+                        elif argv[0]=='nuclei':
+                            errors=[line for line in excerpt.splitlines() if re.search(r'\bERR\b',
+                                re.sub(r'\x1b\[[0-9;]*m','',line))]
+                            if errors:
+                                config_only=all('Could not read nuclei-ignore file' in line for line in errors)
+                                record.update(status='warning' if config_only else 'partial',
+                                    detail='Nuclei yerel ignore dosyasi eksik; sablonlar yine calisti' if config_only
+                                    else 'Nuclei hata satirlari verdi; tamamlama kaniti incelenmeli')
         except (OSError, ValueError) as exc:
             record.update(status="error", detail=str(exc))
     record.update(finished_at=now(), seconds=round(time.monotonic()-started, 2))
@@ -847,6 +867,39 @@ def command(name, argv, folder, events, timeout=900, stop_on=()):
     if interrupted:
         raise KeyboardInterrupt
     return record
+
+
+def recover_http_probe(name, argv, result, raw, events, target, ip, scheme, allow_get=False):
+    """Keep scope pinned while distinguishing TLS identity and empty HTTP replies."""
+    current=result
+    request=argv
+    unverified=False
+    if scheme=='https' and is_ip(target) and result.get('exit_code')==60:
+        events.append({'step':'tls_identity','target':ip,'status':'mismatch',
+            'detail':'IP hedefinin TLS sertifikasi IP adresiyle eslesmiyor; HTTP gozlemi icin kimlik dogrulamasi devre disi bir kez denenecek'})
+        UI.say(f'  {ip}: TCP/443 ve TLS ayri kaydedildi; sertifika IP ile eslesmiyor. HTTP basliklari dogrulamasiz tek denemeyle kontrol edilecek.','yellow')
+        request=argv[:-1]+['--insecure',argv[-1]]
+        current=command(name+'_tls_unverified',request,raw,events,25)
+        if current.get('status')=='ok':
+            current['detail']='TLS kimligi dogrulanmadan yalniz HTTP yaniti gozlemlendi; sertifika uyumsuzlugu korunuyor'
+        unverified=True
+    if allow_get and current.get('exit_code')==52:
+        UI.say(f'  {ip}: HEAD istegine bos HTTP yaniti; govde kaydetmeden sinirli GET denenecek.','yellow')
+        get_args=list(request)
+        if '--head' in get_args:
+            get_args.remove('--head')
+            get_args[-1:-1]=['--request','GET']
+        elif '--request' in get_args and get_args[get_args.index('--request')+1]=='HEAD':
+            get_args[get_args.index('--request')+1]='GET'
+        if '--output' in get_args:
+            get_args[get_args.index('--output')+1]='/dev/null'
+        if '--dump-header' not in get_args:
+            get_args[-1:-1]=['--dump-header','-']
+        get_args[-1:-1]=['--range','0-0','--max-filesize','32768']
+        current=command(name+('_tls_unverified' if unverified else '')+'_get',get_args,raw,events,25)
+        if current.get('status')=='ok':
+            current['detail']='HEAD bos yanit verdi; govde kaydetmeden sinirli GET ile HTTP basliklari denendi'
+    return current
 
 def nuclei_args(target,ip,scheme,templates,selection,max_rate,raw):
     ip_host=f"[{ip}]" if ":" in ip else ip
@@ -920,7 +973,9 @@ def scan_cidr_web(target, assets, discovered_ports, raw, events, meta):
                         '--max-redirs', '0', '--proto', '=http,https',
                         '--request', method, '--output', '/dev/null',
                         '--dump-header', '-', url]
-                command(name, argv, raw, events, 25)['target'] = ip
+                result=command(name, argv, raw, events, 25)
+                result['target']=ip
+                recover_http_probe(name,argv,result,raw,events,ip,ip,scheme,method=='HEAD')
         if 443 in opened and shutil.which('sslscan'):
             command(f'cidr_tls_{safe_filename(ip)}',
                     ['sslscan', '--no-colour', f'{address}:443'], raw, events, 75)['target'] = ip
@@ -928,7 +983,7 @@ def scan_cidr_web(target, assets, discovered_ports, raw, events, meta):
             port = next((p for p in (443, 80, 8443, 8080) if p in opened), None)
             if port is not None:
                 argv = ['nikto', '-host', address, '-port', str(port), '-Tuning',
-                        '123b', '-Pause', '0.2', '-maxtime', '60s', '-timeout', '5s',
+                        '123b', '-Pause', '0.2', '-maxtime', '60s', '-timeout', '5',
                         '-nocheck', '-nolookup', '-nointeractive']
                 if ports[port] == 'https':
                     argv.append('-ssl')
@@ -1045,6 +1100,8 @@ def scan_target(target, meta, root, events, credentials=(), index=1, total=1,
                      "--max-retries","1","--host-timeout","5m"]+ports+
                     ["-oX",str(xml),ip],raw,events,360)
             discovered_ports[ip]=open_tcp_ports(xml)
+            if discovered_ports[ip]:
+                UI.say(f"  {ip} acik TCP portlari: {', '.join(map(str,discovered_ports[ip]))}. HTTP ve TLS yanitlari ayri denetlenir.",'cyan')
     if profile in ("network","full"):
         # Explicit low-impact NSE scripts; never the entire 'vuln' category.
         scripts='ssl-cert,ssl-enum-ciphers,ssh2-enum-algos,http-security-headers'
@@ -1102,10 +1159,14 @@ def scan_target(target, meta, root, events, credentials=(), index=1, total=1,
             port_suffix=f":{port}" if port not in (80,443) else ""
             url = f"{scheme}://{url_host}{port_suffix}/"
             args = ["curl","--silent","--show-error","--noproxy","*","--max-time","15","--connect-timeout","5","--max-redirs","0","--proto","=http,https","--head","--output","-","--resolve",f"{host}:{port}:{pinned_ip}",url]
-            command(f"headers_{safe_filename(ip)}_{scheme}_{port}", args, raw, events, 25)
+            name=f"headers_{safe_filename(ip)}_{scheme}_{port}"
+            result=command(name,args,raw,events,25)
+            recover_http_probe(name,args,result,raw,events,target,ip,scheme,True)
             if profile in ("web","full"):
                 options=["curl","--silent","--show-error","--noproxy","*","--max-time","15","--connect-timeout","5","--max-redirs","0","--proto","=http,https","--request","OPTIONS","--output","/dev/null","--dump-header","-","--resolve",f"{host}:{port}:{pinned_ip}",url]
-                command(f"methods_{safe_filename(ip)}_{scheme}_{port}",options,raw,events,25)
+                name=f"methods_{safe_filename(ip)}_{scheme}_{port}"
+                result=command(name,options,raw,events,25)
+                recover_http_probe(name,options,result,raw,events,target,ip,scheme)
         if 443 in opened and shutil.which("sslscan"):
             command(f"tls_{safe_filename(ip)}",["sslscan","--no-colour",f"{pinned_ip}:443"],raw,events,75)
     if profile in ('web','full'):
@@ -1118,7 +1179,7 @@ def scan_target(target, meta, root, events, credentials=(), index=1, total=1,
             port=443 if 443 in ports else 80
             ip_host=f'[{ip}]' if ':' in ip else ip
             args=['nikto','-host',ip_host,'-port',str(port),'-Tuning','123b',
-                  '-Pause','0.2','-maxtime','60s','-timeout','5s',
+                  '-Pause','0.2','-maxtime','60s','-timeout','5',
                   '-nocheck','-nolookup','-nointeractive']
             if port==443: args.append('-ssl')
             if not is_ip(target): args.extend(['-vhost',target])
@@ -1711,6 +1772,8 @@ def run(args):
             summary=build_inventory(root,meta)
             events.append({'step':'device_inventory','status':'ok','detail':f"{summary['host_count']} cihaz; {summary['mac_count']} MAC; {summary['unknown_count']} sınıflandırılmamış",'output':'DEVICE_INVENTORY.json'})
             UI.say(f"  Cihaz envanteri: {summary['host_count']} adres, {summary['mac_count']} MAC, {summary['unknown_count']} belirsiz.",'cyan')
+            if summary['host_count'] and not summary['mac_count']:
+                UI.say('  MAC gorulmedi: WSL NAT veya yonlendirilmis hedefte uzak cihazin MAC adresi gorulemez; IP ve servis kanitlari raporda.','yellow')
         except Exception as exc:
             events.append({'step':'device_inventory','status':'error','detail':f'{type(exc).__name__}: {exc}'})
             UI.say(f'  Cihaz envanteri oluşturulamadı: {type(exc).__name__}: {exc}','yellow')

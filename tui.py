@@ -220,7 +220,7 @@ class Console:
     def result(self, name, status, seconds):
         if self.animation:
             self.stream.write("\r" + " " * min(self.width - 1, 105) + "\r")
-        tone = "green" if status == "ok" else "yellow" if status in ("missing_tool", "blocked", "inconclusive") else "red"
+        tone = "green" if status == "ok" else "yellow" if status in ("missing_tool", "blocked", "inconclusive", "warning", "partial", "no_response") else "red"
         self.say(f"  [{status.upper():12}] {name}  ({seconds:.1f} sn)", tone)
 
     def done(self, root, status):

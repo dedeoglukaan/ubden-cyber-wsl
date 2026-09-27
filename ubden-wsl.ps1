@@ -500,10 +500,27 @@ function Invoke-Run {
     Invoke-Setup
     $bridge = Join-Path $SourceRoot 'windows-bridge.ps1'
     $networkMode = (Read-State).network_mode
+    $startedAt = (Get-Date).ToUniversalTime().ToString('o')
     & wsl.exe -d kali-linux -u root --exec env "UBDEN_WINDOWS_BRIDGE=$bridge" `
         "UBDEN_WSL_NETWORK_MODE=$networkMode" `
         /opt/ubden-cyber/start.sh
     if ($LASTEXITCODE -ne 0) { throw "UBDEN operasyonu $LASTEXITCODE koduyla durdu" }
+    $reportsWindows = Join-Path $env:LOCALAPPDATA 'UBDEN-Cyber\Reports'
+    New-Item -ItemType Directory -Path $reportsWindows -Force | Out-Null
+    $reportsWsl = Convert-ToWslPath $reportsWindows
+    $deliveryScript = Convert-ToWslPath (Join-Path $SourceRoot 'report_delivery.py')
+    $deliveryOutput = @(& wsl.exe -d kali-linux -u root --exec python3 $deliveryScript `
+        --latest --after $startedAt --destination $reportsWsl)
+    if ($LASTEXITCODE -ne 0) {
+        throw 'Windows rapor aktarimi dogrulanamadi; Kali gorev dosyalari korundu'
+    }
+    $delivery = ($deliveryOutput -join "`n") | ConvertFrom-Json
+    if ($delivery.status -ne 'none') {
+        $reportFolder = Join-Path $reportsWindows ([IO.Path]::GetFileName([string]$delivery.destination))
+        Write-Host "Windows rapor klasoru: $reportFolder"
+        Write-Host "Dogrulanan rapor ve kanit dosyasi: $($delivery.files)"
+        Write-Host "Ac: explorer.exe `"$reportFolder`""
+    }
 }
 
 function Copy-VerifiedTree([string] $Source, [string] $Destination,

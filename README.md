@@ -88,16 +88,16 @@ UBDEN Cyber Security Systems test ekibi
 PowerShell:
 
 ```powershell
-irm 'https://raw.githubusercontent.com/ubden/ubden-cyber-wsl/v4.8.3-wsl.8/bootstrap.ps1' | iex
+irm 'https://raw.githubusercontent.com/ubden/ubden-cyber-wsl/v4.8.3-wsl.9/bootstrap.ps1' | iex
 ```
 
 CMD:
 
 ```cmd
-powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "irm 'https://raw.githubusercontent.com/ubden/ubden-cyber-wsl/v4.8.3-wsl.8/bootstrap.ps1' | iex"
+powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "irm 'https://raw.githubusercontent.com/ubden/ubden-cyber-wsl/v4.8.3-wsl.9/bootstrap.ps1' | iex"
 ```
 
-Komut [sürüm etiketli başlangıç betiğini](https://github.com/ubden/ubden-cyber-wsl/blob/v4.8.3-wsl.8/bootstrap.ps1) çalıştırır. Betik kaynak paketini indirir, mevcut Kali WSL kurulumunu kullanır veya eksikse kurar, bağımlılıkları hazırlar ve görev sihirbazını açar. Windows yeniden başlatması gerekirse işlem sonraki oturumda devam eder. Kurulum yönetici izni isteyebilir.
+Komut [sürüm etiketli başlangıç betiğini](https://github.com/ubden/ubden-cyber-wsl/blob/v4.8.3-wsl.9/bootstrap.ps1) çalıştırır. Betik kaynak paketini indirir, mevcut Kali WSL kurulumunu kullanır veya eksikse kurar, bağımlılıkları hazırlar ve görev sihirbazını açar. Windows yeniden başlatması gerekirse işlem sonraki oturumda devam eder. Kurulum yönetici izni isteyebilir.
 
 Kurulum önce mirrored ağı ve DNS tünellemeyi dener. Mirrored yapılandırması bilgisayardaki **tüm WSL 2 dağıtımlarını** etkiler. Mirrored başlatılamazsa Kali IPv4 adresi ve varsayılan rota doğrulanarak NAT ağında devam edilir. IP tabanlı LAN testlerinde Windows adaptör rotası ve Kali rotası her hedef için ayrıca denetlenir; hedefe erişim doğrulanmadan test başarılı sayılmaz. NAT modunda Kali fiziksel Windows ağ kartlarını doğrudan görmez. Ham katman-2, yayın trafiği, pasif fiziksel ağ yakalama ve bazı VPN yolları için ayrı uygunluk denetimi gerekir. Kullanılan ağ modu görev raporuna yazılır.
 
@@ -144,7 +144,15 @@ Claude AI seçildiğinde dış hizmete gönderilecek veri düzeyi ayrıca belirl
 
 ## Raporlar ve kanıtlar
 
-Her görev için ayrı bir çıktı klasörü oluşturulur. Kali masaüstü oturumunda varsayılan konum `~/Desktop/UBDEN-Cyber-Reports/`, diğer ortamlarda `/opt/ubden-cyber/runs/` dizinidir.
+Her görev için ayrı bir çıktı klasörü oluşturulur. Windows tek satırlık başlatıcıyla çalıştırıldığında raporlar ve kanıtlar, SHA-256 ile doğrulanarak `%LOCALAPPDATA%\UBDEN-Cyber\Reports\GOREV_ADI` klasörüne de kopyalanır. İşlem sonunda Windows yolu terminalde gösterilir. Windows Gezgini'nde rapor klasörünü açmak için:
+
+```powershell
+explorer.exe (Join-Path $env:LOCALAPPDATA 'UBDEN-Cyber\Reports')
+```
+
+Kali içindeki asıl görev dosyaları `/opt/ubden-cyber/runs/` altında kalır. Bu dizin root hesabına özel erişimle korunur; Windows Gezgini'nden doğrudan `\\wsl.localhost\kali-linux\opt\ubden-cyber\runs` yolunu açmaya çalışmak erişim hatası verebilir. Kali masaüstü oturumundan açılan görevlerde varsayılan konum `~/Desktop/UBDEN-Cyber-Reports/` dizinidir.
+
+Bir IP'de TCP/443 açık ve TLS sertifikası okunabilirken HTTP yanıtı boş olabilir. Sertifika yalnız bir alan adına aitse IP ile yapılan doğrulamalı HTTPS isteği ad uyuşmazlığı verir. UBDEN, bu durumu açık port, TLS kanıtı ve HTTP hatası olarak ayrı kaydeder; IP kapsamındaki salt okunur HTTP başlık kontrolünü sertifika kimliğini doğrulamadan bir kez tekrar deneyebilir. Sertifikada görülen başka alan adları otomatik olarak hedef kapsamına eklenmez. Yönlendirilen uzak adreslerde MAC görülmemesi olağandır; MAC yalnız aynı katman-2 komşuluğunda doğrulanabilir.
 
 | Dosya | İçerik |
 | --- | --- |
@@ -181,10 +189,10 @@ Resmî Kali `wordlists` paketi WSL kurulumuna dahildir. Sözlükler yalnız mü�
 
 ## Kurulum ve ortam yönetimi
 
-Tek satırlık kurulumdan sonra Windows giriş betiği `%LOCALAPPDATA%\Programs\UBDEN-Cyber\v4.8.3-wsl.8\ubden-wsl.ps1` konumundadır:
+Tek satırlık kurulumdan sonra Windows giriş betiği `%LOCALAPPDATA%\Programs\UBDEN-Cyber\v4.8.3-wsl.9\ubden-wsl.ps1` konumundadır:
 
 ```powershell
-$ubden = Join-Path $env:LOCALAPPDATA 'Programs\UBDEN-Cyber\v4.8.3-wsl.8\ubden-wsl.ps1'
+$ubden = Join-Path $env:LOCALAPPDATA 'Programs\UBDEN-Cyber\v4.8.3-wsl.9\ubden-wsl.ps1'
 & $ubden -Action status
 & $ubden -Action run
 ```
@@ -194,6 +202,6 @@ $ubden = Join-Path $env:LOCALAPPDATA 'Programs\UBDEN-Cyber\v4.8.3-wsl.8\ubden-ws
 **Tam WSL imhası:** `destroy`, raporları WSL dışındaki seçilen klasöre SHA-256 ile doğrulayarak aktarır ve açık son onaydan sonra **bilgisayardaki tüm WSL dağıtımlarını**, Ubuntu dahil, kalıcı olarak kaldırır. Bu işlem yalnız tüm WSL ortamının kaldırılması istendiğinde kullanılmalıdır.
 
 ```powershell
-$ubden = Join-Path $env:LOCALAPPDATA 'Programs\UBDEN-Cyber\v4.8.3-wsl.8\ubden-wsl.ps1'
+$ubden = Join-Path $env:LOCALAPPDATA 'Programs\UBDEN-Cyber\v4.8.3-wsl.9\ubden-wsl.ps1'
 & $ubden -Action destroy -ExportTo 'D:\UBDEN-Rapor-Devir'
 ```
