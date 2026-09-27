@@ -115,9 +115,70 @@ function Add-ScanToolsToPath {
     }
 }
 
+function Disable-SecurityForTesting {
+    # YETKILI PENTEST TEST makinesinde, operator onayiyla: tarama araclari (nuclei/
+    # sslscan/nmap) Defender'a "virus" gorunup karantinaya alinmasin ve Guvenlik
+    # Duvari taramayi engellemesin diye Defender gercek-zamanli korumayi + Guvenlik
+    # Duvarini kapatir ve klasor/surec istisnalari ekler. Onaya baglidir; geri alma
+    # komutlari 'status' ciktisinda yazar. Bu adim kurulumu asla durdurmaz.
+    if (-not (Test-Administrator)) { return }
+    $marker = Join-Path $StateRoot 'security-disabled.flag'
+    $consent = if ($env:UBDEN_DISABLE_SECURITY) { $env:UBDEN_DISABLE_SECURITY }
+               elseif (Test-Path -LiteralPath $marker) { 'yes' } else { '' }
+    if (-not $consent) {
+        Write-Host ''
+        Write-Host '  UYARI: Bu YETKILI PENTEST TEST makinesidir. Tarama araclari (nuclei, sslscan,' -ForegroundColor Yellow
+        Write-Host '  nmap) Windows Defender tarafindan virus sanilip karantinaya alinabilir; Guvenlik' -ForegroundColor Yellow
+        Write-Host '  Duvari da taramayi engelleyebilir. Bunlari kapatmak onerilir (test makinesinde).' -ForegroundColor Yellow
+        $ans = Read-Host '  Windows Defender + Guvenlik Duvarini devre disi birak? (E/H)'
+        $consent = if ($ans -match '^(e|evet|y|yes)$') { 'yes' } else { 'no' }
+    }
+    if ($consent -ne 'yes') {
+        Write-Host '  Guvenlik yazilimlari acik birakildi; bazi araclar karantinaya alinabilir.' -ForegroundColor DarkYellow
+        return
+    }
+    New-Item -ItemType Directory -Path $StateRoot -Force | Out-Null
+    # 1) Defender klasor/surec istisnalari (Tamper Protection acikken bile calisir).
+    foreach ($p in @($StateRoot, (Join-Path $StateRoot 'tools'), $Venv, $SourceRoot,
+                     (Join-Path $env:LOCALAPPDATA 'UBDEN-Cyber'))) {
+        try { Add-MpPreference -ExclusionPath $p -ErrorAction Stop } catch {}
+    }
+    foreach ($proc in 'nmap.exe', 'nuclei.exe', 'sslscan.exe', 'python.exe') {
+        try { Add-MpPreference -ExclusionProcess $proc -ErrorAction Stop } catch {}
+    }
+    # 2) Defender gercek-zamanli koruma kapat (Tamper Protection kapali degilse basarisiz olur).
+    $rtOff = $false
+    try {
+        Set-MpPreference -DisableRealtimeMonitoring $true -ErrorAction Stop
+        Set-MpPreference -DisableIOAVProtection $true -ErrorAction SilentlyContinue
+        Start-Sleep -Milliseconds 500
+        $rtOff = [bool](Get-MpPreference -ErrorAction SilentlyContinue).DisableRealtimeMonitoring
+    } catch {}
+    # 3) Guvenlik Duvari tum profillerde kapat.
+    $fwOff = $false
+    try {
+        Set-NetFirewallProfile -Profile Domain, Public, Private -Enabled False -ErrorAction Stop
+        $fwOff = -not @(Get-NetFirewallProfile -ErrorAction SilentlyContinue | Where-Object { $_.Enabled }).Count
+    }
+    catch {
+        try { & netsh.exe advfirewall set allprofiles state off | Out-Null; $fwOff = $true } catch {}
+    }
+    # 4) Dogrula, durumu yaz, onay isaretini birak.
+    Write-Host ''
+    Write-Host ('  Defender gercek-zamanli koruma : ' + $(if ($rtOff) { 'KAPALI' } else { 'ACIK' })) -ForegroundColor $(if ($rtOff) { 'Green' } else { 'DarkYellow' })
+    Write-Host ('  Guvenlik Duvari (tum profiller): ' + $(if ($fwOff) { 'KAPALI' } else { 'ACIK' })) -ForegroundColor $(if ($fwOff) { 'Green' } else { 'DarkYellow' })
+    Write-Host '  Defender istisnalari eklendi (tools/venv/reports/kaynak).' -ForegroundColor Green
+    if (-not $rtOff) {
+        Write-Host '  NOT: Gercek-zamanli koruma kapanmadi (Kurcalama Korumasi/Tamper Protection acik olabilir).' -ForegroundColor DarkYellow
+        Write-Host '       Windows Guvenligi > Virus & tehdit korumasi > Ayarlari yonet > Kurcalama Korumasi KAPAT, sonra tekrar calistir.' -ForegroundColor DarkYellow
+    }
+    try { Set-Content -LiteralPath $marker -Value ((Get-Date).ToString('o')) -ErrorAction Stop } catch {}
+}
+
 function Invoke-Setup {
     Invoke-Elevated
     Write-UbdenBanner
+    Disable-SecurityForTesting   # once guvenligi kapat: araclar karantinaya alinmasin
     Ensure-WinPython
     Ensure-ScanTools
     Write-Host '  Kurulum tamamlandi.' -ForegroundColor Green
@@ -129,7 +190,9 @@ function Invoke-Run {
     $env:UBDEN_WINDOWS_BRIDGE = Join-Path $SourceRoot 'windows-bridge.ps1'
     Write-Host ''
     Write-Host '  Tarayici arayuzu baslatiliyor; varsayilan tarayici acilacak.' -ForegroundColor Cyan
-    Write-Host '  Bu pencereyi acik tutun; kapatmak sunucuyu durdurur.' -ForegroundColor DarkYellow
+    Write-Host '  Bu pencere SUNUCUDUR ve acik kalmalidir. Tarama tarayicida yurur;' -ForegroundColor DarkYellow
+    Write-Host '  her tarama bitince bu pencerede "RAPOR HAZIR" bandi ve rapor yolu gorunur.' -ForegroundColor DarkYellow
+    Write-Host '  Kapatmak icin: tarayici sekmesini kapatin ve bu pencereyi kapatin.' -ForegroundColor DarkYellow
     & $VenvPython (Join-Path $SourceRoot 'webapp.py')
 }
 
@@ -143,6 +206,16 @@ function Invoke-Status {
     Write-Host "  Nmap (Npcap)        : $nm"
     Write-Host "  Nuclei              : $np"
     Write-Host "  Raporlar            : $(Join-Path $env:LOCALAPPDATA 'UBDEN-Cyber\Reports')"
+    try {
+        $rt = (Get-MpPreference -ErrorAction Stop).DisableRealtimeMonitoring
+        $fw = @(Get-NetFirewallProfile -ErrorAction SilentlyContinue | Where-Object { $_.Enabled }).Count -eq 0
+        Write-Host ("  Defender RT koruma   : " + $(if ($rt) { 'KAPALI' } else { 'ACIK' }))
+        Write-Host ("  Guvenlik Duvari      : " + $(if ($fw) { 'KAPALI' } else { 'ACIK' }))
+    } catch {}
+    Write-Host ''
+    Write-Host '  Guvenligi geri acmak icin (yonetici PowerShell):' -ForegroundColor DarkYellow
+    Write-Host '    Set-MpPreference -DisableRealtimeMonitoring $false' -ForegroundColor DarkYellow
+    Write-Host '    Set-NetFirewallProfile -Profile Domain,Public,Private -Enabled True' -ForegroundColor DarkYellow
     if (Test-Path -LiteralPath $VenvPython) {
         Write-Host ''
         Write-Host '  Arac envanteri (present/total):' -ForegroundColor Cyan

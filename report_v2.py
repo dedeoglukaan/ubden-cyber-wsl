@@ -1229,13 +1229,25 @@ def html_report(root,meta,steps,hosts,findings,review,report_errors=None):
         ''.join('<tr><td>'+safe(kind)+'</td><td>'+safe(item.get('observed_count'))+'</td><td>'+safe(item.get('truncated_at'))+'</td></tr>'
                 for kind,item in ad.get('inventory',{}).items() if isinstance(item,dict))+'</tbody></table>'+
         '<p>Dizin sayımları yetki, parola ilkesi veya paylaşım izni testinin tamamlandığını göstermez.</p>') if ad else ''
-    counts=Counter(f['severity'] for f in findings if f['status']=='doğrulandı')
-    risk_html='<h2>Doğrulanmış bulguların önem dağılımı</h2><div class="riskbars">'+''.join(
-        f'<div class="riskrow"><span>{safe(label)}</span><div class="risktrack"><i style="width:{max(2,round(100*counts[key]/max(max(counts.values(),default=0),1)))}%;background:{SEVERITY_COLORS[key]}"></i></div><b>{counts[key]}</b></div>'
+    counts=Counter(f['severity'] for f in findings)
+    conf=Counter(f['severity'] for f in findings if f['status']=='doğrulandı')
+    total=sum(counts.values())
+    maxv=max(counts.values(),default=0) or 1
+    level=('Kritik' if counts.get('critical') else 'Yüksek' if counts.get('high')
+           else 'Orta' if counts.get('medium') else 'Düşük' if (counts.get('low') or counts.get('info'))
+           else 'Bulgu yok')
+    risk_html=('<h2>Bulguların önem dağılımı</h2>'
+        '<p>Genel risk seviyesi: <b>'+safe(level)+'</b> &middot; Toplam bulgu: <b>'+str(total)+
+        '</b> &middot; Doğrulanmış: '+str(sum(conf.values()))+' &middot; Taslak: '+str(total-sum(conf.values()))+'</p>'
+        '<div class="riskbars">'+''.join(
+        f'<div class="riskrow"><span>{safe(label)}</span><div class="risktrack"><i style="width:{max(2,round(100*counts.get(key,0)/maxv))}%;background:{SEVERITY_COLORS[key]}"></i></div>'
+        f'<b>{counts.get(key,0)}</b></div>'
         for key,label in SEVERITIES.items())+'</div>'
-    priority_html='<h2>Düzeltme öncelikleri</h2><table><thead><tr><th>ID</th><th>Önem</th><th>Varlık</th><th>İlk aksiyon</th></tr></thead><tbody>'+''.join(
-        '<tr><td>'+safe(f['id'])+'</td><td>'+safe(SEVERITIES[f['severity']])+'</td><td>'+safe(f['asset'])+'</td><td>'+safe(f.get('remediation_priority') or f.get('recommendation'))+'</td></tr>'
-        for f in findings if f['status']=='doğrulandı')+'</tbody></table>'
+        '<p class="dim">Çubuklar tüm bulguları (taslak + doğrulanmış) gösterir; kesinleşmiş güvenlik açığı için analist doğrulaması gerekir.</p>')
+    prio=[f for f in findings if f['status']=='doğrulandı' or f['severity'] in ('critical','high')]
+    priority_html='<h2>Düzeltme öncelikleri</h2><table><thead><tr><th>ID</th><th>Önem</th><th>Durum</th><th>Varlık</th><th>İlk aksiyon</th></tr></thead><tbody>'+''.join(
+        '<tr><td>'+safe(f['id'])+'</td><td>'+safe(SEVERITIES[f['severity']])+'</td><td>'+safe(f['status'])+'</td><td>'+safe(f['asset'])+'</td><td>'+safe(f.get('remediation_priority') or f.get('recommendation'))+'</td></tr>'
+        for f in prio)+'</tbody></table>' if prio else ''
     auth_html=f'<p class="notice">{safe(auth_note)}</p>' if meta.get('auth_probes') else ''
     role_html=(f'<p class="notice">{safe(role_note)}</p>' if meta.get('role_scenarios') or
                any(str(s.get('step','')).startswith('role_') for s in steps) else '')

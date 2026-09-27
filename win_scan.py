@@ -564,6 +564,17 @@ def run_scan(form: dict, progress=None) -> dict:
 
     report_html = root / "REPORT.html"
     emit("Tamamlandi", "done")
+    # Clear completion banner to the server console (the elevated window), since the
+    # web server keeps running (serve_forever) and would otherwise show no "done".
+    line = "=" * 64
+    if report_html.is_file():
+        print(f"\n{line}\n  [OK] RAPOR HAZIR: {report_html}\n"
+              f"  Cihaz: {summary.get('host_count', 0)} · MAC: {summary.get('mac_count', 0)} · "
+              f"Durum: {status}\n  Tarayicidan acabilir veya klasoru inceleyebilirsiniz.\n{line}\n",
+              flush=True)
+    else:
+        print(f"\n{line}\n  [!] Rapor uretilemedi (durum: {status}); gorev klasoru: {root}\n{line}\n",
+              flush=True)
     return {"run_dir": str(root), "report_html": str(report_html) if report_html.is_file() else "",
             "device_summary": summary, "status": status}
 
