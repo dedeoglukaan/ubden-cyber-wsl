@@ -43,7 +43,7 @@ class ServiceProbeTests(unittest.TestCase):
         ran = {e["tool"]: e["status"] for e in events}
         self.assertEqual(ran["dnsenum"], "ok")
         self.assertEqual(ran["theHarvester"], "ok")
-        self.assertEqual(ran["dnstracer"], "missing_tool")
+        self.assertEqual(ran["dnstracer"], "skipped")  # NSE/fierce-covered on Windows, not missing
         self.assertEqual(ran["fierce"], "missing_tool")
         # theHarvester step keeps its exact executable name for catalog matching.
         self.assertTrue(any(e["step"] == "theHarvester_recon" for e in events))
