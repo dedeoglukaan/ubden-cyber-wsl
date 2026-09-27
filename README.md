@@ -88,16 +88,16 @@ UBDEN Cyber Security Systems test ekibi
 PowerShell:
 
 ```powershell
-irm 'https://raw.githubusercontent.com/ubden/ubden-cyber-wsl/v4.8.3-wsl.6/bootstrap.ps1' | iex
+irm 'https://raw.githubusercontent.com/ubden/ubden-cyber-wsl/v4.8.3-wsl.7/bootstrap.ps1' | iex
 ```
 
 CMD:
 
 ```cmd
-powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "irm 'https://raw.githubusercontent.com/ubden/ubden-cyber-wsl/v4.8.3-wsl.6/bootstrap.ps1' | iex"
+powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "irm 'https://raw.githubusercontent.com/ubden/ubden-cyber-wsl/v4.8.3-wsl.7/bootstrap.ps1' | iex"
 ```
 
-Komut [sürüm etiketli başlangıç betiğini](https://github.com/ubden/ubden-cyber-wsl/blob/v4.8.3-wsl.6/bootstrap.ps1) çalıştırır. Betik kaynak paketini indirir, mevcut Kali WSL kurulumunu kullanır veya eksikse kurar, bağımlılıkları hazırlar ve görev sihirbazını açar. Windows yeniden başlatması gerekirse işlem sonraki oturumda devam eder. Kurulum yönetici izni isteyebilir.
+Komut [sürüm etiketli başlangıç betiğini](https://github.com/ubden/ubden-cyber-wsl/blob/v4.8.3-wsl.7/bootstrap.ps1) çalıştırır. Betik kaynak paketini indirir, mevcut Kali WSL kurulumunu kullanır veya eksikse kurar, bağımlılıkları hazırlar ve görev sihirbazını açar. Windows yeniden başlatması gerekirse işlem sonraki oturumda devam eder. Kurulum yönetici izni isteyebilir.
 
 Kurulum önce mirrored ağı ve DNS tünellemeyi dener. Mirrored yapılandırması bilgisayardaki **tüm WSL 2 dağıtımlarını** etkiler. Mirrored başlatılamazsa Kali IPv4 adresi ve varsayılan rota doğrulanarak NAT ağında devam edilir. IP tabanlı LAN testlerinde Windows adaptör rotası ve Kali rotası her hedef için ayrıca denetlenir; hedefe erişim doğrulanmadan test başarılı sayılmaz. NAT modunda Kali fiziksel Windows ağ kartlarını doğrudan görmez. Ham katman-2, yayın trafiği, pasif fiziksel ağ yakalama ve bazı VPN yolları için ayrı uygunluk denetimi gerekir. Kullanılan ağ modu görev raporuna yazılır.
 
@@ -107,7 +107,7 @@ Mirrored WSL `0x8007054f` hatası verirse ve Windows'un IPv4/IPv6 TCP dinamik po
 
 ## Bir görev nasıl yürür?
 
-1. **Kapsam belirleme:** Sihirbazda müşteri, yetki referansı ve test ekibi girilir. IP/CIDR hedefleri ile domain/FQDN hedefleri ayrı alanlarda, hariçler de aynı ayrımla yazılır. Adaptör alt ağları yalnızca öneri olarak gösterilir.
+1. **Kapsam belirleme:** Sihirbazda müşteri, yetki referansı ve test ekibi girilir. IP/CIDR hedefleri ile domain/FQDN hedefleri ayrı alanlarda, hariçler de aynı ayrımla yazılır. Adaptör alt ağları yalnızca öneri olarak gösterilir. DNS adresleri ve toplam hedef adres sayısı profil seçiminden önce kontrol edilir; hatalı kapsam, diğer görev bilgileri yeniden sorulmadan düzeltilir.
 2. **Ön kontrol:** Seçilen adaptör, DNS çözümlemesi, rapor diski, gerekli araçlar, AD test bağlamı ve Kali varsayılan rotası kontrol edilir. Sonuç `PREFLIGHT.json` dosyasına kaydedilir; engelleyici sorun varsa hedef taraması başlamaz. Operatör sorunu düzelterek ön kontrolü yeniden çalıştırabilir veya tarama yapmadan ön kontrol raporuyla görevi durdurabilir. Hedef erişimi sonraki rota ve servis adımlarında doğrulanır. Kapsam ve FQDN adresleri görev için sabitlenir.
 3. **Kontroller:** Seçilen profile ve bulunan servislere uygun modüller çalışır. Kapsam dışı yönlendirmeler izlenmez; eksik araçlar ve erişilemeyen hedefler adım günlüğüne işlenir.
 4. **İnceleme ve teslim:** Otomatik gözlemler, cihaz envanteri ve kanıtlar raporlanır. Analist doğruladığı bulguları ve manuel test sonuçlarını görev kaydına ekler.
@@ -134,6 +134,7 @@ Claude AI seçildiğinde dış hizmete gönderilecek veri düzeyi ayrıca belirl
 ### Operasyon sınırları
 
 - Görev başına en fazla **30 hedef**; en geniş **`/24` IPv4** veya **`/120` IPv6** ağı.
+- Her adres ailesinde en fazla **1024 benzersiz test adresi**. IPv4 ağ ve yayın adresleri ile hariç tutulan adresler sayılmaz. Bir `/24` ağında genellikle 254 kullanılabilir IPv4 adresi vardır; buna ayrıca tekil IP ve DNS hedefleri eklenebilir. DNS sonucu değişirse ilgili hedef taranmaz.
 - Nmap taramaları için varsayılan **250 paket/sn**, üst sınır **500 paket/sn** ve hedef başına en fazla **1000 TCP portu**.
 - Canlı SSH parola kontrolü yalnızca sağlanan test hesabında, hesap başına en fazla iki adayla yapılır.
 - Ham 802.11 kontrolleri için Kali içinde doğrulanmış monitör modlu adaptör gerekir. Windows'un dahili Wi‑Fi bağlantısı IP tabanlı LAN testleri için kullanılabilir.
@@ -178,10 +179,10 @@ Resmî Kali `wordlists` paketi WSL kurulumuna dahildir. Sözlükler yalnız mü�
 
 ## Kurulum ve ortam yönetimi
 
-Tek satırlık kurulumdan sonra Windows giriş betiği `%LOCALAPPDATA%\Programs\UBDEN-Cyber\v4.8.3-wsl.6\ubden-wsl.ps1` konumundadır:
+Tek satırlık kurulumdan sonra Windows giriş betiği `%LOCALAPPDATA%\Programs\UBDEN-Cyber\v4.8.3-wsl.7\ubden-wsl.ps1` konumundadır:
 
 ```powershell
-$ubden = Join-Path $env:LOCALAPPDATA 'Programs\UBDEN-Cyber\v4.8.3-wsl.6\ubden-wsl.ps1'
+$ubden = Join-Path $env:LOCALAPPDATA 'Programs\UBDEN-Cyber\v4.8.3-wsl.7\ubden-wsl.ps1'
 & $ubden -Action status
 & $ubden -Action run
 ```
@@ -191,6 +192,6 @@ $ubden = Join-Path $env:LOCALAPPDATA 'Programs\UBDEN-Cyber\v4.8.3-wsl.6\ubden-ws
 **Tam WSL imhası:** `destroy`, raporları WSL dışındaki seçilen klasöre SHA-256 ile doğrulayarak aktarır ve açık son onaydan sonra **bilgisayardaki tüm WSL dağıtımlarını**, Ubuntu dahil, kalıcı olarak kaldırır. Bu işlem yalnız tüm WSL ortamının kaldırılması istendiğinde kullanılmalıdır.
 
 ```powershell
-$ubden = Join-Path $env:LOCALAPPDATA 'Programs\UBDEN-Cyber\v4.8.3-wsl.6\ubden-wsl.ps1'
+$ubden = Join-Path $env:LOCALAPPDATA 'Programs\UBDEN-Cyber\v4.8.3-wsl.7\ubden-wsl.ps1'
 & $ubden -Action destroy -ExportTo 'D:\UBDEN-Rapor-Devir'
 ```

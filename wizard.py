@@ -39,6 +39,7 @@ from environment_doctor import inspect as inspect_environment
 ROOT = Path(__file__).resolve().parent
 VERSION = "4.8.3"
 BASELINE = ROOT / "templates" / "baseline"
+MAX_SCOPED_ADDRESSES = 1024
 HOST_RE = re.compile(r"(?=^.{1,253}$)(?!-)[a-z0-9-]{1,63}(?<!-)(?:\.(?!-)[a-z0-9-]{1,63}(?<!-))+", re.I)
 WEB_NEXT_AT = 0.0
 TOOL_PACKAGES = {tool.executable: tool.package for tool in CATALOG}
@@ -130,44 +131,73 @@ def resolve(host):
     return sorted({row[4][0] for row in socket.getaddrinfo(host, None, type=socket.SOCK_STREAM)})
 
 
-def validate_task_address_budget(targets, frozen=None):
-    """Keep the union of all numeric targets within one /24 or /120 budget."""
+def validate_task_address_budget(targets, frozen=None, exclusions=()):
+    """Count unique, eligible host IPs; each CIDR is checked separately."""
+    frozen=frozen or {}
+    expanded=list(exclusions)
+    for name in exclusions:
+        if not is_ip(name) and not is_network(name):
+            expanded.extend(frozen.get(name,[]))
     addresses={4:set(),6:set()}
     for target in targets:
+        if target in exclusions:
+            continue
         if is_network(target):
-            candidates=ipaddress.ip_network(target)
+            candidates=ipaddress.ip_network(target).hosts()
         elif is_ip(target):
             candidates=(ipaddress.ip_address(target),)
         else:
-            candidates=(ipaddress.ip_address(ip) for ip in (frozen or {}).get(target,[]))
+            candidates=(ipaddress.ip_address(ip) for ip in frozen.get(target,[]))
         for ip in candidates:
+            if excluded(str(ip),expanded):
+                continue
             addresses[ip.version].add(ip)
-            if len(addresses[4])>256 or len(addresses[6])>256:
-                raise ValueError('Görevde toplam en fazla 256 IPv4 veya 256 IPv6 adresi olabilir')
+            if len(addresses[ip.version])>MAX_SCOPED_ADDRESSES:
+                raise ValueError(f'IPv{ip.version} kapsamı {MAX_SCOPED_ADDRESSES} test adresini aşıyor. '
+                                 'Hedefleri bölün veya hariçleri daraltın.')
     return {family:len(values) for family,values in addresses.items()}
 
 
+def preview_scope_dns(targets, exclusions):
+    """Resolve named entries once while editing scope; no target probes are sent."""
+    frozen={}
+    for name in dict.fromkeys(list(targets)+list(exclusions)):
+        if not is_ip(name) and not is_network(name):
+            try:
+                frozen[name]=resolve(name)
+            except OSError:
+                frozen[name]=[]
+    return frozen
+
+
 def freeze_scope(meta):
-    """Resolve named targets and exclusions once after the operator authorizes traffic."""
+    """Commit the reviewed DNS snapshot; later target steps check for drift."""
+    preview=meta.get('frozen_dns') or {}
     frozen={}
     expanded=list(meta['exclusions'])
     meta['exclusion_dns_names']=[name for name in meta['exclusions']
                                  if not is_ip(name) and not is_network(name)]
     for name in meta['exclusions']:
         if not is_ip(name) and not is_network(name):
-            try: addresses=resolve(name)
-            except socket.gaierror: addresses=[]
+            if name in preview:
+                addresses=preview[name]
+            else:
+                try: addresses=resolve(name)
+                except socket.gaierror: addresses=[]
             frozen[name]=addresses
             expanded.extend(addresses)
     for name in meta['targets']:
         if not is_ip(name) and not is_network(name):
-            try: frozen[name]=resolve(name)
-            except socket.gaierror: frozen[name]=[]
+            if name in preview:
+                frozen[name]=preview[name]
+            else:
+                try: frozen[name]=resolve(name)
+                except socket.gaierror: frozen[name]=[]
     dc=meta.get('ad',{}).get('dc')
     if dc and not is_ip(dc):
         try: frozen[dc]=resolve(dc)
         except socket.gaierror: frozen[dc]=[]
-    meta['address_budget']=validate_task_address_budget(meta['targets'],frozen)
+    meta['address_budget']=validate_task_address_budget(meta['targets'],frozen,meta['exclusions'])
     meta['exclusions']=list(dict.fromkeys(expanded))
     meta['frozen_dns']=frozen
     meta['scope_frozen_at']=now()
@@ -1164,10 +1194,13 @@ def selectable_adapters(snapshot):
     return result
 
 
-def collect_scope_entries(label, kind, required=False):
+def collect_scope_entries(label, kind, required=False, default=()):
     """Keep numeric IP/CIDR and named targets in separate, validated prompts."""
+    previous=', '.join(default)
     while True:
-        raw=UI.prompt(label)
+        raw=UI.prompt(label,previous)
+        if raw.strip()=='-' and not required:
+            return []
         if not raw.strip() and not required:
             return []
         try:
@@ -1180,7 +1213,52 @@ def collect_scope_entries(label, kind, required=False):
                                  else 'Bu alana yalnız alan adı/FQDN girin')
             return entries
         except ValueError as exc:
+            previous=raw
             UI.say('  '+str(exc),'yellow')
+
+
+def collect_scope(initial_targets=(), initial_exclusions=()):
+    """Edit targets and exclusions together, then validate their DNS-expanded size."""
+    targets=list(initial_targets)
+    exclusions=list(initial_exclusions)
+    while True:
+        if targets or exclusions:
+            UI.say("  Önceki değerleri korumak için Enter, bir alanı temizlemek için '-' yazın.",'dim')
+        numeric_targets=collect_scope_entries('Yetkili IP/CIDR hedefleri (örn. 192.168.0.10, 192.168.0.0/28)',
+            'numeric',default=[x for x in targets if is_ip(x) or is_network(x)])
+        named_targets=collect_scope_entries('Yetkili domain/FQDN hedefleri (örn. app.example.com)',
+            'named',default=[x for x in targets if not is_ip(x) and not is_network(x)])
+        targets=list(dict.fromkeys(numeric_targets+named_targets))
+        if not targets:
+            UI.say('  En az bir IP/CIDR veya domain/FQDN hedefi girin.','yellow')
+            continue
+        numeric_exclusions=collect_scope_entries('Hariç IP/CIDR adresleri (varsa)',
+            'numeric',default=[x for x in exclusions if is_ip(x) or is_network(x)])
+        named_exclusions=collect_scope_entries('Hariç domain/FQDN adresleri (varsa)',
+            'named',default=[x for x in exclusions if not is_ip(x) and not is_network(x)])
+        exclusions=list(dict.fromkeys(numeric_exclusions+named_exclusions))
+        try:
+            if len(targets)>30:
+                raise ValueError('Tek görevde en fazla 30 açık hedef olabilir')
+            for target in targets:
+                if is_network(target):
+                    network=ipaddress.ip_network(target)
+                    if (network.version==4 and network.prefixlen<24) or (network.version==6 and network.prefixlen<120):
+                        raise ValueError('Her CIDR en geniş /24 IPv4 veya /120 IPv6 olabilir')
+            frozen=preview_scope_dns(targets,exclusions)
+            for target in targets:
+                if target in frozen and len(frozen[target])>16:
+                    raise ValueError(f'{target}: 16 üzeri DNS adresi; hedefi tekil IP adresleriyle daraltın')
+            budget=validate_task_address_budget(targets,frozen,exclusions)
+        except ValueError as exc:
+            UI.say(f'  Kapsamı düzeltin: {exc}','yellow')
+            continue
+        UI.say(f"  Kapsam ön kontrolü: {budget[4]}/{MAX_SCOPED_ADDRESSES} IPv4, "
+               f"{budget[6]}/{MAX_SCOPED_ADDRESSES} IPv6 test adresi. DNS sonucu değişirse ilgili hedef durdurulur.",'cyan')
+        for target in targets:
+            if target in frozen and not frozen[target]:
+                UI.say(f'  {target}: DNS adresi henüz bulunamadı; bu hedef çözülmeden test edilmeyecek.','yellow')
+        return targets,exclusions,frozen,budget
 
 
 def collect_ad(snapshot):
@@ -1394,31 +1472,7 @@ def collect_meta(args):
         selected_interfaces=UI.choose_many('Test trafiğinin kullanacağı Windows adaptörleri',
                                             items,defaults=defaults)
         UI.say('  Seçilen adaptör alt ağları hedef kapsamına otomatik eklenmez.','dim')
-    while True:
-        numeric_targets=collect_scope_entries('Yetkili IP/CIDR hedefleri (örn. 192.168.0.10, 192.168.0.0/28)',
-                                              'numeric')
-        named_targets=collect_scope_entries('Yetkili domain/FQDN hedefleri (örn. app.example.com)',
-                                            'named')
-        targets=list(dict.fromkeys(numeric_targets+named_targets))
-        if not targets:
-            UI.say('  En az bir IP/CIDR veya domain/FQDN hedefi girin.','yellow')
-            continue
-        try:
-            if len(targets)>30:
-                raise ValueError('Tek görevde en fazla 30 açık hedef olabilir')
-            for target in targets:
-                if is_network(target):
-                    network=ipaddress.ip_network(target)
-                    if (network.version==4 and network.prefixlen<24) or (network.version==6 and network.prefixlen<120):
-                        raise ValueError('Tek görevde en geniş /24 IPv4 veya /120 IPv6 ağı seçilebilir')
-            validate_task_address_budget(targets)
-        except ValueError as exc:
-            UI.say('  '+str(exc),'yellow')
-            continue
-        break
-    numeric_exclusions=collect_scope_entries('Hariç IP/CIDR adresleri (varsa)','numeric')
-    named_exclusions=collect_scope_entries('Hariç domain/FQDN adresleri (varsa)','named')
-    exclusions=list(dict.fromkeys(numeric_exclusions+named_exclusions))
+    targets,exclusions,scope_dns,address_budget=collect_scope()
     UI.section(3,5,"Test profili","Üretim ortamı için kontrollü hız ve süre limitleri")
     profile_options=[("1","External: dış yüzey, DNS/WHOIS, servis, HTTP/TLS"),("2","Web: web portları, başlıklar, yöntemler ve TLS"),("3","Network: servisler + seçilmiş NSE güvenlik kontrolleri"),("4","Full: tüm otomatik modüller + isteğe bağlı kimlikli erişim kontrolü")]
     if args.nuclei_templates:
@@ -1465,7 +1519,7 @@ def collect_meta(args):
     if browser_enabled: enabled_modules.append('browser')
     if wireless_spec.get('enabled'): enabled_modules.append('wireless')
     if ssh_specs: enabled_modules.append('ssh_test_account')
-    meta={"schema":8,"id":str(uuid.uuid4()),"client":client,"project":project,"authorization_reference":auth,"product":"UBDEN Cyber Security Systems","product_owner":"UBDEN®","tester":tester,"targets":targets,"exclusions":exclusions,"selected_interfaces":selected_interfaces,"network_mode":os.environ.get('UBDEN_WSL_NETWORK_MODE','unknown'),"profile":profile,"enabled_modules":enabled_modules,"allowed_techniques":enabled_modules,"auth_probes":auth_specs,"role_scenarios":role_scenarios,"password_probes":ssh_specs,"ad":ad_spec,"browser_enabled":browser_enabled,"wireless":wireless_spec,"host_snapshot":host_snapshot,"limits":{"max_online_failures_per_test_account_service":2,"max_exploit_attempts_per_finding_host":1,"wireless_capture_seconds":600,"wireless_offline_seconds":1800,"wireless_deauth_events":3,"wireless_wps_attempts":10},"ai_enabled":bool(ai_config),"ai_raw_evidence":bool(ai_config and ai_config['raw']),"nuclei_templates":template_dir,"nuclei_profile":nuclei_profile,"nuclei_template_count":len(template_inventory(template_dir)) if template_dir else 0,"max_rate":min(max(args.max_rate,1),500),"top_ports":top_ports,"started_at":now(),"status":"planned","tool_version":VERSION}
+    meta={"schema":8,"id":str(uuid.uuid4()),"client":client,"project":project,"authorization_reference":auth,"product":"UBDEN Cyber Security Systems","product_owner":"UBDEN®","tester":tester,"targets":targets,"exclusions":exclusions,"frozen_dns":scope_dns,"address_budget":address_budget,"selected_interfaces":selected_interfaces,"network_mode":os.environ.get('UBDEN_WSL_NETWORK_MODE','unknown'),"profile":profile,"enabled_modules":enabled_modules,"allowed_techniques":enabled_modules,"auth_probes":auth_specs,"role_scenarios":role_scenarios,"password_probes":ssh_specs,"ad":ad_spec,"browser_enabled":browser_enabled,"wireless":wireless_spec,"host_snapshot":host_snapshot,"limits":{"max_online_failures_per_test_account_service":2,"max_exploit_attempts_per_finding_host":1,"wireless_capture_seconds":600,"wireless_offline_seconds":1800,"wireless_deauth_events":3,"wireless_wps_attempts":10},"ai_enabled":bool(ai_config),"ai_raw_evidence":bool(ai_config and ai_config['raw']),"nuclei_templates":template_dir,"nuclei_profile":nuclei_profile,"nuclei_template_count":len(template_inventory(template_dir)) if template_dir else 0,"max_rate":min(max(args.max_rate,1),500),"top_ports":top_ports,"started_at":now(),"status":"planned","tool_version":VERSION}
     UI.section(4,5,"Ön izleme ve onay","Gerçek trafik başlamadan önce kapsamı kontrol edin")
     UI.preview([("Müşteri",client),("Yetki",auth),("Ürün","UBDEN Cyber Security Systems"),("Test ekibi",tester),("Hedefler",", ".join(targets)),("Hariç",", ".join(exclusions) or "Yok"),("Windows adaptörleri",", ".join(map(str,selected_interfaces)) or "Köprü yok"),("Modüller",", ".join(enabled_modules)),("SSH test hesapları",str(len(ssh_specs))),("Profil",profile),("Kimlikli kontrol",", ".join(f"{x['target']} / {x['role']} ({x['method']})" for x in auth_specs) or "Atlanacak"),("Rol/IDOR",str(len(role_scenarios))+" salt okunur senaryo"),("AD",ad_spec.get('mode','disabled')),("Windows tarayıcı",'Açık' if browser_enabled else 'Kapalı'),("Ham Wi-Fi",'Açık' if wireless_spec['enabled'] else 'Kapalı'),("Claude",'Sınırlı ham kanıt' if ai_config and ai_config['raw'] else 'Anonim özet' if ai_config else 'Kapalı'),("Nuclei",f"{nuclei_profile} / {meta['nuclei_template_count']} şablon" if template_dir else "Atlanacak"),("Hız/port",f"{meta['max_rate']} paket/sn, {meta['top_ports']} TCP portu")])
     required=["nmap"]
@@ -1490,16 +1544,45 @@ def collect_meta(args):
     return meta,credentials,ai_config,ad_secret,ssh_tests
 
 def run(args):
+    meta,credentials,ai_config,ad_secret,ssh_tests=collect_meta(args)
     while True:
-        meta,credentials,ai_config,ad_secret,ssh_tests=collect_meta(args)
         try:
             freeze_scope(meta)
             break
         except ValueError as exc:
-            UI.say(f'  DNS çözümlemesi sonrası kapsam sınırı aşıldı: {exc}','yellow')
-            if UI.menu('Görev kapsamı', [('1','Sihirbazda hedefleri düzelt'),
+            UI.say(f'  Kapsam doğrulanamadı: {exc}','yellow')
+            if UI.menu('Görev kapsamı', [('1','Yalnız hedef ve hariçleri düzelt'),
                                        ('0','Görevi iptal et')],'1')=='0':
                 raise WizardCancelled('Kapsam sınırı doğrulanamadı.')
+            targets,exclusions,frozen,budget=collect_scope(meta['targets'],meta['exclusions'])
+            meta.update(targets=targets,exclusions=exclusions,frozen_dns=frozen,address_budget=budget)
+            credentials=[pair for pair in credentials if pair[0]['target'] in targets and
+                         not excluded(pair[0]['target'],exclusions)]
+            meta['auth_probes']=[spec for spec,_ in credentials]
+            valid_roles={(spec['target'],spec['port'],spec['role']) for spec,_ in credentials}
+            meta['role_scenarios']=[item for item in meta.get('role_scenarios',[]) if
+                (item['target'],item['port'],item['owner']) in valid_roles and
+                (item['target'],item['port'],item['challenger']) in valid_roles]
+            def ssh_in_scope(ip):
+                return not excluded(ip,exclusions) and any(
+                    ip==target if is_ip(target) else
+                    ipaddress.ip_address(ip) in ipaddress.ip_network(target)
+                    if is_network(target) else False for target in targets)
+            ssh_tests=[item for item in ssh_tests if ssh_in_scope(item['target_ip'])]
+            meta['password_probes']=[item for item in meta.get('password_probes',[])
+                                     if ssh_in_scope(item['target_ip'])]
+            if not ssh_tests:
+                meta['enabled_modules']=[name for name in meta['enabled_modules'] if name!='ssh_test_account']
+                meta['allowed_techniques']=[name for name in meta['allowed_techniques'] if name!='ssh_test_account']
+            UI.preview([('Hedefler',', '.join(targets)),('Hariç',', '.join(exclusions) or 'Yok'),
+                        ('Kapsam',f"{budget[4]} IPv4, {budget[6]} IPv6"),
+                        ('Kimlikli kontroller',str(len(credentials))),
+                        ('SSH test hesapları',str(len(ssh_tests)))])
+            while True:
+                approval=UI.prompt('Düzeltilen kapsamı onaylıyorum. Başlatmak için YETKILIYIM, çıkmak için IPTAL yazın')
+                if approval=='YETKILIYIM': break
+                if approval=='IPTAL': raise WizardCancelled('Operatör düzeltilen kapsamı onaylamadı.')
+                UI.say('  YETKILIYIM veya IPTAL yazın.','yellow')
     os.umask(0o077)
     base,owner=choose_run_base(args.runs)
     root=base / f"{safe_filename(meta['client'])}_{dt.datetime.now(dt.timezone.utc):%Y%m%d_%H%M%S}_{meta['id'][:8]}"

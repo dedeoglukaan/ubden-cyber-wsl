@@ -194,17 +194,31 @@ class WslPlatformTests(unittest.TestCase):
         self.assertIn("192.0.2.5", meta["exclusions"])
         self.assertEqual(meta["frozen_dns"]["example.test"], ["192.0.2.5"])
 
-    def test_total_address_budget_rejects_multiple_full_cidrs(self):
+    def test_total_address_budget_counts_usable_unique_hosts_and_exclusions(self):
         self.assertEqual(wizard.validate_task_address_budget(
-            ["192.0.2.0/24", "192.0.2.5"])[4], 256)
-        with self.assertRaises(ValueError):
-            wizard.validate_task_address_budget(["192.0.2.0/24", "198.51.100.0/24"])
-        with self.assertRaises(ValueError):
-            wizard.validate_task_address_budget(["2001:db8::/120", "2001:db8::100"])
+            ["192.0.2.0/24", "192.0.2.5"])[4], 254)
+        self.assertEqual(wizard.validate_task_address_budget(
+            ["192.0.2.0/24", "198.51.100.1", "extra.example"],
+            {"extra.example": ["203.0.113.1"]})[4], 256)
+        self.assertEqual(wizard.validate_task_address_budget(
+            [f"10.0.{index}.0/24" for index in range(4)])[4], 1016)
         with self.assertRaises(ValueError):
             wizard.validate_task_address_budget(
-                ["192.0.2.0/24", "extra.example"],
-                {"extra.example": ["198.51.100.1"]})
+                [f"10.0.{index}.0/24" for index in range(5)])
+        self.assertEqual(wizard.validate_task_address_budget(
+            ["2001:db8::/120", "2001:db8::100"])[6], 256)
+        with self.assertRaises(ValueError):
+            wizard.validate_task_address_budget(
+                [f"2001:db8:{index}::/120" for index in range(5)])
+        self.assertEqual(wizard.validate_task_address_budget(
+            ["192.0.2.0/24"], exclusions=["192.0.2.1/32"])[4], 253)
+
+    def test_frozen_dns_preview_does_not_resolve_again_after_review(self):
+        meta={"targets":["app.example.test"],"exclusions":[],
+              "frozen_dns":{"app.example.test":["192.0.2.5"]}}
+        with patch.object(wizard,"resolve",side_effect=AssertionError("unexpected DNS request")):
+            wizard.freeze_scope(meta)
+        self.assertEqual(meta["address_budget"][4],1)
 
     def test_ssh_password_budget_and_no_secret_in_events(self):
         attempts = []

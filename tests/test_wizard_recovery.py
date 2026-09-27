@@ -19,6 +19,32 @@ class WizardRecoveryTests(unittest.TestCase):
     def tearDown(self):
         os.umask(self.original_umask)
 
+    def test_scope_accepts_cidr_ip_and_domain_before_profile(self):
+        answers=iter(['192.168.0.0/24,195.87.199.26','sanifoam.com.tr','',''])
+        with patch.object(wizard.UI,'prompt',side_effect=lambda *args: next(answers)), \
+             patch.object(wizard.UI,'say'), \
+             patch.object(wizard,'resolve',return_value=['203.0.113.5']):
+            targets,exclusions,frozen,budget=wizard.collect_scope()
+        self.assertEqual(targets,['192.168.0.0/24','195.87.199.26','sanifoam.com.tr'])
+        self.assertEqual(exclusions,[])
+        self.assertEqual(frozen['sanifoam.com.tr'],['203.0.113.5'])
+        self.assertEqual(budget[4],256)
+
+    def test_scope_budget_retry_keeps_previous_fields(self):
+        large=','.join(f'10.0.{index}.0/24' for index in range(5))
+        answers=iter([large,'','','','10.0.0.0/24','','',''])
+        defaults=[]
+        def answer(label,default=''):
+            defaults.append(default)
+            return next(answers) or default
+        with patch.object(wizard.UI,'prompt',side_effect=answer), \
+             patch.object(wizard.UI,'say'):
+            targets,exclusions,_,budget=wizard.collect_scope()
+        self.assertEqual(targets,['10.0.0.0/24'])
+        self.assertEqual(exclusions,[])
+        self.assertEqual(budget[4],254)
+        self.assertEqual(defaults[4].replace(' ',''),large)
+
     def test_non_domain_windows_does_not_offer_joined_ad_and_retries_fields(self):
         answers = iter(['192.0.2.4', 'corp.example', '192.0.2.0/24',
                         'dc.corp.example', 'CORP\\tester'])
@@ -93,12 +119,15 @@ class WizardRecoveryTests(unittest.TestCase):
             meta = {'id': 'qa-run-1', 'client': 'Synthetic', 'targets': ['192.0.2.5', '192.0.2.6'],
                     'exclusions': [], 'host_snapshot': {}, 'nuclei_templates': '',
                     'selected_interfaces': [], 'ad': {'mode': 'disabled'},
-                    'browser_enabled': False, 'wireless': {'enabled': False}}
+                    'browser_enabled': False, 'wireless': {'enabled': False},
+                    'enabled_modules': [], 'allowed_techniques': [], 'auth_probes': [],
+                    'role_scenarios': [], 'password_probes': []}
             outcomes = [{'status': status, 'note': 'Local checks',
                          'checks': [{'name': 'Tool', 'status': status, 'detail': 'Local'}]}
                         for status in ('blocked', 'ok')]
-            with patch.object(wizard, 'collect_meta', return_value=(meta, [], None, None, [])), \
-                 patch.object(wizard, 'freeze_scope'), \
+            with patch.object(wizard, 'collect_meta', return_value=(meta, [], None, None, [])) as collected, \
+                 patch.object(wizard, 'freeze_scope', side_effect=[ValueError('synthetic'),None]), \
+                 patch.object(wizard, 'collect_scope', return_value=(meta['targets'],[],{}, {4:2,6:0})), \
                  patch.object(wizard, 'choose_run_base', return_value=(Path(folder), None)), \
                  patch.object(wizard, 'register_run'), \
                  patch.object(wizard, 'tool_inventory', return_value={}), \
@@ -113,10 +142,12 @@ class WizardRecoveryTests(unittest.TestCase):
                  patch.object(wizard, 'handoff_run'), \
                  patch.object(wizard.subprocess, 'run', return_value=SimpleNamespace(returncode=0)), \
                  patch.object(wizard.UI, 'menu', return_value='1'), \
+                 patch.object(wizard.UI, 'prompt', return_value='YETKILIYIM'), \
                  patch.object(wizard.UI, 'say'), \
                  patch.object(wizard.UI, 'target_done'), \
                  patch.object(wizard.UI, 'done'):
                 wizard.run(SimpleNamespace(runs=None))
+            collected.assert_called_once()
             root = next(Path(folder).iterdir())
             steps = wizard.json.loads((root / 'steps.json').read_text(encoding='utf-8'))
             self.assertEqual(scan.call_count, 2)
