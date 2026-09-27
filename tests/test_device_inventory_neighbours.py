@@ -71,6 +71,33 @@ class DeviceInventoryNeighboursTests(unittest.TestCase):
         summary = device_inventory.build_inventory(root, META, neighbours={}, oui_paths=[])
         self.assertEqual(summary["mac_count"], 0)  # the WSL-NAT failure mode
 
+    def test_scanner_own_machine_is_enriched_from_host_snapshot(self):
+        root = _run_dir(NMAP_NO_MAC)  # 192.168.56.10, no MAC from nmap
+        oui = _oui_csv(root)
+        meta = dict(META)
+        meta["host_snapshot"] = {"host": "UBNTB001", "fqdn": "UBNTB001",
+            "adapters": [{"name": "Wi-Fi", "mac": "00-11-22-33-44-55", "status": "Up",
+                          "addresses": [{"address": "192.168.56.10"}]}]}
+        summary = device_inventory.build_inventory(root, meta, neighbours={}, oui_paths=[oui])
+        dev = summary["devices"][0]
+        self.assertTrue(dev["mac"])                       # filled from the local adapter
+        self.assertEqual(dev["vendor"], "TestVendor")
+        self.assertEqual(dev["display_name"], "UBNTB001")
+        self.assertTrue(dev.get("is_scanner"))
+        self.assertFalse(any("L2 komşuluk yok" in n for n in dev["notices"]))  # misleading note removed
+        self.assertEqual(summary["mac_count"], 1)
+
+    def test_web_identify_signal_feeds_classification(self):
+        root = _run_dir(NMAP_NO_MAC)
+        raw = root / "targets" / "192.168.56.0_24" / "raw"
+        (raw / "web_id_192.168.56.10.json").write_text(json.dumps({
+            "target": "192.168.56.10", "title": "Technicolor Gateway",
+            "server": "lighttpd", "snippet": "DOCSIS Online model 6442 technicolor"}), encoding="utf-8")
+        summary = device_inventory.build_inventory(root, META, neighbours={}, oui_paths=[])
+        dev = summary["devices"][0]
+        self.assertTrue(any("Web kimliği" in s for s in dev["signals"]))
+        self.assertEqual(dev.get("web_id", {}).get("title"), "Technicolor Gateway")
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -406,12 +406,24 @@ def build_inventory(root,meta,neighbours=None,oui_paths=None):
             nb_mac=normalize_mac(netbios.get('mac'))
             if nb_mac:
                 mac=nb_mac; vendor,source=vendor_for(mac,vendors)
+        # HTTP 'view-source' identity (web_identify): title/server/body → classifier blob.
+        web_id={}
+        for rawdir in entry['raws']:
+            web_path=rawdir/f'web_id_{re.sub(r"[^A-Za-z0-9._-]","_",ip)[:90]}.json'
+            if web_path.is_file():
+                try:
+                    wd=json.loads(web_path.read_text(encoding='utf-8'))
+                    if wd.get('target')==ip:
+                        web_id=wd; break
+                except (ValueError,OSError,AttributeError):
+                    pass
         random_mac=bool(mac and int(mac.replace(':','')[:2],16)&2)
         blob=' '.join([vendor]
                       +[f"{p.get('service','')} {p.get('product','')} {p.get('version','')} {p.get('extra_info','')}" for p in ports]
                       +[snmp_description]+entry['hostnames']
                       +[o.get('name','') for o in entry['os_matches']]
-                      +[netbios.get('name',''),netbios.get('domain','')])
+                      +[netbios.get('name',''),netbios.get('domain','')]
+                      +[web_id.get('title',''),web_id.get('server',''),web_id.get('snippet','')])
         cls=classify_device({'vendor':vendor,'ports':ports,'snmp':snmp_description,'text':blob,
                              'os':entry['os_matches'],'gateway':ip in gateways,'random_mac':random_mac})
         category,confidence,signals=cls['category'],cls['confidence'],cls['evidence']
@@ -421,8 +433,16 @@ def build_inventory(root,meta,neighbours=None,oui_paths=None):
             roles.append({'role':'Etki alanı denetleyicisi adayı','confidence':'orta','reason':'NetBIOS ad tablosu (0x1B/0x1C)'})
         elif 'file server' in nb_role:
             roles.append({'role':'Dosya/paylaşım sunucusu adayı','confidence':'düşük','reason':'NetBIOS ad tablosu (0x20)'})
-        # Display name: NetBIOS computer name > DNS hostname > (blank).
+        if web_id.get('title'):
+            signals=list(signals)+[f'Web kimliği (sayfa başlığı): "{web_id["title"][:80]}"'
+                                   + (f' · Server: {web_id["server"]}' if web_id.get('server') else '')]
+        elif web_id.get('server'):
+            signals=list(signals)+[f'Web sunucusu: {web_id["server"]}']
+        # Display name: NetBIOS computer name > DNS hostname > web title (kısa/anlamlı) > (blank).
         display_name=netbios.get('name') or (entry['hostnames'][0] if entry['hostnames'] else '')
+        if not display_name and web_id.get('title') and 2 <= len(web_id['title']) <= 40 \
+                and web_id['title'].lower() not in ('login', 'sign in', 'home', 'index', 'welcome'):
+            display_name=web_id['title']
         notices=[]
         if xml_mac and neighbour_mac and xml_mac!=neighbour_mac:
             notices.append('Nmap MAC ve yerel komşu önbelleği uyuşmuyor; MAC doğrulanmalı')
@@ -440,7 +460,7 @@ def build_inventory(root,meta,neighbours=None,oui_paths=None):
                      'vendor':vendor,'vendor_source':source,
                      'category':category,'category_key':cls['key'],
                      'confidence':confidence,'confidence_pct':cls['confidence_pct'],
-                     'display_name':display_name,'netbios':netbios,
+                     'display_name':display_name,'netbios':netbios,'web_id':web_id,
                      'signals':signals,'ports':ports,'role_candidates':roles,
                      'hostnames':entry['hostnames'],'os_matches':entry['os_matches'],
                      'review_notes':review,'notices':notices,'snmp_sysdescr':snmp_description,
@@ -470,6 +490,32 @@ def build_inventory(root,meta,neighbours=None,oui_paths=None):
             record['role_candidates'].append({'role':'SQL Server adayı','confidence':'orta',
                 'reason':'UDP/1434 SQL Browser yanıtında örnek adı görüldü'})
         record['signals'].append('SQL Browser örnek yanıtı: '+str(path.relative_to(root)))
+    # The scanner's own machine is fully known locally — don't leave it "Bilinmiyor /
+    # MAC görülmedi". Enrich any scanned device whose IP is one of our adapter IPs.
+    host_name=str(snapshot.get('fqdn') or snapshot.get('host') or '')
+    for adapter in snapshot.get('adapters',[]):
+        if not isinstance(adapter,dict):
+            continue
+        amac=normalize_mac(adapter.get('mac',''))
+        for item in adapter.get('addresses',[]):
+            if not isinstance(item,dict):
+                continue
+            addr=str(item.get('address','')).split('%')[0]
+            dev=devices.get(addr)
+            if dev is None:
+                continue
+            if not dev.get('mac') and amac:
+                dev['mac']=amac; dev['mac_source']='windows adaptör (yerel)'
+                dev['vendor'],dev['vendor_source']=vendor_for(amac,vendors)
+            if not dev.get('display_name') and host_name:
+                dev['display_name']=host_name
+            dev['notices']=[n for n in dev.get('notices',[]) if 'L2 komşuluk yok' not in n]
+            note='Bu, taramayı yapan test makinesidir (yerel Windows adaptör kaydı).'
+            if note not in dev['notices']:
+                dev['notices'].append(note)
+            if not any('test makinesi' in s.lower() for s in dev.get('signals',[])):
+                dev.setdefault('signals',[]).insert(0,'Yerel test makinesi: '+(host_name or 'bu ana bilgisayar'))
+            dev['is_scanner']=True
     local_addresses=[]
     selected=set(meta.get('selected_interfaces',[]))
     for adapter in snapshot.get('adapters',[]):

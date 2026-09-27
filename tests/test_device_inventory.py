@@ -92,7 +92,7 @@ class DeviceInventoryTests(unittest.TestCase):
             with patch.object(sys,'argv',['report_v2.py',str(root)]):
                 report_v2.main()
             document=(root/'REPORT.html').read_text(encoding='utf-8')
-            self.assertIn('Cihaz ve MAC envanteri',document)
+            self.assertIn('Cihaz envanteri',document)
             self.assertIn('VMware',document)
             self.assertIn('href="DEVICE_INVENTORY.json"',document)
             self.assertTrue((root/'TEKNIK_RAPOR.pdf').stat().st_size>1000)

@@ -41,6 +41,7 @@ from sql_discovery import discover as discover_sql_browser
 from rootdse_probe import discover as discover_rootdse
 import credential_probes
 import netbios_probe
+import web_identify
 from environment_doctor import inspect as inspect_environment
 
 ROOT = Path(__file__).resolve().parent
@@ -69,6 +70,14 @@ def web_budget_wait():
     if WEB_NEXT_AT > moment:
         time.sleep(WEB_NEXT_AT-moment)
     WEB_NEXT_AT=max(WEB_NEXT_AT,time.monotonic())+0.2
+
+
+def dns_argv(record, qname):
+    """dig when available, else the built-in nslookup (Windows). osint_facts parses
+    both by content (v=DMARC1 / v=spf1), so the fallback keeps DNS OSINT working."""
+    if shutil.which('dig'):
+        return ["dig", "+time=3", "+tries=1", "+noall", "+answer", qname, record]
+    return ["nslookup", "-type=" + record, qname]
 
 def now():
     return dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds")
@@ -1101,6 +1110,7 @@ def run_probe_suite(target, meta, root, raw, events, assets, discovered_ports,
                     discovered_ports[ip]=sorted(set(discovered_ports.get(ip,[]))|set(extra))
         discover_sql_browser(assets,raw,events,meta['max_rate'])
         netbios_probe.run(assets,discovered_ports,raw,events)
+        web_identify.run(assets,discovered_ports,raw,events)
         probe_snmp(target,assets,raw,events,meta['max_rate'])
         discover_rootdse(assets,discovered_ports,raw,events)
         network_extras(assets,discovered_ports,raw,events,command)
@@ -1206,12 +1216,12 @@ def run_probe_suite(target, meta, root, raw, events, assets, discovered_ports,
     if not is_ip(target) and profile in ("external","full"):
         command("whois",["whois",target],raw,events,25)
         command("nslookup",["nslookup",target],raw,events,15)
-        command("dns_a",["dig","+time=3","+tries=1","+noall","+answer",target,"A"],raw,events,15)
-        command("dns_aaaa",["dig","+time=3","+tries=1","+noall","+answer",target,"AAAA"],raw,events,15)
-        command("dns_mx",["dig","+time=3","+tries=1","+noall","+answer",target,"MX"],raw,events,15)
-        command("dns_caa",["dig","+time=3","+tries=1","+noall","+answer",target,"CAA"],raw,events,15)
-        command("dns_txt",["dig","+time=3","+tries=1","+noall","+answer",target,"TXT"],raw,events,15)
-        command("dns_dmarc",["dig","+time=3","+tries=1","+noall","+answer","_dmarc."+target,"TXT"],raw,events,15)
+        command("dns_a",dns_argv("A",target),raw,events,15)
+        command("dns_aaaa",dns_argv("AAAA",target),raw,events,15)
+        command("dns_mx",dns_argv("MX",target),raw,events,15)
+        command("dns_caa",dns_argv("CAA",target),raw,events,15)
+        command("dns_txt",dns_argv("TXT",target),raw,events,15)
+        command("dns_dmarc",dns_argv("TXT","_dmarc."+target),raw,events,15)
         domain_recon(target,raw,events,command)
 
 
