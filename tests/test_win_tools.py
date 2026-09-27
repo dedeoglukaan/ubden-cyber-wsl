@@ -26,11 +26,17 @@ class WinToolsTests(unittest.TestCase):
 
     def test_every_tool_has_source_and_fallback_field(self):
         for tool in win_tools.CATALOG:
-            self.assertIn(tool["source"], {"winget", "pip", "builtin", "nse", "manual"})
+            self.assertIn(tool["source"], {"download", "pip", "builtin", "nse"})
             self.assertIn("fallback", tool)
-            # A tool with no clean Windows install must name a fallback capability.
-            if tool["source"] == "manual":
+            # An NSE-covered tool (no clean Windows binary) must name a fallback capability.
+            if tool["source"] == "nse":
                 self.assertTrue(tool["fallback"], f"{tool['exe']} icin fallback belirtilmemis")
+
+    def test_download_registry_has_nuclei_and_sslscan(self):
+        self.assertIn("nuclei", win_tools.DOWNLOAD_TOOLS)
+        self.assertIn("sslscan", win_tools.DOWNLOAD_TOOLS)
+        for spec in win_tools.DOWNLOAD_TOOLS.values():
+            self.assertTrue({"repo", "asset", "bin"}.issubset(spec))
 
     def test_report_shape(self):
         rep = win_tools.report()
@@ -47,7 +53,7 @@ class WinToolsTests(unittest.TestCase):
 
     def test_pip_tools_declared(self):
         names = {p[0] for p in win_tools.PIP_TOOLS}
-        self.assertTrue({"wafw00f", "fierce", "theHarvester"}.issubset(names))
+        self.assertTrue({"wafw00f", "fierce", "theHarvester", "puresnmp"}.issubset(names))
 
 
 if __name__ == "__main__":

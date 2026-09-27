@@ -92,20 +92,24 @@ function Ensure-ScanTools {
         -not ($nmapPaths | Where-Object { Test-Path $_ })) {
         Install-Winget 'Insecure.Nmap' 'Nmap + Npcap'   # cekirdek: ARP/MAC/L2
     }
-    if (-not (Get-Command nuclei.exe -ErrorAction SilentlyContinue)) {
-        Install-Winget 'ProjectDiscovery.Nuclei' 'Nuclei'
-    }
     if (-not (Get-Command whois.exe -ErrorAction SilentlyContinue)) {
         Install-Winget 'Microsoft.Sysinternals.Whois' 'Sysinternals Whois'
     }
-    # pip tabanli CLI araclari (wafw00f, fierce, theHarvester) venv'e kur.
-    Write-Host '  pip araclari kuruluyor (wafw00f, fierce, theHarvester)...' -ForegroundColor Cyan
+    # nuclei + sslscan GitHub-release ikilileri, pip araclari (wafw00f/fierce/
+    # theHarvester/puresnmp) ve nuclei sablonlari — hepsi win_tools install ile.
+    Write-Host '  Araclar kuruluyor: nuclei + sslscan (GitHub) ve pip araclari...' -ForegroundColor Cyan
     try { & $VenvPython (Join-Path $SourceRoot 'win_tools.py') install | Out-Null } catch {}
 }
 
 function Add-ScanToolsToPath {
-    foreach ($dir in @('C:\Program Files (x86)\Nmap', 'C:\Program Files\Nmap')) {
-        if ((Test-Path (Join-Path $dir 'nmap.exe')) -and ($env:PATH -notlike "*$dir*")) {
+    $toolsDir = Join-Path $StateRoot 'tools'
+    $dirs = @('C:\Program Files (x86)\Nmap', 'C:\Program Files\Nmap', $toolsDir)
+    if (Test-Path $toolsDir) {
+        $dirs += (Get-ChildItem -LiteralPath $toolsDir -Directory -ErrorAction SilentlyContinue |
+                  ForEach-Object { $_.FullName })
+    }
+    foreach ($dir in $dirs) {
+        if ((Test-Path $dir) -and ($env:PATH -notlike "*$dir*")) {
             $env:PATH = "$dir;$env:PATH"
         }
     }

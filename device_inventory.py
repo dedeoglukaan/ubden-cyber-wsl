@@ -283,7 +283,7 @@ def build_inventory(root,meta,neighbours=None,oui_paths=None):
                 try:
                     snmp_data=json.loads(snmp_path.read_text(encoding='utf-8'))
                     if (snmp_data.get('target')==ip and snmp_data.get('confirmed_response') is True
-                            and snmp_data.get('version')=='1' and snmp_data.get('community')=='public'):
+                            and snmp_data.get('version') in ('1', '2c') and snmp_data.get('community')=='public'):
                         snmp_description=str(snmp_data.get('sysDescr',''))[:160]
                         break
                 except (ValueError,OSError,AttributeError):

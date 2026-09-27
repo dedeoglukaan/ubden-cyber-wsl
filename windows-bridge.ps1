@@ -34,14 +34,49 @@ try {
             Where-Object { $_.DestinationPrefix -eq '0.0.0.0/0' -or $_.DestinationPrefix -eq '::/0' } |
             ForEach-Object { @{ destination = $_.DestinationPrefix; gateway = $_.NextHop;
                                 interface_index = $_.InterfaceIndex; metric = $_.RouteMetric } })
-        $computer = Get-CimInstance Win32_ComputerSystem
+        $computer = Get-CimInstance Win32_ComputerSystem -ErrorAction SilentlyContinue
+        $os = Get-CimInstance Win32_OperatingSystem -ErrorAction SilentlyContinue
+        $cpu = Get-CimInstance Win32_Processor -ErrorAction SilentlyContinue | Select-Object -First 1
+        # Aktif oturum kullanicisi (CIM UserName konsol oturumu; yoksa env kullan).
+        $activeUser = if ($computer -and $computer.UserName) { "$($computer.UserName)" }
+                      elseif ($env:USERDOMAIN -and $env:USERNAME) { "$env:USERDOMAIN\$env:USERNAME" }
+                      else { "$env:USERNAME" }
+        $roleMap = @{ 0 = 'Standalone Workstation'; 1 = 'Member Workstation'; 2 = 'Standalone Server';
+                      3 = 'Member Server'; 4 = 'Backup Domain Controller'; 5 = 'Primary Domain Controller' }
+        $domainRole = if ($computer) { $roleMap[[int]$computer.DomainRole] } else { '' }
+        # Azure AD / Entra join durumu (best-effort; dsregcmd her surumde vardir).
+        $aadJoined = $false; $enterpriseJoined = $false
+        try {
+            $dsreg = (& dsregcmd.exe /status 2>$null)
+            if ($dsreg) {
+                $aadJoined = [bool]($dsreg | Select-String -SimpleMatch 'AzureAdJoined : YES')
+                $enterpriseJoined = [bool]($dsreg | Select-String -SimpleMatch 'EnterpriseJoined : YES')
+            }
+        } catch {}
+        $ipv4Total = @($adapters | ForEach-Object { $_.addresses } |
+            Where-Object { $_ -and $_.family -match 'v4|InterNetwork$' }).Count
+        $memMB = if ($computer -and $computer.TotalPhysicalMemory) { [math]::Round($computer.TotalPhysicalMemory / 1MB) } else { 0 }
+        $up = ''
+        if ($os -and $os.LastBootUpTime) { $u = (Get-Date) - $os.LastBootUpTime; $up = "$($u.Days)g $($u.Hours)s $($u.Minutes)d" }
         Emit-Json @{
             status = 'ok'
-            schema = 1
+            schema = 2
             host = $env:COMPUTERNAME
+            fqdn = if ($computer -and $computer.Domain -and $computer.Domain -ne 'WORKGROUP') { "$env:COMPUTERNAME.$($computer.Domain)" } else { $env:COMPUTERNAME }
             windows_build = [Environment]::OSVersion.Version.ToString()
-            part_of_domain = [bool]$computer.PartOfDomain
-            domain = "$($computer.Domain)"
+            os_caption = if ($os) { "$($os.Caption)" } else { '' }
+            manufacturer = if ($computer) { "$($computer.Manufacturer)" } else { '' }
+            model = if ($computer) { "$($computer.Model)" } else { '' }
+            cpu = if ($cpu) { "$($cpu.NumberOfCores) Core - $($cpu.Name)" } else { '' }
+            memory_mb = $memMB
+            uptime = $up
+            active_user = $activeUser
+            part_of_domain = [bool]($computer -and $computer.PartOfDomain)
+            domain = if ($computer) { "$($computer.Domain)" } else { '' }
+            domain_role = $domainRole
+            aad_joined = $aadJoined
+            enterprise_joined = $enterpriseJoined
+            ipv4_total = $ipv4Total
             adapters = $adapters
             default_routes = $routes
         }

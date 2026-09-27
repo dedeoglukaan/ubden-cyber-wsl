@@ -59,8 +59,12 @@ class WslPlatformTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             raw = Path(tmp) / "targets" / "one" / "raw"
             events = []
-            supplemental_scans.run("192.0.2.0/24", ["192.0.2.5", "192.0.2.6"],
-                                   {"192.0.2.5": [443, 445]}, raw, events, fake, "network")
+            # Simulate the Linux tools present so the discovered-ports gating is
+            # exercised deterministically regardless of host OS (Windows falls back
+            # to ping/nbtstat, which is covered elsewhere).
+            with patch.object(supplemental_scans.shutil, "which", return_value="/usr/bin/x"):
+                supplemental_scans.run("192.0.2.0/24", ["192.0.2.5", "192.0.2.6"],
+                                       {"192.0.2.5": [443, 445]}, raw, events, fake, "network")
         self.assertEqual([item[0] for item in calls],
                          ["fping_001", "nbtscan_001", "hping3_001", "fping_002"])
         self.assertEqual(calls[2][1], ["hping3", "-S", "-c", "1", "-p", "443", "192.0.2.5"])

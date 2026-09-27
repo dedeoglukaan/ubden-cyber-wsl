@@ -944,16 +944,36 @@ def nuclei_args(target,ip,scheme,templates,selection,max_rate,raw):
     return name,argv+["-o",str(raw/f"{name}.jsonl")]
 
 def probe_snmp(target, assets, raw, events, max_rate):
-    """One read-only SNMPv1/public sysDescr GET per discovered, in-scope IP."""
+    """One read-only public sysDescr GET per discovered, in-scope IP.
+
+    Uses pure-Python puresnmp when available (no external snmpget binary — the fix
+    for the 'snmpget kurulu değil' skip on Windows); falls back to the snmpget CLI
+    if puresnmp is absent but the binary exists.
+    """
     summary_path=raw/'snmp_v1_public_summary.json'
-    if not shutil.which('snmpget'):
+    try:
+        from puresnmp import get as _snmp_get
+        backend='puresnmp'
+    except Exception:
+        _snmp_get=None
+        backend='snmpget' if shutil.which('snmpget') else None
+    if backend is None:
         events.append({'step':'snmp_v1_public','target':target,'status':'missing_tool',
-                       'detail':'snmpget kurulu değil; kontrol yapılamadı'})
-        UI.say('  SNMPv1/public kontrolü atlandı: snmpget kurulu değil.','yellow')
+                       'detail':'SNMP istemcisi yok (puresnmp kurulmadı, snmpget yok)'})
+        UI.say('  SNMP kontrolü atlandı: SNMP istemcisi yok.','yellow')
         return
     started=time.monotonic()
     oid='1.3.6.1.2.1.1.1.0'
+    version='2c' if backend=='puresnmp' else '1'
     def query(ip):
+        if _snmp_get is not None:
+            try:
+                value=_snmp_get(ip,'public',oid,timeout=2)
+                if isinstance(value,(bytes,bytearray)):
+                    value=value.decode('utf-8','replace')
+                return str(value).strip()[:300]
+            except Exception:
+                return ''
         try:
             result=subprocess.run(['snmpget','-v1','-c','public','-t','1','-r','0',
                                    '-Oqv',ip,oid],capture_output=True,text=True,
@@ -969,16 +989,16 @@ def probe_snmp(target, assets, raw, events, max_rate):
             response=future.result()
             if response:
                 evidence=raw/f'snmp_v1_public_{safe_filename(ip)}.json'
-                atomic_json(evidence,{'target':ip,'version':'1','community':'public',
+                atomic_json(evidence,{'target':ip,'version':version,'community':'public',
                                       'oid':oid,'sysDescr':response,'confirmed_response':True})
                 responses.append({'ip':ip,'evidence':str(evidence.relative_to(raw.parent.parent.parent))})
-            UI.counted('SNMPv1/public',index,len(assets),started)
+            UI.counted('SNMP public',index,len(assets),started)
     summary={'target':target,'tested_count':len(assets),'responding_count':len(responses),
              'responding':responses,'status':'completed',
              'note':'Yalnızca SNMPv1, public community ve tek salt okunur sysDescr sorgusu denendi. Yanıt yokluğu SNMP kapalı anlamına gelmez.'}
     atomic_json(summary_path,summary)
-    events.append({'step':'snmp_v1_public','tool':'snmpget','target':target,'status':'ok',
-                   'detail':f'{len(responses)}/{len(assets)} cihaz SNMPv1/public ile yanıtladı',
+    events.append({'step':'snmp_v1_public','tool':backend,'target':target,'status':'ok',
+                   'detail':f'{len(responses)}/{len(assets)} cihaz SNMP/public ile yanıtladı',
                    'seconds':round(time.monotonic()-started,2),
                    'output':str(summary_path.relative_to(raw.parent.parent.parent)),
                    'sha256':hashlib.sha256(summary_path.read_bytes()).hexdigest()})

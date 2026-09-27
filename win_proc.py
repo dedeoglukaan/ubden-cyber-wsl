@@ -117,6 +117,7 @@ def run(name, argv, folder, events, timeout=900, stop_on=(), on_tick=None):
                 process = subprocess.Popen(argv, stdout=handle, stderr=subprocess.STDOUT,
                                            creationflags=CREATE_NEW_PROCESS_GROUP)
                 last_stop = 0.0
+                last_tick = 0.0
                 try:
                     while True:
                         try:
@@ -133,7 +134,9 @@ def run(name, argv, folder, events, timeout=900, stop_on=(), on_tick=None):
                                         raise _StopPattern()
                                 except OSError:
                                     pass
-                            if on_tick:
+                            # Throttle progress ticks to ~1 every 2s (avoids flooding the UI/log).
+                            if on_tick and time.monotonic() - last_tick >= 2.0:
+                                last_tick = time.monotonic()
                                 try:
                                     on_tick(name, time.monotonic() - started, timeout)
                                 except Exception:  # progress must never break a scan

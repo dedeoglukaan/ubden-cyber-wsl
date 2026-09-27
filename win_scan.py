@@ -58,6 +58,28 @@ MAX_LANES = 6          # hard ceiling on concurrent target lanes
 DEFAULT_LANES = 3      # default when the form does not specify
 
 
+def is_admin() -> bool:
+    """True when we can send raw packets (SYN scan, OS fingerprint, ARP)."""
+    if os.name != "nt":
+        return True
+    try:
+        import ctypes
+        return bool(ctypes.windll.shell32.IsUserAnAdmin())
+    except Exception:
+        return False
+
+
+def scan_flags() -> list:
+    """SYN + OS fingerprint when privileged (Npcap/admin); TCP connect otherwise.
+
+    Even the unprivileged connect path still captures on-link MAC, because nmap
+    does ARP host discovery before the port scan when -Pn is NOT used.
+    """
+    if is_admin():
+        return ["-sS", "-O", "--osscan-limit"]
+    return ["-sT"]
+
+
 def now() -> str:
     return dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds")
 
@@ -233,9 +255,10 @@ def _scan_scope(target, assets, meta, raw, events, progress):
     """
     ipv6 = ["-6"] if any(":" in a for a in assets) else []
     ports = _ports_arg(meta)
+    flags = scan_flags()  # -sS -O when privileged (Npcap/admin), else -sT; both keep ARP MAC
     if wizard.is_network(target):
         name = "nmap_cidr"
-        argv = (["nmap"] + ipv6 + ["-n", "-sS", "-sV", "--version-light", "-T3",
+        argv = (["nmap"] + ipv6 + ["-n"] + flags + ["-sV", "--version-light", "-T3",
                 "--stats-every", "10s", "--max-rate", str(meta["max_rate"]),
                 "--max-retries", "1", "--host-timeout", "10m"] + ports +
                 ["-oX", str(raw / f"{name}.xml"), target])
@@ -249,8 +272,8 @@ def _scan_scope(target, assets, meta, raw, events, progress):
         for ip in assets:
             key = wizard.safe_filename(ip)
             name = f"nmap_{key}"
-            argv = (["nmap"] + (["-6"] if ":" in ip else []) +
-                    ["-n", "-sS", "-sV", "--version-light", "-T3", "--stats-every", "10s",
+            argv = (["nmap"] + (["-6"] if ":" in ip else []) + ["-n"] + flags +
+                    ["-sV", "--version-light", "-T3", "--stats-every", "10s",
                      "--max-rate", str(meta["max_rate"]), "--max-retries", "1",
                      "--host-timeout", "8m"] + ports + ["-oX", str(raw / f"{name}.xml"), ip])
             progress(f"{ip}: ARP + servis taramasi", "info")
