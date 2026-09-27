@@ -424,7 +424,9 @@ function Ensure-BrowserHelper {
 function Invoke-Setup {
     Invoke-Elevated
     $build = [Environment]::OSVersion.Version.Build
-    if ($build -lt 22621) { throw 'Mirrored ag icin Windows 11 22H2 veya daha yenisi gerekli' }
+    # Mirrored ag yalnizca Windows 11 22H2 (build 22621) ve sonrasinda vardir.
+    # Daha eski surumlerde kurulum durmaz; dogrudan NAT moduyla devam eder.
+    $mirroredSupported = ($build -ge 22621)
     $stateDrive = [IO.Path]::GetPathRoot($env:LOCALAPPDATA).TrimEnd('\').TrimEnd(':')
     $drive = Get-PSDrive -Name $stateDrive -PSProvider FileSystem -ErrorAction Stop
     if ($drive.Free -lt 10GB) { throw 'WSL kurulumu icin Windows sistem diskinde en az 10 GiB bos alan gerekli' }
@@ -447,7 +449,25 @@ function Invoke-Setup {
     $knownMirroredFailure = ($beforeNetwork.network_mode -eq 'nat' -or
         $beforeNetwork.setup_error -eq 'Mirrored WSL yeniden baslatmadan sonra da dogrulanamadi' -or
         $beforeNetwork.setup_error -match '^Mirrored: ')
-    if ($knownMirroredFailure) {
+    if (-not $mirroredSupported) {
+        # 22H2 oncesi Windows: mirrored ag yok, dogrudan NAT'a gec.
+        try {
+            Test-NatNetwork
+            $networkMode = 'nat'
+            $networkFailure = ('Mirrored ag icin Windows 11 22H2+ gerekli (mevcut build ' +
+                $build + '); NAT moduna gecildi')
+            Write-Host $networkFailure -ForegroundColor DarkYellow
+        }
+        catch {
+            $failed = Read-State
+            $failed | Add-Member -NotePropertyName setup_error `
+                -NotePropertyValue ('Mirrored desteklenmiyor (22H2 oncesi) ve NAT dogrulanamadi: ' +
+                    $_.Exception.Message) -Force
+            Save-State $failed
+            throw $failed.setup_error
+        }
+    }
+    elseif ($knownMirroredFailure) {
         try {
             Test-NatNetwork
             $networkMode = 'nat'

@@ -83,7 +83,7 @@ UBDEN Cyber Security Systems test ekibi
 
 ### Test bilgisayarı ve erişim ortamı
 
-- Windows 11 22H2 veya üzeri, yönetici yetkisi, WSL 2 ve sanallaştırma desteği. UBDEN Kali WSL'yi kurar; mevcut Kali varsa kullanır.
+- WSL 2 ve sanallaştırma desteği, yönetici yetkisi. Mirrored ağ için Windows 11 22H2 veya üzeri önerilir; daha eski Windows sürümlerinde kurulum durmaz, otomatik olarak NAT ağıyla devam eder. UBDEN Kali WSL'yi kurar; mevcut Kali varsa kullanır.
 - Temel kurulum için en az 10 GiB boş disk; GVM ve geniş araç kataloğu da seçilecekse hem Windows sistem diskinde hem Kali dosya sisteminde en az 30 GiB boş alan. 16 GiB RAM önerilir; büyük envanterlerde daha fazla kaynak gerekebilir.
 - Kali paketleri ve resmî IEEE MAC kayıtları için kurulum sırasında internet; test sırasında müşterinin onayladığı hedeflere ağ erişimi. VPN kullanılacaksa test bilgisayarındaki profil ve gerekli MFA yöntemi önceden hazırlanmalıdır.
 - Kablolu erişim tercih edilir. Dahili Wi‑Fi IP tabanlı ağ testlerini destekleyebilir; ham 802.11 kontrolü için Kali'de sürücü ve monitör modu doğrulanmış uyumlu USB Wi‑Fi adaptörü gerekir.
@@ -91,21 +91,21 @@ UBDEN Cyber Security Systems test ekibi
 
 ## Windows üzerinde hızlı başlangıç
 
-**Gereksinimler:** Windows 11 22H2 veya üzeri, sanallaştırma desteği, yönetici yetkisi, kurulum için internet erişimi ve en az 10 GiB boş sistem diski alanı. Bazı isteğe bağlı araçlar daha fazla alan ister. Ağ testi için yazılı yetki ve açık hedef kapsamı gerekir.
+**Gereksinimler:** WSL 2 ve sanallaştırma desteği, yönetici yetkisi, kurulum için internet erişimi ve en az 10 GiB boş sistem diski alanı. Mirrored ağ modu için Windows 11 22H2 veya üzeri önerilir; daha eski sürümlerde NAT ağıyla devam edilir. Bazı isteğe bağlı araçlar daha fazla alan ister. Ağ testi için yazılı yetki ve açık hedef kapsamı gerekir.
 
 PowerShell:
 
 ```powershell
-irm 'https://raw.githubusercontent.com/ubden/ubden-cyber-wsl/v5.0.0-wsl.9/bootstrap.ps1' | iex
+irm 'https://raw.githubusercontent.com/ubden/ubden-cyber-wsl/v5.0.0-wsl.10/bootstrap.ps1' | iex
 ```
 
 CMD:
 
 ```cmd
-powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "irm 'https://raw.githubusercontent.com/ubden/ubden-cyber-wsl/v5.0.0-wsl.9/bootstrap.ps1' | iex"
+powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "irm 'https://raw.githubusercontent.com/ubden/ubden-cyber-wsl/v5.0.0-wsl.10/bootstrap.ps1' | iex"
 ```
 
-Komut [sürüm etiketli başlangıç betiğini](https://github.com/ubden/ubden-cyber-wsl/blob/v5.0.0-wsl.9/bootstrap.ps1) çalıştırır. Betik kaynak paketini indirir, mevcut Kali WSL kurulumunu kullanır veya eksikse kurar, bağımlılıkları hazırlar ve görev sihirbazını açar. Windows yeniden başlatması gerekirse işlem sonraki oturumda devam eder. Kurulum yönetici izni isteyebilir.
+Komut [sürüm etiketli başlangıç betiğini](https://github.com/ubden/ubden-cyber-wsl/blob/v5.0.0-wsl.10/bootstrap.ps1) çalıştırır. Betik kaynak paketini indirir, mevcut Kali WSL kurulumunu kullanır veya eksikse kurar, bağımlılıkları hazırlar ve görev sihirbazını açar. Windows yeniden başlatması gerekirse işlem sonraki oturumda devam eder. Kurulum yönetici izni isteyebilir.
 
 Kurulum önce mirrored ağı ve DNS tünellemeyi dener. Mirrored yapılandırması bilgisayardaki **tüm WSL 2 dağıtımlarını** etkiler. Mirrored başlatılamazsa Kali IPv4 adresi ve varsayılan rota doğrulanarak NAT ağında devam edilir. IP tabanlı LAN testlerinde Windows adaptör rotası ve Kali rotası her hedef için ayrıca denetlenir; hedefe erişim doğrulanmadan test başarılı sayılmaz. NAT modunda Kali fiziksel Windows ağ kartlarını doğrudan görmez. Ham katman-2, yayın trafiği, pasif fiziksel ağ yakalama ve bazı VPN yolları için ayrı uygunluk denetimi gerekir. Kullanılan ağ modu görev raporuna yazılır.
 
@@ -197,10 +197,10 @@ Resmî Kali `wordlists` paketi WSL kurulumuna dahildir. Sözlükler yalnız mü�
 
 ## Kurulum ve ortam yönetimi
 
-Tek satırlık kurulumdan sonra Windows giriş betiği `%LOCALAPPDATA%\Programs\UBDEN-Cyber\v5.0.0-wsl.9\ubden-wsl.ps1` konumundadır:
+Tek satırlık kurulumdan sonra Windows giriş betiği `%LOCALAPPDATA%\Programs\UBDEN-Cyber\v5.0.0-wsl.10\ubden-wsl.ps1` konumundadır:
 
 ```powershell
-$ubden = Join-Path $env:LOCALAPPDATA 'Programs\UBDEN-Cyber\v5.0.0-wsl.9\ubden-wsl.ps1'
+$ubden = Join-Path $env:LOCALAPPDATA 'Programs\UBDEN-Cyber\v5.0.0-wsl.10\ubden-wsl.ps1'
 & $ubden -Action status
 & $ubden -Action run
 ```
@@ -210,6 +210,6 @@ $ubden = Join-Path $env:LOCALAPPDATA 'Programs\UBDEN-Cyber\v5.0.0-wsl.9\ubden-ws
 **Tam WSL imhası:** `destroy`, raporları WSL dışındaki seçilen klasöre SHA-256 ile doğrulayarak aktarır ve açık son onaydan sonra **bilgisayardaki tüm WSL dağıtımlarını**, Ubuntu dahil, kalıcı olarak kaldırır. Bu işlem yalnız tüm WSL ortamının kaldırılması istendiğinde kullanılmalıdır.
 
 ```powershell
-$ubden = Join-Path $env:LOCALAPPDATA 'Programs\UBDEN-Cyber\v5.0.0-wsl.9\ubden-wsl.ps1'
+$ubden = Join-Path $env:LOCALAPPDATA 'Programs\UBDEN-Cyber\v5.0.0-wsl.10\ubden-wsl.ps1'
 & $ubden -Action destroy -ExportTo 'D:\UBDEN-Rapor-Devir'
 ```
