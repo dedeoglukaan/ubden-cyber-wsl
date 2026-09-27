@@ -31,20 +31,25 @@ _LOCK = threading.Lock()
 def _new_job() -> str:
     job_id = secrets.token_hex(8)
     with _LOCK:
-        _JOBS[job_id] = {"lines": [], "status": "running", "result": None}
+        _JOBS[job_id] = {"lines": [], "lanes": {}, "status": "running", "result": None}
     return job_id
 
 
-def _emit(job_id: str, line: str, level: str) -> None:
+def _emit(job_id: str, line: str, level: str = "info", lane: dict | None = None) -> None:
     with _LOCK:
         job = _JOBS.get(job_id)
-        if job is not None:
+        if job is None:
+            return
+        if lane and lane.get("id"):
+            job["lanes"][lane["id"]] = lane  # live multi-lane panel state
+        if line:
             job["lines"].append({"t": line, "level": level})
 
 
 def _run_job(job_id: str, form: dict) -> None:
     try:
-        result = win_scan.run_scan(form, progress=lambda line, level="info": _emit(job_id, line, level))
+        result = win_scan.run_scan(
+            form, progress=lambda line, level="info", lane=None: _emit(job_id, line, level, lane))
         with _LOCK:
             _JOBS[job_id]["result"] = result
             _JOBS[job_id]["status"] = "done"
@@ -81,6 +86,15 @@ button:disabled{opacity:.5;cursor:not-allowed}
 height:260px;overflow:auto;font:13px/1.5 Consolas,monospace;white-space:pre-wrap}
 .l-info{color:var(--ink)}.l-tick{color:var(--dim)}.l-warn{color:var(--yellow)}
 .l-done{color:var(--green);font-weight:700}.hint{color:var(--dim);font-size:12px;margin-top:6px}
+#lanes{display:flex;flex-direction:column;gap:8px;margin:10px 0}
+.lane{display:flex;align-items:center;gap:10px;background:#0a1226;border:1px solid var(--line);
+border-radius:8px;padding:8px 12px}
+.lane .id{font:12px Consolas,monospace;color:var(--teal);min-width:28px}
+.lane .tgt{font-weight:600;min-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.lane .step{color:var(--dim);flex:1;font:13px Consolas,monospace;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.lane .badge{font-size:12px;border-radius:999px;padding:2px 9px;border:1px solid var(--line)}
+.lane .badge.run{color:var(--yellow)}.lane .badge.done{color:var(--green)}
+.lane .cnt{font:12px Consolas,monospace;color:var(--dim)}.lane .cnt b{color:var(--red)}
 a{color:var(--teal)}.pill{display:inline-block;background:#16233f;border:1px solid var(--line);
 border-radius:999px;padding:3px 10px;font-size:12px;color:var(--dim);margin-left:8px}
 </style></head><body>
@@ -107,6 +121,7 @@ border-radius:999px;padding:3px 10px;font-size:12px;color:var(--dim);margin-left
 </select></div>
 <div><label>En cok TCP portu</label><input id="top_ports" type="number" value="200" min="1" max="1000"></div>
 <div><label>Hiz (paket/sn)</label><input id="max_rate" type="number" value="100" min="1" max="500"></div>
+<div><label>Es zamanli serit</label><input id="lanes" type="number" value="3" min="1" max="6"></div>
 </div>
 <label class="adapters" style="margin-top:12px"><input type="checkbox" id="defcred"> Varsayilan kimlik denemesi (opt-in, sinirli, kilitlenme-farkinda)</label>
 <div id="adapters" class="adapters"><label>Ag adaptorleri yukleniyor...</label></div>
@@ -116,6 +131,7 @@ border-radius:999px;padding:3px 10px;font-size:12px;color:var(--dim);margin-left
 <div class="card" id="progress" style="display:none">
 <div style="display:flex;justify-content:space-between;align-items:center">
 <strong>Ilerleme</strong><span id="state" class="pill">calisiyor</span></div>
+<div id="lanes"></div>
 <div id="log"></div>
 <div id="done" style="display:none;margin-top:12px"></div>
 </div>
@@ -137,7 +153,7 @@ let JOB=null,timer=null;
 async function start(){
  const body={client:c("client"),project:c("project"),authorization_reference:c("auth"),
  tester:c("tester"),targets:lines(v("targets")),exclusions:lines(v("exclusions")),
- profile:v("profile"),top_ports:v("top_ports"),max_rate:v("max_rate"),
+ profile:v("profile"),top_ports:v("top_ports"),max_rate:v("max_rate"),lanes:v("lanes"),
  default_cred_test:document.getElementById("defcred").checked,
  selected_interfaces:[...document.querySelectorAll(".adp:checked")].map(x=>x.value)};
  if(!body.targets.length){alert("En az bir hedef girin.");return;}
@@ -151,9 +167,21 @@ async function poll(){
  const log=document.getElementById("log");
  log.innerHTML=(d.lines||[]).map(l=>`<div class="l-${l.level}">${esc(l.t)}</div>`).join("");
  log.scrollTop=log.scrollHeight;
+ renderLanes(d.lanes||{});
  document.getElementById("state").textContent=d.status;
  if(d.status==="done"||d.status==="error"){clearInterval(timer);
  document.getElementById("go").disabled=false;showDone(d);}
+}
+function renderLanes(lanes){const box=document.getElementById("lanes");
+ const ids=Object.keys(lanes).sort();
+ if(!ids.length){box.innerHTML="";return;}
+ box.innerHTML=ids.map(id=>{const l=lanes[id];const done=l.status==="bitti";
+ const issues=l.issues?`<b>${l.issues} sorun</b>`:"";
+ return `<div class="lane"><span class="id">${esc(id)}</span>`+
+ `<span class="tgt">${esc(l.target||"")}</span>`+
+ `<span class="step">${esc(l.step||"")}</span>`+
+ `<span class="cnt">${l.steps||0} adim ${issues}</span>`+
+ `<span class="badge ${done?"done":"run"}">${done?"bitti":"calisiyor"}</span></div>`;}).join("");
 }
 function showDone(d){const el=document.getElementById("done");el.style.display="block";
  const s=(d.result&&d.result.device_summary)||{};

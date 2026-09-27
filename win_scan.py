@@ -25,10 +25,12 @@ import os
 import shutil
 import socket
 import subprocess
-import uuid
-from pathlib import Path
-
 import sys
+import threading
+import time
+import uuid
+from concurrent.futures import ThreadPoolExecutor
+from pathlib import Path
 
 import wizard  # imports cleanly on Windows (pwd is guarded); reuse pure helpers
 import device_inventory
@@ -52,6 +54,8 @@ except Exception:
 ROOT = Path(__file__).resolve().parent
 VERSION = getattr(wizard, "VERSION", "5.0.0")
 PROFILES = ("external", "web", "network", "full")
+MAX_LANES = 6          # hard ceiling on concurrent target lanes
+DEFAULT_LANES = 3      # default when the form does not specify
 
 
 def now() -> str:
@@ -321,10 +325,15 @@ def run_scan(form: dict, progress=None) -> dict:
 
     Returns ``{'run_dir', 'report_html', 'device_summary', 'status'}``.
     """
-    def emit(line, level="info"):
+    def emit(line, level="info", lane=None):
         if progress:
             try:
-                progress(line, level)
+                progress(line, level, lane)
+            except TypeError:
+                try:
+                    progress(line, level)  # older 2-arg progress callback
+                except Exception:
+                    pass
             except Exception:
                 pass
 
@@ -345,18 +354,102 @@ def run_scan(form: dict, progress=None) -> dict:
     root = base / label
     (root / "targets").mkdir(parents=True, exist_ok=True)
 
+    # Concurrency: run targets in parallel lanes. The shared packet-rate budget is
+    # SPLIT across active lanes (per_lane = max_rate // lanes) so parallel scans do
+    # not exceed the engagement rate cap or trip IDS. Credential/lockout-sensitive
+    # work stays per-target (one lane = one target), so no host sees parallel auth.
+    targets = list(meta["targets"])
+    try:
+        requested = int(form.get("lanes", 0))
+    except (TypeError, ValueError):
+        requested = 0
+    lanes = requested if requested > 0 else DEFAULT_LANES
+    lanes = max(1, min(lanes, MAX_LANES, len(targets) or 1))
+    per_lane_rate = max(1, meta["max_rate"] // lanes)
+    meta["concurrency"] = {"lanes": lanes, "per_lane_max_rate": per_lane_rate,
+                           "total_max_rate": meta["max_rate"]}
+
     events: list = []
     # Persist meta + host snapshot up front (engagement.json is the hard dependency).
     _atomic_json(root / "engagement.json", meta)
     _atomic_json(root / "HOST_CAPABILITIES.json", host_snapshot)
 
-    for target in meta["targets"]:
+    # Per-lane state for the live multi-lane panel + job ledger.
+    lane_states: dict[str, dict] = {}
+    lane_events: dict[str, list] = {}
+    ledger_lock = threading.Lock()
+    stop_monitor = threading.Event()
+
+    def lane_snapshot(tid, state, done=False):
+        evs = lane_events.get(tid, [])
+        last = evs[-1] if evs else {}
+        emit("", "lane", {"id": tid, "target": state["target"],
+                          "step": last.get("step", state.get("phase", "hazirlaniyor")),
+                          "status": "bitti" if done else state.get("phase", "calisiyor"),
+                          "steps": len(evs),
+                          "ok": sum(1 for e in evs if e.get("status") == "ok"),
+                          "issues": sum(1 for e in evs if e.get("status") in
+                                        ("error", "timeout", "blocked", "missing_tool"))})
+
+    def monitor():
+        while not stop_monitor.wait(1.2):
+            with ledger_lock:
+                for tid, state in lane_states.items():
+                    if not state.get("done"):
+                        lane_snapshot(tid, state)
+
+    def run_lane(index, target):
+        tid = f"L{index + 1}"
+        state = {"target": target, "phase": "kesif", "done": False,
+                 "started_at": now()}
+        evs: list = []
+        with ledger_lock:
+            lane_states[tid] = state
+            lane_events[tid] = evs
+        lane_meta = dict(meta)
+        lane_meta["max_rate"] = per_lane_rate
+
+        def lane_progress(line, level="info", lane=None):
+            if line:
+                emit(f"[{tid} {target}] {line}", level)
+            with ledger_lock:
+                lane_snapshot(tid, state)
+        emit(f"{target}: serit {tid} basladi", "info")
         try:
-            scan_target(target, meta, root, events, emit)
-        except Exception as exc:  # one target must not abort the whole run
-            events.append({"step": "target_error", "target": target, "status": "error",
-                           "detail": f"{type(exc).__name__}: {exc}"})
-            emit(f"{target}: hata - {exc}", "warn")
+            scan_target(target, lane_meta, root, evs, lane_progress)
+        except Exception as exc:  # one lane must not abort the run
+            evs.append({"step": "target_error", "target": target, "status": "error",
+                        "detail": f"{type(exc).__name__}: {exc}"})
+            emit(f"[{tid} {target}] hata - {exc}", "warn")
+        finally:
+            state["done"] = True
+            state["finished_at"] = now()
+            with ledger_lock:
+                lane_snapshot(tid, state, done=True)
+
+    emit(f"Es zamanli yurutme: {lanes} serit, serit basi {per_lane_rate} paket/sn "
+         f"(toplam ~{meta['max_rate']})", "info")
+    monitor_thread = threading.Thread(target=monitor, daemon=True)
+    monitor_thread.start()
+    with ThreadPoolExecutor(max_workers=lanes) as pool:
+        list(pool.map(lambda pair: run_lane(*pair), list(enumerate(targets))))
+    stop_monitor.set()
+    monitor_thread.join(timeout=3)
+
+    # Merge lane events in deterministic target order → steps.json.
+    for index, target in enumerate(targets):
+        events.extend(lane_events.get(f"L{index + 1}", []))
+
+    # Execution ledger (concurrency timeline) for the report/audit.
+    ledger = {"schema": 1, "concurrency": meta["concurrency"],
+              "lanes": [{"id": f"L{i + 1}", "target": t,
+                         "started_at": lane_states.get(f"L{i + 1}", {}).get("started_at"),
+                         "finished_at": lane_states.get(f"L{i + 1}", {}).get("finished_at"),
+                         "steps": len(lane_events.get(f"L{i + 1}", [])),
+                         "issues": sum(1 for e in lane_events.get(f"L{i + 1}", [])
+                                       if e.get("status") in ("error", "timeout", "blocked", "missing_tool"))}
+                        for i, t in enumerate(targets)]}
+    _atomic_json(root / "UBDEN_EXECUTION.json", ledger)
 
     # Device inventory with real Windows L2 data → MAC/vendor/category populated.
     emit("Cihaz envanteri olusturuluyor (MAC/uretici/kategori)", "info")
