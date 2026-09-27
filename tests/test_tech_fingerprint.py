@@ -32,6 +32,17 @@ class IdentifyTests(unittest.TestCase):
         syn = next(x for x in T.identify({5000, 5001}, "synology diskstation dsm 7.1") if x["family"] == "Synology DSM")
         self.assertEqual(syn["version"], "7.1")
 
+    def test_cisco_iosxe_split_and_cpe(self):
+        m = T.identify({443, 22}, "cisco ios-xe software, version 17.9.1")
+        xe = next(x for x in m if x["family"] == "Cisco IOS-XE")
+        self.assertEqual(xe["version"], "17.9.1")
+        self.assertEqual(xe["cpe_parts"], ["o", "cisco", "ios_xe"])
+        self.assertFalse(any(x["family"] == "Cisco ASA" for x in m))
+
+    def test_mapped_family_carries_cpe_parts(self):
+        esxi = next(x for x in T.identify({443, 902}, "vmware esxi 7.0.3") if x["family"] == "VMware ESXi")
+        self.assertEqual(esxi["cpe_parts"], ["o", "vmware", "esxi"])
+
     def test_no_match_is_empty(self):
         self.assertEqual(T.identify({80}, "apache httpd 2.4"), [])
 

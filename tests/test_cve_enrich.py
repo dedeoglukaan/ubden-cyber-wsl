@@ -42,6 +42,13 @@ class QueryTests(unittest.TestCase):
         self.assertEqual(len(targets), 1)
         self.assertTrue(targets[0]["cpe"].startswith("cpe:2.3:o:fortinet:fortios:7.2.4"))
 
+    def test_targets_use_match_cpe_parts(self):
+        tech = {"matches": [{"family": "Cisco IOS-XE", "version": "17.9.1", "ip": "10.0.0.1",
+                             "cpe_parts": ["o", "cisco", "ios_xe"]}]}
+        targets = C._targets(tech)
+        self.assertEqual(len(targets), 1)
+        self.assertTrue(targets[0]["cpe"].startswith("cpe:2.3:o:cisco:ios_xe:17.9.1"))
+
     def test_enrich_collects_and_counts(self):
         tech = {"matches": [{"family": "Fortinet FortiGate / FortiOS", "version": "7.2.4", "ip": "10.0.0.1"}]}
         result = C.enrich(Path("."), tech, fetch=fake_fetch, sleep=lambda *a: None, delay=0)

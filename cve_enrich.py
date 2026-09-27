@@ -78,17 +78,21 @@ def query_nvd(cpe23: str, fetch=_default_fetch, api_key: str = "", limit: int = 
 
 
 def _targets(tech: dict) -> list:
-    """CPE eşlemesi + gözlenen sürümü olan benzersiz (aile, sürüm, cpe) hedefleri."""
+    """CPE eşlemesi + gözlenen sürümü olan benzersiz (aile, sürüm, cpe) hedefleri.
+
+    Önce maçın kendi `cpe_parts` alanını (tech_fingerprint'ten) kullanır; yoksa
+    aile adına göre CPE_MAP'e düşer.
+    """
     seen = {}
     for match in (tech or {}).get("matches", []):
         family = match.get("family", "")
         version = str(match.get("version") or "").strip()
-        mapping = CPE_MAP.get(family)
-        if not mapping or not version:
+        parts = match.get("cpe_parts") or CPE_MAP.get(family)
+        if not parts or not version:
             continue
-        part, vendor, product = mapping
+        part, vendor, product = parts
         cpe = f"cpe:2.3:{part}:{vendor}:{product}:{version}:*:*:*:*:*:*:*"
-        key = (product, version)
+        key = (vendor, product, version)
         if key not in seen:
             seen[key] = {"family": family, "version": version, "cpe": cpe,
                          "assets": sorted({m.get("ip", "") for m in tech["matches"]

@@ -19,7 +19,7 @@ from pathlib import Path
 # yönetim portları/arayüzü, sürüm regex'i (opsiyonel) ve doğrulanacak danışmalar.
 PROFILES = [
     # --- Sanallaştırma ---
-    {"family": "VMware ESXi", "category": "hypervisor",
+    {"family": "VMware ESXi", "category": "hypervisor", "cpe": ("o", "vmware", "esxi"),
      "text": [r"vmware esxi", r"\besxi\b", r"vmware/\d"], "vendors": ["vmware"],
      "ports": {443, 902, 5988, 5989, 8000},
      "mgmt": "ESXi Host Client (443), vSphere API, hostd/vpxa (902)",
@@ -27,14 +27,14 @@ PROFILES = [
      "advisories": ["OpenSLP CVE-2021-21974 (427/902) — SLP kapalı mı doğrula",
                     "ESXiArgs fidye kampanyası — yama/patch seviyesini doğrula",
                     "Gözlenen build'i VMware VMSA danışmalarıyla karşılaştır"]},
-    {"family": "VMware vCenter", "category": "hypervisor",
+    {"family": "VMware vCenter", "category": "hypervisor", "cpe": ("a", "vmware", "vcenter_server"),
      "text": [r"vcenter", r"vsphere", r"vsphere client"], "vendors": ["vmware"],
      "ports": {443, 5480, 9443},
      "mgmt": "vSphere Client (443), VAMI (5480)",
      "version_re": r"(?:vcenter|vsphere)[^0-9]{0,10}(\d+\.\d+(?:\.\d+)?)",
      "advisories": ["CVE-2021-21985 (vSAN Health RCE), CVE-2021-22005 (analytics) — build'e karşı doğrula",
                     "5480 VAMI ve 443 yönetim erişiminin ağ sınırını doğrula"]},
-    {"family": "Proxmox VE", "category": "hypervisor",
+    {"family": "Proxmox VE", "category": "hypervisor", "cpe": ("a", "proxmox", "virtual_environment"),
      "text": [r"proxmox"], "vendors": ["proxmox"], "ports": {8006, 3128, 111},
      "mgmt": "Proxmox web arayüzü (8006)",
      "version_re": r"proxmox[^0-9]{0,10}(\d+\.\d+)",
@@ -44,38 +44,48 @@ PROFILES = [
      "mgmt": "WinRM (5985/5986), VMConnect (2179), SCVMM",
      "advisories": ["Uzak yönetim (WinRM/2179) erişim sınırını doğrula", "Windows/Hyper-V yama seviyesini doğrula"]},
     # --- Ağ güvenliği ---
-    {"family": "Fortinet FortiGate / FortiOS", "category": "firewall",
+    {"family": "Fortinet FortiGate / FortiOS", "category": "firewall", "cpe": ("o", "fortinet", "fortios"),
      "text": [r"fortigate", r"fortios", r"fortinet"], "vendors": ["fortinet"],
      "ports": {443, 10443, 4443, 541, 8443},
      "mgmt": "FortiOS admin (443/8443), SSL-VPN (10443/4443)",
      "version_re": r"fortios[^0-9]{0,8}(\d+\.\d+(?:\.\d+)?)",
      "advisories": ["CVE-2022-42475, CVE-2024-21762 (SSL-VPN RCE), CVE-2023-27997 — FortiOS sürümüne karşı doğrula",
                     "SSL-VPN portalının internete açıklığını ve sürümünü doğrula"]},
-    {"family": "Sophos Firewall (SFOS/XG)", "category": "firewall",
+    {"family": "Sophos Firewall (SFOS/XG)", "category": "firewall", "cpe": ("o", "sophos", "sfos"),
      "text": [r"sophos", r"\bsfos\b", r"sophos firewall"], "vendors": ["sophos"],
      "ports": {443, 4444, 4443},
      "mgmt": "SFOS admin (4444), kullanıcı portalı (443)",
      "advisories": ["CVE-2022-1040, CVE-2020-12271 — SFOS sürümüne karşı doğrula",
                     "Admin (4444) ve portal (443) WAN erişimini doğrula"]},
-    {"family": "Cisco (IOS / IOS-XE / ASA)", "category": "firewall",
-     "text": [r"cisco", r"ios-xe", r"\basa\b", r"adaptive security"], "vendors": ["cisco"],
-     "ports": {22, 23, 443, 80, 161},
-     "mgmt": "SSH/Telnet CLI, Web UI (IOS-XE 443/80), ASDM (ASA)",
-     "advisories": ["IOS-XE Web UI CVE-2023-20198/20273, ASA CVE-2020-3452 — sürüme karşı doğrula",
-                    "Web yönetim arayüzünün (IOS-XE) internete açıklığını doğrula"]},
+    {"text_only": True, "family": "Cisco IOS-XE", "category": "router",
+     "text": [r"ios-xe", r"ios xe"], "vendors": ["cisco"], "ports": {22, 23, 443, 80, 161},
+     "mgmt": "SSH/Telnet CLI, Web UI (443/80)", "cpe": ("o", "cisco", "ios_xe"),
+     "version_re": r"ios[ -]xe.{0,30}?(\d+\.\d+(?:\.\d+)?)",
+     "advisories": ["Web UI CVE-2023-20198/20273 — sürüme karşı doğrula",
+                    "Web yönetim arayüzünün internete açıklığını doğrula"]},
+    {"text_only": True, "family": "Cisco ASA", "category": "firewall",
+     "text": [r"adaptive security", r"cisco asa"], "vendors": ["cisco"], "ports": {22, 443, 80},
+     "mgmt": "SSH CLI, ASDM (443)", "cpe": ("o", "cisco", "adaptive_security_appliance_software"),
+     "version_re": r"(?:asa|adaptive security).{0,30}?(\d+\.\d+(?:\.\d+)?)",
+     "advisories": ["CVE-2020-3452 (path traversal), AnyConnect danışmaları — sürüme karşı doğrula"]},
+    {"text_only": True, "family": "Cisco IOS", "category": "router",
+     "text": [r"cisco ios software", r"cisco internetwork operating"], "vendors": ["cisco"],
+     "ports": {22, 23, 161, 80, 443}, "mgmt": "SSH/Telnet CLI", "cpe": ("o", "cisco", "ios"),
+     "version_re": r"ios software[^0-9]{0,20}(\d+\.\d+)",
+     "advisories": ["Cisco IOS PSIRT danışmalarını gözlenen sürüme karşı doğrula"]},
     {"family": "Ruijie / Reyee", "category": "router",
      "text": [r"ruijie", r"reyee"], "vendors": ["ruijie"], "ports": {80, 443, 23, 22},
      "mgmt": "Web yönetim arayüzü, bulut yönetimi",
      "advisories": ["Bulut/AP yönetim danışmalarını gözlenen firmware'e karşı doğrula",
                     "Yönetim arayüzü ve bulut kaydının erişim sınırını doğrula"]},
     # --- Depolama / sunucu yönetimi ---
-    {"family": "Synology DSM", "category": "nas",
+    {"family": "Synology DSM", "category": "nas", "cpe": ("o", "synology", "diskstation_manager"),
      "text": [r"synology", r"diskstation", r"\bdsm\b"], "vendors": ["synology"],
      "ports": {5000, 5001, 443},
      "mgmt": "DSM web arayüzü (5000/5001)",
      "version_re": r"dsm[^0-9]{0,6}(\d+\.\d+(?:\.\d+)?)",
      "advisories": ["DSM sürümünü Synology-SA danışmalarıyla doğrula", "DSM yönetim portlarının internete açıklığını doğrula"]},
-    {"family": "QNAP QTS", "category": "nas",
+    {"family": "QNAP QTS", "category": "nas", "cpe": ("o", "qnap", "qts"),
      "text": [r"qnap", r"\bqts\b"], "vendors": ["qnap"], "ports": {8080, 443, 8081},
      "mgmt": "QTS web arayüzü (8080/443)",
      "advisories": ["DeadBolt/eCh0raix kampanyaları — QTS sürüm/yamasını doğrula",
@@ -129,7 +139,10 @@ def identify(ports: set, blob: str, vendor: str = "") -> list:
     matches = []
     for profile in PROFILES:
         text_hit = any(re.search(pattern, blob) for pattern in profile["text"])
-        vendor_hit = any(v in vendor or v in blob for v in profile["vendors"]) if profile["vendors"] else False
+        # text_only profiller (ör. aynı üreticiyi paylaşan Cisco alt ürünleri)
+        # yalnız açık ürün metniyle eşleşir; üretici+port yolu kapalıdır.
+        vendor_hit = (not profile.get("text_only")
+                      and (any(v in vendor or v in blob for v in profile["vendors"]) if profile["vendors"] else False))
         # Üretici+port yolu için ayırt edici port gerekir (80/443 tek başına her
         # yerde bulunduğu için yanlış eşleşme üretir).
         distinctive = profile["ports"] - {80, 443}
@@ -152,6 +165,7 @@ def identify(ports: set, blob: str, vendor: str = "") -> list:
             "mgmt_ports_observed": sorted(ports & profile["ports"]),
             "advisories": profile["advisories"],
             "signal": "ürün metni" if text_hit else "üretici + port",
+            "cpe_parts": list(profile["cpe"]) if profile.get("cpe") else None,
         })
     return matches
 
