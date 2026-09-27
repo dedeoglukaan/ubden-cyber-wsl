@@ -5,7 +5,7 @@ param(
 
 $ErrorActionPreference = 'Stop'
 $repo = 'ubden/ubden-cyber-wsl'
-$tag = 'v5.0.0-wsl.2'
+$tag = 'v5.0.0-wsl.3'
 $installBase = Join-Path $env:LOCALAPPDATA 'Programs\UBDEN-Cyber'
 $releaseRoot = Join-Path $installBase $tag
 $entryPoint = Join-Path $releaseRoot 'ubden-wsl.ps1'
@@ -88,5 +88,38 @@ if (-not (Test-ReleaseFiles $releaseRoot)) {
 }
 
 if (-not (Test-ReleaseFiles $releaseRoot)) { throw 'UBDEN kaynak dosyalari dogrulanamadi' }
-& $entryPoint -Action $Action
-if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+# 'irm | iex' ile calisildiginda kurulum/gorev AYRI, kalici bir yonetici
+# penceresinde calisir. Boylece: (1) etkilesimli oturum 'exit' ile ANI kapanmaz,
+# (2) UAC bir kez istenir, (3) ilerleme ve olasi hatalar pencerede gorunur kalir
+# (Enter'a basana kadar) ve bir log dosyasina yazilir.
+$shell = if (Get-Command pwsh.exe -ErrorAction SilentlyContinue) { 'pwsh.exe' } else { 'powershell.exe' }
+$log = Join-Path $releaseRoot 'setup-log.txt'
+$inner = @"
+`$ErrorActionPreference = 'Stop'
+try { Start-Transcript -Path '$log' -Append | Out-Null } catch {}
+try {
+    & '$entryPoint' -Action '$Action'
+    Write-Host ''
+    Write-Host 'UBDEN islemi tamamlandi.' -ForegroundColor Green
+} catch {
+    Write-Host ''
+    Write-Host ('UBDEN kurulum hatasi: ' + `$_.Exception.Message) -ForegroundColor Red
+    Write-Host 'Ayrinti icin log: $log' -ForegroundColor Yellow
+} finally {
+    try { Stop-Transcript | Out-Null } catch {}
+    Write-Host ''
+    Read-Host 'Pencereyi kapatmak icin Enter tuslayin' | Out-Null
+}
+"@
+$encoded = [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($inner))
+Write-Host 'UBDEN ayri bir yonetici penceresinde baslatiliyor (UAC izni istenebilir)...'
+try {
+    Start-Process -FilePath $shell -Verb RunAs -WindowStyle Normal `
+        -ArgumentList @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-EncodedCommand', $encoded) | Out-Null
+    Write-Host 'Kurulum penceresi acildi. Ilerleme ve hatalar orada gorunur; bu pencereyi kapatabilirsiniz.'
+}
+catch {
+    Write-Host "Yonetici penceresi acilamadi (UAC reddedilmis olabilir): $($_.Exception.Message)" -ForegroundColor Red
+    Write-Host "Elle calistirmak icin yonetici PowerShell'de: & '$entryPoint' -Action $Action"
+}
