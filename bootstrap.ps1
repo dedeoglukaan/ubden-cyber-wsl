@@ -5,7 +5,7 @@ param(
 
 $ErrorActionPreference = 'Stop'
 $repo = 'ubden/ubden-cyber-wsl'
-$tag = 'v5.0.0-wsl.3'
+$tag = 'v5.0.0-wsl.4'
 $installBase = Join-Path $env:LOCALAPPDATA 'Programs\UBDEN-Cyber'
 $releaseRoot = Join-Path $installBase $tag
 $entryPoint = Join-Path $releaseRoot 'ubden-wsl.ps1'
@@ -94,7 +94,10 @@ if (-not (Test-ReleaseFiles $releaseRoot)) { throw 'UBDEN kaynak dosyalari dogru
 # (2) UAC bir kez istenir, (3) ilerleme ve olasi hatalar pencerede gorunur kalir
 # (Enter'a basana kadar) ve bir log dosyasina yazilir.
 $shell = if (Get-Command pwsh.exe -ErrorAction SilentlyContinue) { 'pwsh.exe' } else { 'powershell.exe' }
-$log = Join-Path $releaseRoot 'setup-log.txt'
+# Log RELEASE dizininin DISINDA tutulur: entry betigi kaynak dizinindeki her
+# dosyanin SHA256'sini alir; log orada olursa transcript kilidi 'baska islem
+# kullaniyor' hatasi verir. Ust dizin ($installBase) hash'lenmez.
+$log = Join-Path $installBase 'setup-log.txt'
 $inner = @"
 `$ErrorActionPreference = 'Stop'
 try { Start-Transcript -Path '$log' -Append | Out-Null } catch {}
