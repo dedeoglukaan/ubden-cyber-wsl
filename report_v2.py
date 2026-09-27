@@ -606,9 +606,9 @@ def read_data(root):
             item=json.loads(path.read_text(encoding='utf-8'))
         except (OSError,ValueError,TypeError):
             continue
-        if not isinstance(item,dict) or item.get('confirmed_response') is not True or item.get('version')!='1' or item.get('community')!='public':
+        if not isinstance(item,dict) or item.get('confirmed_response') is not True or item.get('version') not in ('1','2c') or item.get('community')!='public':
             continue
-        observations.append({'title':'SNMPv1 varsayılan public topluluğuyla bilgi okunabiliyor',
+        observations.append({'title':'SNMP varsayılan public topluluğuyla bilgi okunabiliyor',
                              'severity':'medium','asset':str(item.get('target','')),
                              'description':'Tek salt okunur sysDescr sorgusuna SNMPv1/public yanıtı alındı. Erişim sınırları ve yanıtın kaynak cihazı analistçe doğrulanmalıdır.',
                              'impact':'Varsayılan toplulukla cihaz ve sürüm bilgisi edinilebilir; SNMPv1 trafik şifrelemez.',

@@ -55,6 +55,10 @@ TOOL_PACKAGES.update({'curl':'curl','sslscan':'sslscan','nuclei':'nuclei',
                       'snmpget':'snmp','airodump-ng':'aircrack-ng',
                       'aireplay-ng':'aircrack-ng','reaver':'reaver'})
 TOOL_VERSIONS = {}
+try:  # pure-Python SNMP (no snmpget binary); tests patch this to force a backend
+    import puresnmp as _PURESNMP
+except Exception:
+    _PURESNMP = None
 
 
 def recorded_tool_version(executable):
@@ -961,10 +965,9 @@ def probe_snmp(target, assets, raw, events, max_rate):
     if puresnmp is absent but the binary exists.
     """
     summary_path=raw/'snmp_v1_public_summary.json'
-    try:
-        from puresnmp import get as _snmp_get
-        backend='puresnmp'
-    except Exception:
+    if _PURESNMP is not None:
+        _snmp_get=_PURESNMP.get; backend='puresnmp'
+    else:
         _snmp_get=None
         backend='snmpget' if shutil.which('snmpget') else None
     if backend is None:
