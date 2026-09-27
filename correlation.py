@@ -13,7 +13,10 @@ zafiyet iddiası değildir. OSINT katmanı ileride `osint` argümanıyla ekleneb
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
+
+_CVE_RE = re.compile(r"CVE-\d{4}-\d{4,}", re.I)
 
 # Uzaktan yönetim / erişim yüzeyi ve veritabanı servis portları.
 REMOTE_PORTS = {22: "SSH", 3389: "RDP", 5900: "VNC", 5985: "WinRM",
@@ -97,9 +100,14 @@ def build(meta: dict, hosts: list, findings: list, devices: dict,
     facts = _facts(meta, hosts, findings, devices, ad)
     correlations, chains, actions = [], [], []
 
-    def add(title, severity, detail, chain=None, action=None):
+    _corr_weight = {"critical": 8, "high": 5, "medium": 2, "low": 1}
+
+    def add(title, severity, detail, chain=None, action=None, scored=True):
+        # scored=False: korelasyon görünür ama maruziyet cezasına EKLENMEZ
+        # (ör. doğrulanmış CVE bulguları zaten confirmed_penalty'de sayılır).
         correlations.append({"title": title, "severity": severity, "detail": detail,
-                             "network_side": detail, "social_side": ""})
+                             "network_side": detail, "social_side": "",
+                             "_penalty": _corr_weight.get(severity, 0) if scored else 0})
         if chain:
             chains.append(chain)
         if action:
@@ -223,9 +231,29 @@ def build(meta: dict, hosts: list, findings: list, devices: dict,
                         "action": "Yönetim düzlemi arayüzlerini ayrı yönetim ağına al; MFA + güncel yama uygula",
                         "rationale": "Yönetim düzlemi tek noktadan geniş erişim sağlar; sürüm/yama kritiktir"})
 
+    # Analistçe DOĞRULANMIŞ CVE'leri görünür kıl (NVD adayları değil; adaylar
+    # UBDEN_CVE.json'da kalır ve maruziyeti düşürmez). Bu bulgular zaten
+    # confirmed_penalty'de sayıldığından korelasyon scored=False eklenir.
+    confirmed_cves = []
+    for finding in facts["confirmed"]:
+        hay = " ".join(str(finding.get(k, "")) for k in ("id", "title", "reference", "cwe", "description"))
+        for cid in _CVE_RE.findall(hay):
+            confirmed_cves.append((cid.upper(), finding.get("severity", "info"), str(finding.get("asset", ""))))
+    if confirmed_cves:
+        ids = sorted({c[0] for c in confirmed_cves})
+        top = max((c[1] for c in confirmed_cves), key=lambda s: _SEV_RANK.get(s, 0))
+        assets = sorted({c[2] for c in confirmed_cves if c[2]})
+        add("Doğrulanmış CVE maruziyeti", top,
+            f"Analistçe doğrulanmış CVE bulguları: {', '.join(ids[:10])}"
+            + (f" · varlıklar: {', '.join(assets[:6])}" if assets else "")
+            + ". Bu bulgular maruziyet indeksine doğrulanmış bulgu cezasıyla yansır; NVD adayları yansımaz.",
+            action={"priority": "kritik" if top == "critical" else "yüksek", "effort": "orta",
+                    "action": "Doğrulanan CVE'ler için üretici yamasını/azaltımını öncelikle uygulayın ve yeniden test edin",
+                    "rationale": "Analistçe doğrulanmış CVE'ler somut, kanıtlı maruziyettir"},
+            scored=False)
+
     confirmed_penalty = sum(_SEV_PENALTY.get(f.get("severity"), 0) for f in facts["confirmed"])
-    corr_penalty = min(45, sum({"critical": 8, "high": 5, "medium": 2, "low": 1}.get(c["severity"], 0)
-                               for c in correlations))
+    corr_penalty = min(45, sum(c["_penalty"] for c in correlations))
     network_score = max(0, 100 - confirmed_penalty - corr_penalty)
     exposure = {
         "score": network_score, "grade": _grade(network_score),
@@ -243,7 +271,8 @@ def build(meta: dict, hosts: list, findings: list, devices: dict,
     return {
         "schema": 1,
         "exposure_index": exposure,
-        "correlations": sorted(correlations, key=lambda c: -_SEV_RANK.get(c["severity"], 0)),
+        "correlations": [{k: v for k, v in c.items() if k != "_penalty"}
+                         for c in sorted(correlations, key=lambda c: -_SEV_RANK.get(c["severity"], 0))],
         "attack_chains": chains,
         "combined_actions": sorted(actions, key=lambda a: {"kritik": 0, "yüksek": 1, "orta": 2, "düşük": 3}.get(a["priority"], 4)),
         "graph": _build_graph(facts, osint),

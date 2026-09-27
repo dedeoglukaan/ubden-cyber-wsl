@@ -87,6 +87,17 @@ class CorrelationOsintBridgeTests(unittest.TestCase):
         self.assertTrue(any("püskürtme" in ch["name"].lower() for ch in result["attack_chains"]))
         self.assertTrue(any(e.get("label") == "parola püskürtme" for e in result["graph"]["edges"]))
 
+    def test_confirmed_cve_visible_and_not_double_counted(self):
+        findings = [{"status": "doğrulandı", "severity": "critical", "id": "PX-1",
+                     "title": "FortiOS SSL-VPN RCE", "reference": "CVE-2024-21762",
+                     "asset": "10.0.0.1", "type": ""}]
+        result = correlation.build({"targets": ["10.0.0.0/24"]}, [], findings, {"categories": {}}, {})
+        titles = [c["title"] for c in result["correlations"]]
+        self.assertTrue(any("Doğrulanmış CVE" in t for t in titles))
+        self.assertTrue(all("_penalty" not in c for c in result["correlations"]))
+        # confirmed critical (18) düşer; CVE korelasyonu scored=False → çift sayılmaz.
+        self.assertEqual(result["exposure_index"]["score"], 82)
+
     def test_no_osint_means_no_phishing(self):
         result = correlation.build({"targets": ["10.0.0.1"]},
                                    [{"ip": "10.0.0.5", "ports": [{"port": "3389", "protocol": "tcp"}]}],
