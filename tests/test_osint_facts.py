@@ -112,6 +112,22 @@ class CorrelationOsintBridgeTests(unittest.TestCase):
         self.assertIn("45.33.32.10", nas["detail"])
         self.assertNotIn("10.0.0.5", nas["detail"])  # private IP internet maruziyeti sayılmaz
 
+    def test_public_management_plane_is_critical(self):
+        tech = {"matches": [{"family": "Fortinet FortiGate / FortiOS", "category": "firewall",
+                             "ip": "45.33.32.30", "mgmt_ports_observed": [443, 10443]}]}
+        result = correlation.build({"targets": ["45.33.32.0/24"]}, [], [], {"categories": {}}, {}, tech=tech)
+        titles = [c["title"] for c in result["correlations"]]
+        self.assertTrue(any("İnternete açık yönetim düzlemi" in t for t in titles))
+        self.assertFalse(any(t == "Kritik yönetim düzlemi platformu erişilebilir" for t in titles))
+
+    def test_private_management_plane_is_high_not_public(self):
+        tech = {"matches": [{"family": "VMware ESXi", "category": "hypervisor",
+                             "ip": "10.0.0.40", "mgmt_ports_observed": [443, 902]}]}
+        result = correlation.build({"targets": ["10.0.0.0/8"]}, [], [], {"categories": {}}, {}, tech=tech)
+        titles = [c["title"] for c in result["correlations"]]
+        self.assertTrue(any("Kritik yönetim düzlemi platformu erişilebilir" in t for t in titles))
+        self.assertFalse(any("İnternete açık yönetim düzlemi" in t for t in titles))
+
     def test_private_nas_camera_no_internet_exposure(self):
         tech = {"matches": [{"family": "QNAP QTS", "category": "nas", "ip": "10.0.0.5", "mgmt_ports_observed": [8080]},
                             {"family": "Dahua kamera/NVR", "category": "camera", "ip": "192.168.1.9", "mgmt_ports_observed": [37777]}]}

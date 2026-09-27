@@ -224,8 +224,10 @@ def build(meta: dict, hosts: list, findings: list, devices: dict,
 
     # Platform tespiti: kritik yönetim düzlemi (hipervizör/güvenlik duvarı/BMC) maruziyeti.
     if tech:
+        # İç (public olmayan) yönetim düzlemi: erişilebilir → yüksek.
         crit = [m for m in tech.get("matches", [])
-                if m.get("category") in ("hypervisor", "firewall", "ilo") and m.get("mgmt_ports_observed")]
+                if m.get("category") in ("hypervisor", "firewall", "ilo")
+                and m.get("mgmt_ports_observed") and not _is_public(m.get("ip", ""))]
         if crit:
             fams = ", ".join(sorted({f"{m['family']} ({m['ip']})" for m in crit})[:6])
             add("Kritik yönetim düzlemi platformu erişilebilir", "high",
@@ -239,6 +241,22 @@ def build(meta: dict, hosts: list, findings: list, devices: dict,
                 action={"priority": "yüksek", "effort": "orta",
                         "action": "Yönetim düzlemi arayüzlerini ayrı yönetim ağına al; MFA + güncel yama uygula",
                         "rationale": "Yönetim düzlemi tek noktadan geniş erişim sağlar; sürüm/yama kritiktir"})
+        # İnternete açık yönetim düzlemi (public IP): en yüksek etkili maruziyet.
+        mgmt_pub = sorted({m.get("ip", "") for m in tech.get("matches", [])
+                           if m.get("category") in ("hypervisor", "firewall", "ilo")
+                           and _is_public(m.get("ip", ""))})
+        if mgmt_pub:
+            add("İnternete açık yönetim düzlemi arayüzü", "critical",
+                f"Hipervizör/güvenlik duvarı/donanım yönetimi (iLO/iDRAC/IPMI) arayüzü genel (public) IP'de gözlendi: {', '.join(mgmt_pub[:8])}. "
+                "İnternete açık yönetim düzlemi ele geçirilirse tüm altyapı tek noktadan tehlikeye girer.",
+                chain={"name": "İnternete açık yönetim düzlemi → altyapı ele geçirme", "likelihood": "orta",
+                       "impact": "Hipervizör/güvenlik duvarı/BMC üzerinden tüm altyapıya erişim",
+                       "steps": ["Arayüzün internetten erişilebilirliğini kapsam dışı bir noktadan doğrula",
+                                 "Gözlenen sürümü üretici danışmalarıyla (VMSA/PSIRT) karşılaştır",
+                                 "Yönetimi internetten kaldırıp VPN/atlama sunucusu (bastion) ve MFA arkasına al"]},
+                action={"priority": "kritik", "effort": "orta",
+                        "action": "Yönetim arayüzlerini internetten kaldır; VPN/bastion + MFA; güncel yama; varsayılan hesabı kapat",
+                        "rationale": "İnternete açık yönetim düzlemi en yüksek etkili maruziyettir"})
         # NAS / kamera internet maruziyeti: platform genel (public) IP'de gözlendiyse.
         nas_pub = sorted({m.get("ip", "") for m in tech.get("matches", [])
                           if m.get("category") == "nas" and _is_public(m.get("ip", ""))})
