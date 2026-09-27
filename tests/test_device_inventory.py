@@ -13,6 +13,29 @@ from unittest.mock import patch
 
 
 class DeviceInventoryTests(unittest.TestCase):
+    def test_windows_local_address_is_listed_without_claiming_a_service_scan(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root=Path(folder)
+            (root/'HOST_CAPABILITIES.json').write_text('{}')
+            meta={'targets':['192.0.2.0/24'],'exclusions':[],
+                  'selected_interfaces':[35],
+                  'host_snapshot':{'adapters':[{'index':35,'name':'Wi-Fi','status':'Up',
+                    'addresses':[{'address':'192.0.2.37','prefix':24}]}]}}
+            result=build_inventory(root,meta,neighbours={},oui_paths=[])
+            self.assertEqual(result['host_count'],0)
+            self.assertEqual(result['local_interface_addresses'],[{
+                'ip':'192.0.2.37','adapter':'Wi-Fi','interface_index':35,
+                'status':'yalnız Windows adaptör kaydı; Kali erişimi doğrulanmadı',
+                'evidence':'HOST_CAPABILITIES.json'}])
+            (root/'engagement.json').write_text(json.dumps({**meta,'client':'Example',
+                'project':'Device QA','tester':'Tester','profile':'network','status':'completed'}))
+            (root/'steps.json').write_text('[]')
+            with patch.object(sys,'argv',['report_v2.py',str(root)]):
+                report_v2.main()
+            html=(root/'REPORT.html').read_text()
+            self.assertIn('192.0.2.37',html)
+            self.assertIn('Windows adaptör kaydı servis testi kanıtı değildir',html)
+
     def test_scope_mac_vendor_and_duplicate_proxy_warning(self):
         with tempfile.TemporaryDirectory() as folder:
             root=Path(folder)

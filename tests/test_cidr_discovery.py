@@ -58,6 +58,7 @@ class CidrDiscoveryTests(unittest.TestCase):
             self.assertIn('-sn',calls[0][1]);self.assertNotIn('-Pn',calls[0][1])
             self.assertIn('--disable-arp-ping',calls[0][1])
             self.assertIn('--discovery-ignore-rst',calls[0][1])
+            self.assertIn('445',next(item for item in calls[0][1] if item.startswith('-PS')))
             self.assertIn('-Pn',calls[1][1]);self.assertIn('-iL',calls[1][1])
             live_file=Path(calls[1][1][calls[1][1].index('-iL')+1])
             self.assertEqual(live_file.read_text().splitlines(),up)
@@ -212,6 +213,23 @@ class CidrDiscoveryTests(unittest.TestCase):
                              ['192.0.2.5','192.0.2.37'])
             summary=json.loads((root/'targets'/'192.0.2.0_24'/'raw'/'discovery_summary.json').read_text())
             self.assertEqual(summary['responding_count'],2)
+
+    def test_windows_local_address_is_reported_when_wsl_cannot_reach_it(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root=Path(directory);events=[];calls=[]
+            meta=dict(self.META,selected_interfaces=[35],host_snapshot={
+                'adapters':[{'index':35,'name':'Wi-Fi','addresses':[
+                    {'address':'192.0.2.37','prefix':24}]}]})
+            with patch.object(wizard,'route_guard',side_effect=lambda ips,*args: ips), \
+                 patch.object(wizard,'command',side_effect=self.fake_command(['192.0.2.1'],calls)), \
+                 patch.object(wizard,'icmp_fallback',return_value=[]), \
+                 patch.object(wizard.UI,'say'):
+                wizard.scan_target('192.0.2.0/24',meta,root,events)
+            summary=json.loads((root/'targets'/'192.0.2.0_24'/'raw'/'discovery_summary.json').read_text())
+            self.assertEqual(summary['windows_local_unreachable'],['192.0.2.37'])
+            self.assertEqual(summary['responding_hosts'],['192.0.2.1'])
+            self.assertTrue(any(row.get('step')=='windows_local_address' and
+                                row.get('status')=='not_verified' for row in events))
 
     def test_ping_fallback_uses_eligible_addresses_only(self):
         with tempfile.TemporaryDirectory() as directory:

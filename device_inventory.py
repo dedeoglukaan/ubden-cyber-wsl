@@ -308,6 +308,26 @@ def build_inventory(root,meta,neighbours=None,oui_paths=None):
             record['role_candidates'].append({'role':'SQL Server adayı','confidence':'orta',
                 'reason':'UDP/1434 SQL Browser yanıtında örnek adı görüldü'})
         record['signals'].append('SQL Browser örnek yanıtı: '+str(path.relative_to(root)))
+    local_addresses=[]
+    selected=set(meta.get('selected_interfaces',[]))
+    for adapter in snapshot.get('adapters',[]):
+        if not isinstance(adapter,dict) or adapter.get('index') not in selected or str(adapter.get('status','')).lower()!='up':
+            continue
+        for item in adapter.get('addresses',[]):
+            if not isinstance(item,dict):
+                continue
+            try:
+                ip=str(ipaddress.ip_address(item.get('address','')))
+                if not permitted(ip):
+                    continue
+            except (ValueError,TypeError):
+                continue
+            if any(row['ip']==ip for row in local_addresses):
+                continue
+            local_addresses.append({'ip':ip,'adapter':str(adapter.get('name',''))[:80],
+                'interface_index':adapter['index'],
+                'status':'servis taraması kanıtlı' if ip in devices else 'yalnız Windows adaptör kaydı; Kali erişimi doğrulanmadı',
+                'evidence':'HOST_CAPABILITIES.json' if (root/'HOST_CAPABILITIES.json').is_file() else 'engagement.json'})
     duplicates=defaultdict(list)
     for device in devices.values():
         if device['mac']:
@@ -320,6 +340,7 @@ def build_inventory(root,meta,neighbours=None,oui_paths=None):
     ordered=sorted(devices.values(),key=lambda row:ipaddress.ip_address(row['ip']))
     summary={'schema':1,'source':'UBDEN yerel cihaz envanteri',
              'host_count':len(ordered),'mac_count':sum(bool(row['mac']) for row in ordered),
+             'local_interface_addresses':local_addresses,
              'unknown_count':sum(row['category']=='Bilinmiyor' for row in ordered),
              'categories':dict(Counter(row['category'] for row in ordered)),
              'services':dict(Counter(f"{port['port']}/{port['protocol']} {port['service']}".strip()

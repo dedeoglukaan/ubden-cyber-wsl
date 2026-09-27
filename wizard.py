@@ -671,7 +671,7 @@ def icmp_fallback(allowed, max_rate, version):
             UI.counted('ICMP keşfi',index,len(futures),started)
         return live
 
-def discover_cidr_hosts(target, net, raw, events, exclusions, max_rate, selected_interfaces=()):
+def discover_cidr_hosts(target, net, raw, events, exclusions, max_rate, selected_interfaces=(), host_snapshot=None):
     """Probe eligible CIDR addresses once; port scans only get verified responses."""
     allowed=[str(ip) for ip in net.hosts() if not excluded(str(ip),exclusions)]
     allowed=route_guard(allowed,list(selected_interfaces),raw,events,target)
@@ -683,11 +683,16 @@ def discover_cidr_hosts(target, net, raw, events, exclusions, max_rate, selected
     targets_file=raw/'discovery_targets.txt'
     targets_file.write_text('\n'.join(allowed)+'\n',encoding='ascii')
     xml=raw/'discovery_hosts.xml'
+    # Probe common infrastructure ports as well as ICMP. An open TCP service
+    # can identify a host that filters echo requests; RST alone is not proof
+    # of a distinct host on networks with NAT or interception devices.
+    discovery_ports='21,22,53,80,135,139,443,445,1433,3306,3389,5432,5985,8080,8443,9100'
+    discovery_timeout=min(1200,max(90,math.ceil(len(allowed)*16/max(1,max_rate))*3+30))
     argv=['nmap']+(['-6'] if net.version==6 else [])+['-sn','-n','--disable-arp-ping',
-          '--discovery-ignore-rst','-PE','-PS80,443',
-          '-PA80,443','-T3','--stats-every','10s','--max-rate',str(max_rate),'--max-retries','1',
+          '--discovery-ignore-rst','-PE','-PS'+discovery_ports,
+          '-T3','--stats-every','10s','--max-rate',str(max_rate),'--max-retries','1',
           '--host-timeout','15s','-oX',str(xml),'-iL',str(targets_file)]
-    result=command('discovery_hosts',argv,raw,events,90)
+    result=command('discovery_hosts',argv,raw,events,discovery_timeout)
     status='error' if result['status']!='ok' else 'ok'
     live=[]
     if status=='ok':
@@ -720,15 +725,28 @@ def discover_cidr_hosts(target, net, raw, events, exclusions, max_rate, selected
         if status=='no_hosts': status='ok'
         elif status=='error': status='partial'
     if status=='ok' and not live: status='no_hosts'
+    local_ips=[]
+    for adapter in (host_snapshot or {}).get('adapters',[]):
+        if not isinstance(adapter,dict) or adapter.get('index') not in selected_interfaces:
+            continue
+        for item in adapter.get('addresses',[]):
+            if isinstance(item,dict) and item.get('address') in allowed:
+                local_ips.append(item['address'])
+    local_unreachable=sorted(set(local_ips)-set(live),key=ipaddress.ip_address)
+    for ip in local_unreachable:
+        events.append({'step':'windows_local_address','target':ip,'status':'not_verified',
+            'detail':'Windows adaptöründe kayıtlı; Kali WSL keşfinde yanıt yok. Windows kendi adresine ping sonucu bu yolu doğrulamaz.'})
+        UI.say(f'  {ip}: Windows adaptöründe kayıtlı, ancak Kali WSL üzerinden yanıt doğrulanamadı. Servis testi yapılmış sayılmayacak.','yellow')
     events.append({'step':'icmp_probe','target':target,
                    'status':'missing_tool' if fallback is None else 'ok' if fallback else 'no_hosts',
                    'detail':f"{len(fallback or [])}/{len(allowed)} IP ping yanıtı verdi; Nmap sonucu: {result['status']}"})
     summary={'target':target,'status':status,'eligible_count':len(allowed),
              'responding_count':len(live),'unresponsive_count':len(allowed)-len(live) if status in ('ok','partial','no_hosts') else None,
-             'responding_hosts':live,'nmap_responding_count':nmap_responding_count,
+             'responding_hosts':live,'windows_local_unreachable':local_unreachable,
+             'nmap_responding_count':nmap_responding_count,
              'icmp_responding_count':len(fallback or []),
              'all_addresses_responded':len(allowed)>=32 and len(live)==len(allowed),
-             'method':'Nmap -sn; ICMP ve TCP SYN/ACK yoklamaları (ARP/ND keşfi ve RST host yanıtı sayılmaz)',
+             'method':'Nmap -sn; ICMP ve 16 yaygın servis portuna TCP SYN yoklaması (ARP/ND ve RST host yanıtı sayılmaz)',
              'fallback_used':used_fallback,
              'note':'Yanıt vermemesi hostun kapalı olduğunu kanıtlamaz. Nmap tamamlanmadıysa ping yanıtlı hostlarla kısmi tarama sürer.'}
     if used_fallback:
@@ -944,7 +962,7 @@ def scan_target(target, meta, root, events, credentials=(), index=1, total=1,
             events.append({"step":"scope", "target":target,"status":"blocked", "detail":"CIDR sınırı aşıldı"})
             return
         assets=discover_cidr_hosts(target,net,raw,events,exclusions,meta['max_rate'],
-                                   meta.get('selected_interfaces',[]))
+                                   meta.get('selected_interfaces',[]),meta.get('host_snapshot'))
     elif is_ip(target):
         assets = [] if excluded(target, exclusions) else [target]
     else:

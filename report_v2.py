@@ -177,10 +177,13 @@ def discovery_line(summary):
     anomaly=(f" Tüm adresler yanıtlı görünüyor (Nmap {summary.get('nmap_responding_count','?')}, "
              f"ping {summary.get('icmp_responding_count','?')}); vekil ARP/sanal ağ olasılığı doğrulanmalı."
              if summary.get('all_addresses_responded') else '')
+    local=(" Windows adaptöründe kayıtlı olup Kali üzerinden doğrulanamayan adresler: " +
+           ', '.join(summary.get('windows_local_unreachable',[])) + '. Bu adreslerde servis testi yapılmış sayılmaz.'
+           if summary.get('windows_local_unreachable') else '')
     return (f"{summary.get('target','?')}: durum {status_label}; "
             f"uygun {summary.get('eligible_count','?')}; yanıt veren {summary.get('responding_count','?')}; "
             f"yanıt vermeyen {count if count is not None else 'bilinmiyor'}. "
-            'Yanıt vermemesi sistemin kapalı olduğunu kanıtlamaz.'+method+coverage+anomaly)
+            'Yanıt vermemesi sistemin kapalı olduğunu kanıtlamaz.'+method+coverage+anomaly+local)
 
 def tool_rows(root, steps):
     path=root/'TOOL_ENVIRONMENT.json'
@@ -696,6 +699,8 @@ def pdf(root, filename, meta, steps, hosts, findings, review, executive=False):
     if devices:
         story.append(P('Cihaz ve MAC analizi',st['SectionX']))
         story.append(P(f"{devices.get('host_count',0)} adres; MAC görülen {devices.get('mac_count',0)}; sınıfı belirsiz {devices.get('unknown_count',0)}. Kategoriler: "+', '.join(f'{label}: {count}' for label,count in devices.get('categories',{}).items()),st['BodyX']))
+        for item in devices.get('local_interface_addresses',[]):
+            story.append(P(f"Test bilgisayarı: {item['ip']} ({item['adapter']}); {item['status']}. Bu adres, yalnız Windows adaptör kaydıyla servis taraması yapılmış sayılmaz.",st['SmallX']))
         if devices.get('role_counts_lower_bound'):
             story.append(P('Gözlenen rol adaylarının alt sınırı: '+', '.join(f'{label}: {count}' for label,count in devices['role_counts_lower_bound'].items())+'. Güvenlik duvarı kimliği: '+devices.get('firewall_identity_status','doğrulanmadı')+'.',st['BodyX']))
         story.append(P(devices.get('limits',''),st['SmallX']))
@@ -800,6 +805,11 @@ def pdf(root, filename, meta, steps, hosts, findings, review, executive=False):
                 story.append(table)
         if devices:
             story.append(P('Cihaz kimliği ve sınıflandırma',st['SectionX']))
+            local=devices.get('local_interface_addresses',[])
+            if local:
+                story.append(P('Test bilgisayarının kapsam içi IP adresleri',st['SubX']))
+                for item in local:
+                    story.append(P(f"{item['ip']} | {item['adapter']} | {item['status']} | kanıt: {item['evidence']}",st['SmallX']))
             summary=[[P(x,st['SmallWhiteX']) for x in ('Cihaz sınıfı adayı','Adres sayısı')]]
             summary.extend([[P(label,st['SmallX']),P(count,st['SmallX'])]
                             for label,count in sorted(devices.get('categories',{}).items(),key=lambda row:(-row[1],row[0]))])
@@ -881,6 +891,11 @@ def html_report(root,meta,steps,hosts,findings,review,report_errors=None):
     category_rows=''.join(f'<tr><td>{safe(name)}</td><td>{count}</td></tr>' for name,count in sorted(devices.get('categories',{}).items(),key=lambda row:(-row[1],row[0])))
     service_rows=''.join(f'<tr><td>{safe(name)}</td><td>{count}</td></tr>' for name,count in sorted(devices.get('services',{}).items(),key=lambda row:(-row[1],row[0])))
     device_html=('<h2>Cihaz ve MAC envanteri</h2><p>'+safe(devices.get('limits'))+'</p><p>Adres: '+safe(devices.get('host_count'))+' · MAC görülen: '+safe(devices.get('mac_count'))+' · Belirsiz sınıf: '+safe(devices.get('unknown_count'))+'</p><p>Rol adayları (gözlenen alt sınır): '+safe(', '.join(f'{name}: {count}' for name,count in devices.get('role_counts_lower_bound',{}).items()))+' · Güvenlik duvarı kimliği: '+safe(devices.get('firewall_identity_status','doğrulanmadı'))+'</p><p>OUI kaynakları: '+safe(', '.join(devices.get('oui_sources',[])) or 'yüklenemedi')+'</p><p><a href="DEVICE_INVENTORY.json">Makine tarafından okunabilir envanter (JSON)</a></p><h3>Cihaz sınıfları</h3><table><thead><tr><th>Sınıf adayı</th><th>Adres</th></tr></thead><tbody>'+category_rows+'</tbody></table><h3>Servis dağılımı</h3><table><thead><tr><th>Port / servis</th><th>Adres</th></tr></thead><tbody>'+service_rows+'</tbody></table><h3>Cihaz kayıtları</h3><table><thead><tr><th>IP</th><th>Ad</th><th>OS tahmini</th><th>MAC</th><th>Üretici</th><th>Cihaz adayı</th><th>Güven</th><th>Gerekçe ve inceleme</th><th>Kanıt</th></tr></thead><tbody>'+device_rows+'</tbody></table>') if devices else ''
+    if devices.get('local_interface_addresses'):
+        local_rows=''.join('<tr><td>'+safe(item.get('ip'))+'</td><td>'+safe(item.get('adapter'))+'</td><td>'+
+            safe(item.get('status'))+'</td><td>'+evidence_link(root,item.get('evidence'))+'</td></tr>'
+            for item in devices['local_interface_addresses'])
+        device_html+='<h3>Test bilgisayarının kapsam içi IP adresleri</h3><p>Windows adaptör kaydı servis testi kanıtı değildir.</p><table><thead><tr><th>IP</th><th>Adaptör</th><th>Doğrulama durumu</th><th>Kanıt</th></tr></thead><tbody>'+local_rows+'</tbody></table>'
     analyst_plan=json.loads((root/'ANALIST_GOREV_RAPORU.json').read_text(encoding='utf-8')) if (root/'ANALIST_GOREV_RAPORU.json').is_file() else {}
     analyst_html=('<h2>Analist çalışma raporu</h2><p>Bekleyen adım: '+safe(analyst_plan.get('pending_count'))+'. Her adım için hedef, tetikleyen gözlem, müşteri girdisi, uygulanacak kontrol ve kanıt listesi ayrı hazırlanmıştır.</p><p><a href="ANALIST_GOREV_RAPORU.md">Ayrıntılı çalışma ve komut rehberi</a> · <a href="ANALIST_GOREV_RAPORU.json">Yapılandırılmış görevler</a></p><table><thead><tr><th>Öncelik</th><th>Kontrol</th><th>Durum</th><th>Hedef</th></tr></thead><tbody>'+''.join('<tr><td>'+safe(t['priority'])+'</td><td>'+safe(t['id']+' · '+t['title'])+'</td><td>'+safe(t['status'])+'</td><td>'+safe(', '.join(t['targets'][:5]))+'</td></tr>' for t in analyst_plan.get('tasks',[]))+'</tbody></table>') if analyst_plan else ''
     event=''.join(f'<tr><td>{safe(s.get("step"))}</td><td>{safe(s.get("status"))}</td><td>{safe(s.get("seconds"))}</td><td>{evidence_link(root,s.get("output"))}<br>{safe(s.get("detail"))}</td></tr>' for s in steps)

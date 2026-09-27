@@ -15,6 +15,15 @@ from sql_discovery import parse_response, discover
 
 
 class AnalystWorkplanTests(unittest.TestCase):
+    def test_local_windows_address_gap_creates_targeted_scope_steps(self):
+        with TemporaryDirectory() as folder:
+            plan=build_plan(Path(folder),{'targets':['192.0.2.0/24'],'exclusions':[]},
+                [{'step':'windows_local_address','target':'192.0.2.37','status':'not_verified'}],
+                initial(),{'devices':[]},[])
+            scope=next(task for task in plan['tasks'] if task['case']=='SCOPE')
+            self.assertIn('192.0.2.37',scope['targets'])
+            self.assertTrue(any('ikinci fiziksel test noktası' in step for step in scope['steps']))
+
     def test_observed_services_trigger_scoped_tasks_and_evidence_state(self):
         with TemporaryDirectory() as folder:
             root=Path(folder)

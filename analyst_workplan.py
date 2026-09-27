@@ -99,6 +99,9 @@ def build_plan(root: Path, meta: dict, steps: list, review: dict,
             database = sorted(set(database) | {result["ip"]}, key=ipaddress.ip_address)
     confirmed = [item for item in findings if item.get("status") == "doğrulandı"]
     candidates = [item for item in findings if item.get("status") == "taslak"]
+    local_unreachable=sorted({_ip(item.get('target','')) for item in steps
+        if isinstance(item,dict) and item.get('step')=='windows_local_address'
+        and item.get('status')=='not_verified'} - {''},key=ipaddress.ip_address)
     task_list = []
 
     def add(code, case, priority, title, targets, trigger, steps_to_do,
@@ -114,12 +117,20 @@ def build_plan(root: Path, meta: dict, steps: list, review: dict,
                 "görev klasörüne ekleyip `ubden-cyber --analyst-review GOREV_DIZINI` ile SHA-256 kaydını oluşturun. "
                 "Ardından `ubden-cyber --report-only GOREV_DIZINI` çalıştırın.")})
 
-    add("T-01", "SCOPE", "P1", "Kapsam ve ağ yolunu kesinleştir",
-        meta.get("targets", []), "Görevde tanımlanan hedefler ve Windows rota kaydı.",
-        ["Yetki belgesindeki IP/FQDN/CIDR listesini, hariçleri ve test saatlerini müşteriyle karşılaştırın.",
+    scope_steps=["Yetki belgesindeki IP/FQDN/CIDR listesini, hariçleri ve test saatlerini müşteriyle karşılaştırın.",
          "VPN, VLAN ve NAT arkasındaki ek ağları ağ sorumlusuna teyit ettirin; tarama görünürlüğünü tüm kurum envanteri saymayın.",
-         "Erişilemeyen veya yanlış arayüze yönlenen hedefleri ayrı listeleyin."],
-        ["İmzalı kapsam/yetki referansı", "Rota ve DNS kanıtı", "Hariç ve erişilemeyen hedef listesi"],
+         "Erişilemeyen veya yanlış arayüze yönlenen hedefleri ayrı listeleyin."]
+    scope_evidence=["İmzalı kapsam/yetki referansı", "Rota ve DNS kanıtı", "Hariç ve erişilemeyen hedef listesi"]
+    if local_unreachable:
+        scope_steps += ["Windows adaptöründe kayıtlı ama Kali'den yanıtsız IP'ler için Kali rota, ICMP ve sınırlı TCP çıktılarını karşılaştırın.",
+            "Windows adaptörünün ağ profilini ve gelen trafik güvenlik duvarı kurallarını salt okunur inceleyin; Windows'un kendi IP'sine ping sonucunu dış erişim kanıtı saymayın.",
+            "Müşterinin izin verdiği ikinci fiziksel test noktasından aynı IP'leri kontrol edin; ağ yolu düzeldikten sonra hedefi yeniden test edin."]
+        scope_evidence += ["Kali ve Windows ağ yolu karşılaştırması", "İkinci test noktasının erişim sonucu veya engel kaydı"]
+    add("T-01", "SCOPE", "P1", "Kapsam ve ağ yolunu kesinleştir",
+        meta.get("targets", [])+local_unreachable,
+        "Görevde tanımlanan hedefler ve Windows rota kaydı."+
+        (" Kali üzerinden doğrulanamayan yerel Windows IP'leri: "+', '.join(local_unreachable)+'.' if local_unreachable else ''),
+        scope_steps,scope_evidence,
         request="Yetkili kapsam listesi, hariçler, bakım penceresi ve acil durdurma kişisi.")
 
     if devices:
