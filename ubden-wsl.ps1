@@ -148,20 +148,27 @@ function Test-MirroredNetwork {
         Where-Object { $_.AddressState -eq 'Preferred' -and $_.IPAddress -notmatch '^(127|169\.254)\.' }).IPAddress)
     $psi = New-Object System.Diagnostics.ProcessStartInfo
     $psi.FileName = 'wsl.exe'
-    $psi.Arguments = '-d kali-linux -u root --exec ip -j addr show'
+    # hostname is present in the base Kali image; iproute2 is installed later.
+    $psi.Arguments = '-d kali-linux -u root --exec hostname -I'
     $psi.UseShellExecute = $false
     $psi.RedirectStandardOutput = $true
     $psi.RedirectStandardError = $true
     $process = [System.Diagnostics.Process]::Start($psi)
+    if (-not $process.WaitForExit(60000)) {
+        try { $process.Kill() } catch {}
+        throw 'Kali ag denetimi 60 saniyede baslamadi; WSL durumunu ve Windows yeniden baslatma gereksinimini kontrol edin'
+    }
     $raw = $process.StandardOutput.ReadToEnd()
     $diagnostic = $process.StandardError.ReadToEnd()
-    $process.WaitForExit()
-    if ($diagnostic -match '0x8007054f') {
+    $failure = (($diagnostic + ' ' + $raw) -replace "`0", '').Trim()
+    if ($failure -match '0x8007054f') {
         throw 'WSL mirrored ag kurulumu 0x8007054f koduyla basarisiz oldu'
     }
-    if ($process.ExitCode -ne 0) { throw "Kali ag arayuzleri okunamadi: $diagnostic" }
-    $linux = @($raw | ConvertFrom-Json | ForEach-Object { $_.addr_info } |
-        Where-Object { $_.family -eq 'inet' } | ForEach-Object { $_.local })
+    if ($process.ExitCode -ne 0) {
+        if (-not $failure) { $failure = 'WSL cikti vermedi; Windows yeniden baslatma veya WSL onarimi gerekebilir' }
+        throw "Kali ag arayuzleri okunamadi (WSL cikis kodu $($process.ExitCode)): $failure"
+    }
+    $linux = @($raw.Trim() -split '\s+' | Where-Object { $_ -match '^\d{1,3}(\.\d{1,3}){3}$' })
     if (-not @($windows | Where-Object { $linux -contains $_ }).Count) {
         $hint = if ($diagnostic) { ' WSL: ' + $diagnostic.Trim() } else { '' }
         throw ('Mirrored ag dogrulanamadi: Windows ve Kali IPv4 adresleri eslesmiyor.' + $hint)
@@ -235,6 +242,11 @@ function Invoke-Setup {
     $rebootWasDone = [bool]($beforeNetwork.setup_pending_reboot -and
         $beforeNetwork.setup_reboot_baseline -and $bootTime -and
         $bootTime.ToUniversalTime() -gt [datetime]::Parse($beforeNetwork.setup_reboot_baseline))
+    if ($beforeNetwork.setup_pending_reboot -and -not $rebootWasDone) {
+        Register-SetupResume
+        throw ('Windows yeniden baslatilmali: ' + $beforeNetwork.setup_pending_reboot +
+            '. Yeniden baslattiktan sonra UBDEN kurulumu devam eder.')
+    }
     try { Ensure-MirroredNetwork }
     catch {
         if ($_.Exception.Message -match '0x8007054f|IPv4 adresleri eslesmiyor') {

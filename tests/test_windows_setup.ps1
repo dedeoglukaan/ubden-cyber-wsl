@@ -134,9 +134,22 @@ try {
         -not $pending.setup_pending_reboot) {
         throw "0x8007054f kurtarma kaydı yok: $setupError; feature=$script:enabledFeature; resume=$script:resumeRegistered; pending=$($pending.setup_pending_reboot)"
     }
+    $script:networkAttempted = $false
+    $script:resumeRegistered = $false
+    function Ensure-MirroredNetwork {
+        $script:networkAttempted = $true
+        throw 'Ag denetimine erken girildi'
+    }
+    $rebootNotice = ''
+    try { Invoke-Setup } catch { $rebootNotice = $_.Exception.Message }
+    if ($script:networkAttempted -or -not $script:resumeRegistered -or
+        $rebootNotice -notmatch 'Windows yeniden baslatilmali') {
+        throw "Bekleyen yeniden baslatma ag denetiminden once aciklanmadi: $rebootNotice"
+    }
     $pending | Add-Member -NotePropertyName setup_reboot_baseline `
         -NotePropertyValue '2020-01-01T00:00:00Z' -Force
     Save-State $pending
+    function Ensure-MirroredNetwork { throw 'WSL mirrored 0x8007054f' }
     function Get-CimInstance {
         [CmdletBinding()]
         param([string] $ClassName, [string] $Filter)
