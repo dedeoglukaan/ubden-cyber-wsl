@@ -32,6 +32,7 @@ from ad_assessment import inspect as inspect_ad
 from wireless_assessment import (run as run_wireless, validate as validate_wireless,
                                  MAC as WIFI_MAC, IFACE as WIFI_IFACE, BUSID as WIFI_BUSID)
 from supplemental_scans import run as run_supplemental
+from service_probes import web_extras, domain_recon
 from credential_assessment import run_ssh as run_ssh_passwords
 from sql_discovery import discover as discover_sql_browser
 from environment_doctor import inspect as inspect_environment
@@ -1169,6 +1170,10 @@ def scan_target(target, meta, root, events, credentials=(), index=1, total=1,
                 recover_http_probe(name,options,result,raw,events,target,ip,scheme)
         if 443 in opened and shutil.which("sslscan"):
             command(f"tls_{safe_filename(ip)}",["sslscan","--no-colour",f"{pinned_ip}:443"],raw,events,75)
+        if profile in ('web','full') and web_ports:
+            fscheme,fport=web_ports[0]
+            fsuffix=f":{fport}" if fport not in (80,443) else ""
+            web_extras(f"{safe_filename(ip)}_{fscheme}_{fport}",f"{fscheme}://{url_host}{fsuffix}/",ip,raw,events,command)
     if profile in ('web','full'):
         web_hosts=[ip for ip in assets if set(discovered_ports.get(ip,[])) & {80,443}]
         if not shutil.which('nikto') and web_hosts:
@@ -1228,6 +1233,7 @@ def scan_target(target, meta, root, events, credentials=(), index=1, total=1,
         command("dns_caa",["dig","+time=3","+tries=1","+noall","+answer",target,"CAA"],raw,events,15)
         command("dns_txt",["dig","+time=3","+tries=1","+noall","+answer",target,"TXT"],raw,events,15)
         command("dns_dmarc",["dig","+time=3","+tries=1","+noall","+answer","_dmarc."+target,"TXT"],raw,events,15)
+        domain_recon(target,raw,events,command)
 
 
 def show_windows_network(snapshot):

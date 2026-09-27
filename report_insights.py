@@ -11,6 +11,8 @@ from assessment_coverage import build_coverage
 
 
 TECHNIQUES = {
+    "OSINT-DNS": ("T1590", "Gather Victim Network Information"),
+    "WEB-FINGERPRINT": ("T1595", "Active Scanning"),
     "NET-DISC": ("T1018", "Remote System Discovery"),
     "NET-PORT": ("T1046", "Network Service Discovery"),
     "AD-READ": ("T1087.002", "Domain Account Discovery"),
