@@ -189,6 +189,21 @@ def build(meta: dict, hosts: list, findings: list, devices: dict,
                     "action": "DMARC'ı p=reject'e taşı; SPF/DKIM'i sıkılaştır; oltalama farkındalık eğitimi ver",
                     "rationale": "Zayıf e-posta kimlik doğrulaması en yaygın ilk erişim vektörüdür"})
 
+    # OSINT: keşfedilen kullanıcı adları + AD → parola püskürtme köprüsü.
+    if osint and osint.get("usernames_discovered") and facts["ad_present"]:
+        count = osint.get("username_count", 0)
+        add("Keşfedilen kullanıcı adları + AD ortamı", "high",
+            f"OSINT ile {count} kullanıcı adı adayı elde edildi ve AD ortamı gözlendi; "
+            "kilitleme eşiği altında parola püskürtme ilk erişim riski oluşturur.",
+            chain={"name": "Parola püskürtme → alan hesabı", "likelihood": "orta",
+                   "impact": "Alan hesabı ele geçirme",
+                   "steps": ["Kilitleme ve gözlem eşiklerini doğrula (yetkili senaryo)",
+                             "Elde edilen kullanıcı adlarıyla eşik altında az sayıda yaygın parola dene",
+                             "Erişim doğrulanırsa hesap ayrıcalıklarını ve yanal hareketi haritala"]},
+            action={"priority": "yüksek", "effort": "düşük",
+                    "action": "Parola politikası + kilitleme eşiği uygula; MFA; tahmin edilebilir parolaları engelle",
+                    "rationale": "Bilinen kullanıcı adları + zayıf parola politikası püskürtmeyi kolaylaştırır"})
+
     confirmed_penalty = sum(_SEV_PENALTY.get(f.get("severity"), 0) for f in facts["confirmed"])
     corr_penalty = min(45, sum({"critical": 8, "high": 5, "medium": 2, "low": 1}.get(c["severity"], 0)
                                for c in correlations))
@@ -245,6 +260,9 @@ def _build_graph(facts: dict, osint: dict | None = None) -> dict:
         if osint.get("email_spoofable"):
             node("email", "Sahtelenebilir e-posta", "email", "high")
             edges.append({"source": scope_id, "target": "email", "label": "DMARC zayıf"})
+        if osint.get("usernames_discovered"):
+            node("users", f"{osint.get('username_count', 0)} kullanıcı adı", "person", "high")
+            edges.append({"source": scope_id, "target": "users", "label": "OSINT"})
     for ip, port, name in facts["remote"][:8]:
         nid = f"svc-{ip}-{port}"
         node(nid, f"{ip}:{port} {name}", "service", "high")
@@ -267,6 +285,9 @@ def _build_graph(facts: dict, osint: dict | None = None) -> dict:
     # Çapraz köprü: sahtelenebilir e-posta → ilk iç uç nokta (oltalama ile ilk erişim).
     if osint and osint.get("email_spoofable") and first_internal and first_internal in seen:
         edges.append({"source": "email", "target": first_internal, "label": "oltalama"})
+    ad_target = f"ad-{facts['ad_hosts'][0]}" if facts["ad_hosts"] else first_internal
+    if osint and osint.get("usernames_discovered") and ad_target and ad_target in seen:
+        edges.append({"source": "users", "target": ad_target, "label": "parola püskürtme"})
     return {"nodes": nodes, "edges": edges}
 
 

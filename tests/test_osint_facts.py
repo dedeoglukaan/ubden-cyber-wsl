@@ -43,6 +43,22 @@ class OsintFactsTests(unittest.TestCase):
         self.assertFalse(facts["available"])
         self.assertFalse(facts["email_spoofable"])
 
+    def test_harvest_matches_registrable_domain(self):
+        folder = Path(tempfile.mkdtemp())
+        raw = folder / "targets" / "portal.ornek.com" / "raw"
+        raw.mkdir(parents=True)
+        (raw / "dns_dmarc.txt").write_text("", encoding="utf-8")
+        (raw / "theHarvester_recon.txt").write_text(
+            "Emails found:\nahmet@ornek.com\nayse@ornek.com\nbaska@disalan.net\n"
+            "Hosts found:\nvpn.ornek.com\nmail.ornek.com\n", encoding="utf-8")
+        facts = osint_facts.build(folder, {"targets": ["portal.ornek.com"]})
+        # E-postalar kayıtlı ana alan (ornek.com) ile eşleşir; yabancı alan elenir.
+        self.assertEqual(facts["email_count"], 2)
+        self.assertEqual(facts["username_count"], 2)
+        self.assertIn("ahmet", facts["usernames"])
+        self.assertGreaterEqual(facts["subdomain_count"], 2)
+        self.assertTrue(facts["usernames_discovered"])
+
 
 class CorrelationOsintBridgeTests(unittest.TestCase):
     def test_spoofable_email_creates_phishing_chain_and_bridge(self):
@@ -59,6 +75,17 @@ class CorrelationOsintBridgeTests(unittest.TestCase):
         graph = result["graph"]
         self.assertTrue(any(n["type"] == "email" for n in graph["nodes"]))
         self.assertTrue(any(e.get("label") == "oltalama" for e in graph["edges"]))
+
+    def test_usernames_plus_ad_creates_spraying_bridge(self):
+        meta = {"targets": ["ornek.com"]}
+        hosts = [{"ip": "10.0.0.20", "ports": [{"port": "88", "protocol": "tcp"},
+                                               {"port": "445", "protocol": "tcp"}]}]
+        osint = {"usernames_discovered": True, "username_count": 6, "domains": ["ornek.com"],
+                 "human_score": 60, "human_grade": "D"}
+        result = correlation.build(meta, hosts, [], {"categories": {}}, {"status": "completed"}, osint)
+        self.assertTrue(any("kullanıcı adları" in c["title"].lower() for c in result["correlations"]))
+        self.assertTrue(any("püskürtme" in ch["name"].lower() for ch in result["attack_chains"]))
+        self.assertTrue(any(e.get("label") == "parola püskürtme" for e in result["graph"]["edges"]))
 
     def test_no_osint_means_no_phishing(self):
         result = correlation.build({"targets": ["10.0.0.1"]},

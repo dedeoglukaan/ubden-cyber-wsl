@@ -32,7 +32,7 @@ from ad_assessment import inspect as inspect_ad
 from wireless_assessment import (run as run_wireless, validate as validate_wireless,
                                  MAC as WIFI_MAC, IFACE as WIFI_IFACE, BUSID as WIFI_BUSID)
 from supplemental_scans import run as run_supplemental
-from service_probes import web_extras, domain_recon
+from service_probes import web_extras, domain_recon, network_extras, snmp_extras
 from credential_assessment import run_ssh as run_ssh_passwords
 from sql_discovery import discover as discover_sql_browser
 from rootdse_probe import discover as discover_rootdse
@@ -1129,6 +1129,8 @@ def scan_target(target, meta, root, events, credentials=(), index=1, total=1,
         discover_sql_browser(assets,raw,events,meta['max_rate'])
         probe_snmp(target,assets,raw,events,meta['max_rate'])
         discover_rootdse(assets,discovered_ports,raw,events)
+        network_extras(assets,discovered_ports,raw,events,command)
+        snmp_extras(assets,raw,events,command)
         if 'supplemental_network' in meta.get('enabled_modules',[]):
             run_supplemental(target,assets,discovered_ports,raw,events,command,profile)
         for item in ssh_tests:

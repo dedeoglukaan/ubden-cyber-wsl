@@ -21,11 +21,41 @@ def _is_domain(value: str) -> bool:
     return "." in value and bool(re.search(r"[A-Za-z]", value))
 
 
-def _read(path: Path) -> str:
+def _read(path: Path, limit: int = 200_000) -> str:
     try:
-        return path.read_text(encoding="utf-8", errors="replace")
+        with path.open("r", encoding="utf-8", errors="replace") as handle:
+            return handle.read(limit)
     except OSError:
         return ""
+
+
+_EMAIL_RE = re.compile(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}")
+
+
+def _harvest(root: Path, domains: list) -> tuple[list, list, list]:
+    """theHarvester/dnsenum/fierce çıktısından e-posta ve alt alan toplar.
+
+    Ham e-posta/kullanıcı adları yalnız OSINT kanıt dosyasında tutulur; rapor
+    anlatısına yalnız sayıları geçer (kişisel veriyi derlemekten kaçınmak için).
+    """
+    raw_dir = root / "targets"
+    if not raw_dir.exists():
+        return [], [], []
+    emails, subs = set(), set()
+    # Kayıtlı ana alan (son iki etiket) bazında eşleştir: portal.ornek.com → ornek.com.
+    bases = sorted({".".join(d.lower().split(".")[-2:]) for d in domains if "." in d})
+    for path in sorted(raw_dir.glob("*/raw/*_recon.txt"))[:40]:
+        text = _read(path)
+        for match in _EMAIL_RE.findall(text):
+            dom = match.partition("@")[2].lower()
+            if not bases or any(dom == b or dom.endswith("." + b) for b in bases):
+                emails.add(match.lower())
+        for b in bases:
+            for match in re.findall(r"\b([A-Za-z0-9_-]+(?:\.[A-Za-z0-9_-]+)*\." + re.escape(b) + r")\b", text, re.I):
+                if match.lower() != b:
+                    subs.add(match.lower())
+    usernames = sorted({e.split("@", 1)[0] for e in emails})
+    return sorted(emails), sorted(subs), usernames
 
 
 def _dmarc_policy(text: str) -> str:
@@ -79,6 +109,8 @@ def build(root: Path, meta: dict) -> dict:
         evaluated.append({"domain": label, "dmarc": policy or "yok",
                           "spf": spf_q or "yok", "spoofable": level})
 
+    emails, subdomains, usernames = _harvest(root, [e["domain"] for e in evaluated] or domains)
+
     # İnsan-riski skoru (100 en iyi). DMARC en ağır faktördür.
     score = 100
     factors = []
@@ -93,6 +125,11 @@ def build(root: Path, meta: dict) -> dict:
     if dmarc_files and not spf_present:
         score -= 10
         factors.append("SPF kaydı görülmedi")
+    if usernames:
+        score -= 14 if len(usernames) >= 5 else 8
+        factors.append(f"OSINT ile {len(usernames)} kullanıcı adı adayı elde edildi")
+    if subdomains:
+        factors.append(f"{len(subdomains)} alt alan gözlendi")
     score = max(0, min(100, score))
     grade = ("A" if score >= 85 else "B" if score >= 70 else "C" if score >= 50
              else "D" if score >= 30 else "E")
@@ -105,6 +142,13 @@ def build(root: Path, meta: dict) -> dict:
         "email_posture": worst,
         "spf_present": spf_present,
         "records": evaluated,
+        "email_count": len(emails),
+        "subdomain_count": len(subdomains),
+        "username_count": len(usernames),
+        "usernames_discovered": bool(usernames),
+        "emails": emails,
+        "subdomains": subdomains,
+        "usernames": usernames,
         "human_score": score,
         "human_grade": grade,
         "factors": factors,

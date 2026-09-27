@@ -1,4 +1,6 @@
+import json
 import sys
+import tempfile
 import unittest
 from pathlib import Path
 from unittest.mock import patch
@@ -45,6 +47,32 @@ class ServiceProbeTests(unittest.TestCase):
         self.assertEqual(ran["fierce"], "missing_tool")
         # theHarvester step keeps its exact executable name for catalog matching.
         self.assertTrue(any(e["step"] == "theHarvester_recon" for e in events))
+
+    def test_network_extras_gates_smbclient_on_445(self):
+        events = []
+        with patch("service_probes.shutil.which", side_effect=lambda n: n):
+            service_probes.network_extras(["10.0.0.5", "10.0.0.6"],
+                                          {"10.0.0.5": [445], "10.0.0.6": [80]},
+                                          None, events, fake_command)
+        smb = [e for e in events if e["tool"] == "smbclient"]
+        self.assertEqual(len(smb), 1)
+        self.assertEqual(smb[0]["target"], "10.0.0.5")
+        self.assertTrue(any(e["tool"] == "traceroute" for e in events))
+        self.assertTrue(any(e["tool"] == "ike-scan" for e in events))
+
+    def test_snmp_extras_only_on_confirmed_responders(self):
+        raw = Path(tempfile.mkdtemp())
+        (raw / "snmp_v1_public_10.0.0.5.json").write_text(
+            json.dumps({"target": "10.0.0.5", "confirmed_response": True}), encoding="utf-8")
+        (raw / "snmp_v1_public_10.0.0.6.json").write_text(
+            json.dumps({"target": "10.0.0.6", "confirmed_response": False}), encoding="utf-8")
+        events = []
+        with patch("service_probes.shutil.which", side_effect=lambda n: n if n in ("snmp-check", "onesixtyone") else None):
+            service_probes.snmp_extras(["10.0.0.5", "10.0.0.6"], raw, events, fake_command)
+        targets = {e["target"] for e in events}
+        self.assertEqual(targets, {"10.0.0.5"})
+        self.assertTrue(any(e["tool"] == "snmp-check" for e in events))
+        self.assertTrue(any(e["tool"] == "onesixtyone" for e in events))
 
     def test_coverage_marks_new_controls_executed(self):
         steps = [
