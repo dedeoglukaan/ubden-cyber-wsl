@@ -6,6 +6,7 @@ $tree = [System.Management.Automation.Language.Parser]::ParseFile($scriptPath, [
 if ($parseErrors.Count) { throw 'ubden-wsl.ps1 PowerShell sözdizimi geçersiz' }
 foreach ($name in @('Read-State', 'Save-State', 'Register-SetupResume',
                     'Set-MirroredConfig', 'Ensure-MirroredNetwork',
+                    'Invoke-WslNetworkProbe', 'Test-NatNetwork',
                     'Get-DynamicTcpRange', 'Set-DynamicTcpRange', 'Repair-MirroredTcpRange',
                     'Copy-VerifiedTree', 'Assert-VerifiedManifest',
                     'Assert-ExportDestination', 'Invoke-Setup')) {
@@ -68,6 +69,15 @@ try {
         (Read-State).config_managed) {
         throw 'Başarısız mirrored ağ denetimi önceki yapılandırmayı geri getirmedi'
     }
+    function Invoke-WslNetworkProbe([string] $Arguments) {
+        if ($Arguments -match 'hostname -I') { return '172.28.196.192' }
+        return 'default via 172.28.192.1 dev eth0 proto kernel'
+    }
+    Test-NatNetwork
+    function Invoke-WslNetworkProbe([string] $Arguments) { return '' }
+    $natRejected = $false
+    try { Test-NatNetwork } catch { $natRejected = $true }
+    if (-not $natRejected) { throw 'Varsayilan rota olmayan NAT agi kabul edildi' }
 
     $script:tcpRanges = @{
         ipv4 = [pscustomobject]@{ start = 1024; count = 64511 }
@@ -158,6 +168,7 @@ try {
     function Invoke-Elevated {}
     function Ensure-Kali {}
     function Ensure-MirroredNetwork { throw 'WSL mirrored 0x8007054f' }
+    function Test-NatNetwork { throw 'NAT disconnected' }
     function Get-PSDrive {
         [CmdletBinding()]
         param([string] $Name, [string] $PSProvider)
@@ -218,6 +229,16 @@ try {
     if ($script:enabledFeature -or $script:resumeRegistered -or
         $afterReboot.setup_pending_reboot -or -not $afterReboot.setup_error) {
         throw 'Başarısız yeniden başlatma sonrası kurulum durumu yanlış raporlandı'
+    }
+    function Test-NatNetwork { $script:natChecked = $true }
+    $script:natChecked = $false
+    $script:mirroredCalls = 0
+    function Ensure-MirroredNetwork { $script:mirroredCalls++; throw '0x8007054f' }
+    try { Invoke-Setup } catch {}
+    $afterFallback = Read-State
+    if (-not $script:natChecked -or $script:mirroredCalls -ne 0 -or
+        $afterFallback.network_mode -ne 'nat' -or $afterFallback.setup_error) {
+        throw 'Bilinen mirrored hatasi NAT ile kurtarilmadi'
     }
     'Windows setup/export tests OK'
 }

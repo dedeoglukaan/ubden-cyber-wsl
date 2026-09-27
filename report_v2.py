@@ -226,6 +226,11 @@ def platform_lines(root, meta, steps):
         return []
     snapshot=meta.get('host_snapshot',{})
     lines=[]
+    network_mode=meta.get('network_mode','unknown')
+    if network_mode in ('nat','mirrored'):
+        lines.append('Kali WSL ağ modu: '+network_mode.upper())
+        if network_mode=='nat':
+            lines.append('Ağ yeteneği: IP tabanlı testler hedef bazında rota ve erişimle doğrulanır; ham katman-2 ve fiziksel kart görünürlüğü sağlanmaz.')
     if isinstance(snapshot,dict):
         adapters=[]
         for item in snapshot.get('adapters',[]):

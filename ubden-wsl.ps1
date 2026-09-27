@@ -242,6 +242,36 @@ function Test-MirroredNetwork {
     Write-Host ('Mirrored ag dogrulandi; ortak IPv4: ' + (($windows | Where-Object { $linux -contains $_ }) -join ', '))
 }
 
+function Invoke-WslNetworkProbe([string] $Arguments) {
+    $psi = New-Object System.Diagnostics.ProcessStartInfo
+    $psi.FileName = 'wsl.exe'
+    $psi.Arguments = $Arguments
+    $psi.UseShellExecute = $false
+    $psi.RedirectStandardOutput = $true
+    $psi.RedirectStandardError = $true
+    $process = [System.Diagnostics.Process]::Start($psi)
+    if (-not $process.WaitForExit(30000)) {
+        try { $process.Kill() } catch {}
+        throw 'Kali NAT ag denetimi 30 saniyede tamamlanmadi'
+    }
+    $output = ($process.StandardOutput.ReadToEnd() -replace "`0", '').Trim()
+    $diagnostic = ($process.StandardError.ReadToEnd() -replace "`0", '').Trim()
+    if ($process.ExitCode -ne 0) {
+        throw "Kali NAT ag denetimi basarisiz (kod $($process.ExitCode)): $diagnostic $output"
+    }
+    return $output
+}
+
+function Test-NatNetwork {
+    $addresses = Invoke-WslNetworkProbe '-d kali-linux -u root --exec hostname -I'
+    $routes = Invoke-WslNetworkProbe '-d kali-linux -u root --exec ip -4 route show default'
+    $linux = @($addresses -split '\s+' | Where-Object { $_ -match '^\d{1,3}(\.\d{1,3}){3}$' })
+    if (-not $linux.Count -or $routes -notmatch '(?m)^default via (\d{1,3}(?:\.\d{1,3}){3}) dev (\S+)') {
+        throw 'Kali NAT IPv4 adresi veya varsayilan rotasi yok'
+    }
+    Write-Host "Kali NAT agi dogrulandi; IPv4: $($linux -join ', '); Windows gecidi: $($Matches[1])."
+}
+
 function Ensure-MirroredNetwork {
     $before = if (Test-Path -LiteralPath $WslConfig) {
         [IO.File]::ReadAllBytes($WslConfig)
@@ -313,10 +343,25 @@ function Invoke-Setup {
         throw ('Windows yeniden baslatilmali: ' + $beforeNetwork.setup_pending_reboot +
             '. Yeniden baslattiktan sonra UBDEN kurulumu devam eder.')
     }
-    $networkRecovered = $false
-    try { Ensure-MirroredNetwork }
-    catch {
-        if ($_.Exception.Message -match '0x8007054f|IPv4 adresleri eslesmiyor') {
+    $networkMode = 'mirrored'
+    $networkFailure = ''
+    $knownMirroredFailure = ($beforeNetwork.network_mode -eq 'nat' -or
+        $beforeNetwork.setup_error -eq 'Mirrored WSL yeniden baslatmadan sonra da dogrulanamadi' -or
+        $beforeNetwork.setup_error -match '^Mirrored: ')
+    if ($knownMirroredFailure) {
+        try {
+            Test-NatNetwork
+            $networkMode = 'nat'
+            $networkFailure = 'Mirrored WSL bu bilgisayarda daha once dogrulanamadi'
+        }
+        catch { Write-Host ("Mevcut NAT agi dogrulanamadi: " + $_.Exception.Message) }
+    }
+    if ($networkMode -ne 'nat') {
+      try { Ensure-MirroredNetwork }
+      catch {
+        $networkFailure = $_.Exception.Message
+        $networkRecovered = $false
+        if ($networkFailure -match '0x8007054f|IPv4 adresleri eslesmiyor') {
             $feature = Get-CimInstance Win32_OptionalFeature -Filter "Name='HypervisorPlatform'" `
                 -ErrorAction SilentlyContinue
             if ($feature -and $feature.InstallState -eq 2) {
@@ -335,28 +380,41 @@ function Invoke-Setup {
                 Register-SetupResume
                 throw 'Mirrored WSL 0x8007054f: HypervisorPlatform acildi; Windows yeniden baslatilinca setup surdurulecek'
             }
-            if ($_.Exception.Message -match '0x8007054f') {
-                $networkRecovered = Repair-MirroredTcpRange
-            }
-            if ($rebootWasDone -and -not $networkRecovered) {
-                $failed = Read-State
-                $failed | Add-Member -NotePropertyName setup_pending_reboot -NotePropertyValue '' -Force
-                $failed | Add-Member -NotePropertyName setup_error `
-                    -NotePropertyValue 'Mirrored WSL yeniden baslatmadan sonra da dogrulanamadi' -Force
-                Save-State $failed
+            if ($networkFailure -match '0x8007054f' -and -not $rebootWasDone) {
+                try { $networkRecovered = Repair-MirroredTcpRange }
+                catch {
+                    $networkFailure = $_.Exception.Message
+                    if ($networkFailure -match 'geri alinamadi') { throw }
+                }
             }
         }
         if ($networkRecovered) {
             Write-Host 'Mirrored WSL agi Windows TCP araligi onarimiyla acildi.'
         } else {
-            throw
+            try {
+                Test-NatNetwork
+                $networkMode = 'nat'
+                Write-Host ("Mirrored WSL kullanilamadi: $networkFailure")
+            }
+            catch {
+                $failed = Read-State
+                $failed | Add-Member -NotePropertyName setup_pending_reboot -NotePropertyValue '' -Force
+                $failed | Add-Member -NotePropertyName setup_error `
+                    -NotePropertyValue ("Mirrored: $networkFailure; NAT: " + $_.Exception.Message) -Force
+                Save-State $failed
+                throw $failed.setup_error
+            }
         }
+      }
     }
     $state = Read-State
-    if ($state.setup_pending_reboot -or $state.setup_error) {
-        $state | Add-Member -NotePropertyName setup_pending_reboot -NotePropertyValue '' -Force
-        $state | Add-Member -NotePropertyName setup_error -NotePropertyValue '' -Force
-        Save-State $state
+    $state | Add-Member -NotePropertyName network_mode -NotePropertyValue $networkMode -Force
+    $state | Add-Member -NotePropertyName network_note -NotePropertyValue $networkFailure -Force
+    $state | Add-Member -NotePropertyName setup_pending_reboot -NotePropertyValue '' -Force
+    $state | Add-Member -NotePropertyName setup_error -NotePropertyValue '' -Force
+    Save-State $state
+    if ($networkMode -eq 'nat') {
+        Write-Host 'NAT modunda IP tabanli kapsam ici LAN testleri kullanilabilir; ham L2 ve bazi VPN yollari ayrica dogrulanir.'
     }
     $sourceFiles = @(Get-ChildItem -LiteralPath $SourceRoot -File |
         Where-Object { $_.Extension -in @('.py','.sh','.ps1','.json','.md','.txt') })
@@ -398,6 +456,10 @@ function Invoke-Status {
         Write-Host ('Kurulum yeniden baslatma bekliyor: ' + $state.setup_pending_reboot)
     }
     if ($state.setup_error) { Write-Host ('Kurulum hatasi: ' + $state.setup_error) }
+    if ($state.network_mode) {
+        Write-Host ('Son kurulumda dogrulanan Kali ag modu: ' + $state.network_mode)
+        if ($state.network_note) { Write-Host ('Ag modu aciklamasi: ' + $state.network_note) }
+    }
     if ($state.hypervisor_platform_added) {
         Write-Host 'HypervisorPlatform: UBDEN kurulumu tarafindan acildi; destroy geri alacak'
     }
@@ -437,7 +499,9 @@ function Invoke-Status {
 function Invoke-Run {
     Invoke-Setup
     $bridge = Join-Path $SourceRoot 'windows-bridge.ps1'
+    $networkMode = (Read-State).network_mode
     & wsl.exe -d kali-linux -u root --exec env "UBDEN_WINDOWS_BRIDGE=$bridge" `
+        "UBDEN_WSL_NETWORK_MODE=$networkMode" `
         /opt/ubden-cyber/start.sh
     if ($LASTEXITCODE -ne 0) { throw "UBDEN operasyonu $LASTEXITCODE koduyla durdu" }
 }
