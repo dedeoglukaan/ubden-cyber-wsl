@@ -510,6 +510,19 @@ def read_data(root):
                 hosts.append({'ip':ip,'ports':ports,'evidence':str(path.relative_to(root))})
         except ET.ParseError:
             steps.append({'step':'parse','status':'error','detail':f'Bozuk Nmap XML: {path.name}'})
+    # Aynı IP birden çok Nmap XML'inde (ör. top-1000 + platform portları) görülebilir;
+    # portları birleştir ve kanıt yollarını topla ki adres tek satırda gösterilsin.
+    merged={}
+    for host in hosts:
+        entry=merged.setdefault(host['ip'],{'ip':host['ip'],'ports':[],'evidence':host['evidence'],'_seen':set()})
+        for port in host['ports']:
+            key=(port['port'],port['protocol'])
+            if key not in entry['_seen']:
+                entry['_seen'].add(key)
+                entry['ports'].append(port)
+        if host['evidence'] not in entry['evidence']:
+            entry['evidence']+='; '+host['evidence']
+    hosts=[{k:v for k,v in entry.items() if k!='_seen'} for entry in merged.values()]
     findings=[]
     # Non-intrusive header observations are review candidates, never confirmed vulnerabilities.
     observations=[]

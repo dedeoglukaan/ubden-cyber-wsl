@@ -1126,6 +1126,21 @@ def scan_target(target, meta, root, events, credentials=(), index=1, total=1,
                     key=safe_filename(ip)
                     command("audit_"+key,["nmap"] + (["-6"] if ":" in ip else []) + ["-Pn","-sT","-sV","-T3","--stats-every","10s","--max-rate",str(meta["max_rate"]),"--max-retries","1","--script-timeout","30s","--host-timeout","5m","--script",scripts,"-p",",".join(map(str,opened)),"-oX",str(raw/("audit_"+key+".xml")),ip],raw,events,360)
     if profile in ('network','full'):
+        # Platform/yönetim portları (Forti SSL-VPN, ESXi/vCenter, Proxmox, iLO/iDRAC,
+        # NAS, kamera) çoğu top-1000 dışıdır; canlı hostlarda sınırlı ek tarama.
+        live_hosts=[ip for ip in assets if discovered_ports.get(ip)]
+        if live_hosts and shutil.which('nmap'):
+            platform_ports="541,902,2179,4443,5000,5001,5480,5900,5989,8000,8006,10443,17988,17990,37777,37778"
+            plat_list=raw/'platform_targets.txt'
+            plat_list.write_text('\n'.join(live_hosts)+'\n',encoding='ascii')
+            plat_xml=raw/'nmap_platform.xml'
+            command('nmap_platform',["nmap"]+(['-6'] if ':' in live_hosts[0] else [])+
+                    ["-Pn","-n","-sS","-sV","--version-light","-T3","--max-rate",str(meta['max_rate']),
+                     "--max-retries","1","-p",platform_ports,"-oX",str(plat_xml),"-iL",str(plat_list)],
+                    raw,events,min(3600,max(600,len(live_hosts)*len(platform_ports.split(','))//max(1,meta['max_rate'])*3+300)))
+            for ip,extra in open_tcp_ports_by_host(plat_xml,live_hosts).items():
+                if extra:
+                    discovered_ports[ip]=sorted(set(discovered_ports.get(ip,[]))|set(extra))
         discover_sql_browser(assets,raw,events,meta['max_rate'])
         probe_snmp(target,assets,raw,events,meta['max_rate'])
         discover_rootdse(assets,discovered_ports,raw,events)
