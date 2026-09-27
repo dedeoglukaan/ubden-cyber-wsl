@@ -90,8 +90,9 @@ def _facts(meta: dict, hosts: list, findings: list, devices: dict, ad: dict) -> 
 
 
 def build(meta: dict, hosts: list, findings: list, devices: dict,
-          ad: dict | None = None, osint: dict | None = None) -> dict:
-    """Ağ (ve varsa OSINT) kanıtından maruziyet korelasyonu üretir."""
+          ad: dict | None = None, osint: dict | None = None,
+          tech: dict | None = None) -> dict:
+    """Ağ (ve varsa OSINT / platform tespiti) kanıtından maruziyet korelasyonu üretir."""
     ad = ad or {}
     facts = _facts(meta, hosts, findings, devices, ad)
     correlations, chains, actions = [], [], []
@@ -204,6 +205,24 @@ def build(meta: dict, hosts: list, findings: list, devices: dict,
                     "action": "Parola politikası + kilitleme eşiği uygula; MFA; tahmin edilebilir parolaları engelle",
                     "rationale": "Bilinen kullanıcı adları + zayıf parola politikası püskürtmeyi kolaylaştırır"})
 
+    # Platform tespiti: kritik yönetim düzlemi (hipervizör/güvenlik duvarı/BMC) maruziyeti.
+    if tech:
+        crit = [m for m in tech.get("matches", [])
+                if m.get("category") in ("hypervisor", "firewall", "ilo") and m.get("mgmt_ports_observed")]
+        if crit:
+            fams = ", ".join(sorted({f"{m['family']} ({m['ip']})" for m in crit})[:6])
+            add("Kritik yönetim düzlemi platformu erişilebilir", "high",
+                f"Sanallaştırma/güvenlik duvarı/donanım yönetimi platformlarının yönetim arayüzleri kapsamda gözlendi: {fams}. "
+                "Yönetim düzlemi ele geçirilirse çok sayıda sisteme tek noktadan erişim doğar.",
+                chain={"name": "Yönetim düzlemi → toplu erişim", "likelihood": "orta",
+                       "impact": "Hipervizör/güvenlik duvarı/BMC üzerinden geniş erişim",
+                       "steps": ["Gözlenen sürümü üretici danışmaları (VMSA/PSIRT) ile karşılaştır",
+                                 "Yönetim arayüzü erişimini ayrı yönetim ağıyla sınırla",
+                                 "Varsayılan hesap ve MFA durumunu yetkili test hesabıyla doğrula"]},
+                action={"priority": "yüksek", "effort": "orta",
+                        "action": "Yönetim düzlemi arayüzlerini ayrı yönetim ağına al; MFA + güncel yama uygula",
+                        "rationale": "Yönetim düzlemi tek noktadan geniş erişim sağlar; sürüm/yama kritiktir"})
+
     confirmed_penalty = sum(_SEV_PENALTY.get(f.get("severity"), 0) for f in facts["confirmed"])
     corr_penalty = min(45, sum({"critical": 8, "high": 5, "medium": 2, "low": 1}.get(c["severity"], 0)
                                for c in correlations))
@@ -292,8 +311,9 @@ def _build_graph(facts: dict, osint: dict | None = None) -> dict:
 
 
 def write(root: Path, meta: dict, hosts: list, findings: list,
-          devices: dict, ad: dict | None = None, osint: dict | None = None) -> dict:
-    result = build(meta, hosts, findings, devices, ad, osint)
+          devices: dict, ad: dict | None = None, osint: dict | None = None,
+          tech: dict | None = None) -> dict:
+    result = build(meta, hosts, findings, devices, ad, osint, tech)
     temp = root / ".UBDEN_CORRELATION.pending.json"
     temp.write_text(json.dumps(result, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     temp.replace(root / "UBDEN_CORRELATION.json")

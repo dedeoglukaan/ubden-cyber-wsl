@@ -909,6 +909,20 @@ def pdf(root, filename, meta, steps, hosts, findings, review, executive=False):
                 act_cells.append([P(a.get('priority',''),st['SmallX']),P(a.get('action',''),st['SmallX'],limit=200),
                                   P((a.get('rationale','')+' · efor: '+a.get('effort','?')),st['SmallX'],limit=200)])
             story.append(grid_table(act_cells,[doc.width*.14,doc.width*.44,doc.width*.42]))
+    tech=json.loads((root/'UBDEN_TECH_PROFILE.json').read_text(encoding='utf-8')) if (root/'UBDEN_TECH_PROFILE.json').is_file() else {}
+    if tech and tech.get('matches'):
+        story.append(P('Teknoloji ve platform tespiti',st['SectionX']))
+        story.append(P(tech.get('note',''),st['SmallX']))
+        story.append(P('Aile dağılımı: '+', '.join(f'{k}: {v}' for k,v in tech.get('families',{}).items()),st['BodyX']))
+        tcells=[[P(x,st['SmallWhiteX']) for x in ('Platform / adres','Sürüm / güven','Yönetim portları','Doğrulanacak danışmalar')]]
+        for m in tech['matches'][:20]:
+            tcells.append([P(f"{m.get('family','')}\n{m.get('ip','')}",st['SmallX'],limit=120),
+                           P((m.get('version') or 'sürüm gözlenmedi')+f"\n{m.get('confidence','')}",st['SmallX']),
+                           P(', '.join(map(str,m.get('mgmt_ports_observed',[]))) or '—',st['SmallX']),
+                           P('; '.join(m.get('advisories',[])[:2]),st['SmallX'],limit=280)])
+        story.append(grid_table(tcells,[doc.width*.24,doc.width*.16,doc.width*.14,doc.width*.46]))
+        if len(tech['matches'])>20:
+            story.append(P(f"Diğer {len(tech['matches'])-20} eşleşme UBDEN_TECH_PROFILE.json içinde.",st['SmallX']))
     story += [P('Yönetici değerlendirmesi',st['SectionX']),P(review.get('analyst_summary') or 'Analist değerlendirmesi henüz eklenmedi. Teslim öncesi iş etkisi, öncelik ve önerilen aksiyonlar doğrulanmalıdır.',st['BodyX'])]
     story.append(P('Önerilen yaklaşım',st['SectionX']))
     story.append(P('Doğrulanmış bulguları önce iş etkisine göre önceliklendirin. Her düzeltmeden sonra aynı hedefte yeniden test yapın. Kapsam dışındaki varlıklar veya çalışmayan kontroller için ayrı çalışma planlayın.',st['BodyX']))
@@ -1156,6 +1170,16 @@ def html_report(root,meta,steps,hosts,findings,review,report_errors=None):
             correlation_html+=('<h3>Öncelikli birleşik aksiyonlar</h3><table><thead><tr><th>Öncelik</th><th>Aksiyon</th><th>Gerekçe / efor</th></tr></thead><tbody>'+
                 ''.join('<tr><td>'+safe(a.get('priority'))+'</td><td>'+safe(a.get('action'))+'</td><td>'+safe(a.get('rationale'))+' · efor: '+safe(a.get('effort'))+'</td></tr>'
                         for a in corr['combined_actions'])+'</tbody></table>')
+    tech=json.loads((root/'UBDEN_TECH_PROFILE.json').read_text(encoding='utf-8')) if (root/'UBDEN_TECH_PROFILE.json').is_file() else {}
+    tech_html=''
+    if tech and tech.get('matches'):
+        tech_html=('<h2>Teknoloji ve platform tespiti</h2><p>'+safe(tech.get('note'))+
+            ' · <a href="UBDEN_TECH_PROFILE.json">Platform kaydı</a></p>'+
+            '<p>Aile dağılımı: '+safe(', '.join(f'{k}: {v}' for k,v in tech.get('families',{}).items()))+'</p>'+
+            '<table><thead><tr><th>Platform</th><th>Adres</th><th>Sürüm</th><th>Güven</th><th>Yönetim portları</th><th>Doğrulanacak danışmalar</th></tr></thead><tbody>'+
+            ''.join('<tr><td>'+safe(m.get('family'))+'</td><td>'+safe(m.get('ip'))+'</td><td>'+safe(m.get('version') or '—')+
+                    '</td><td>'+safe(m.get('confidence'))+'</td><td>'+safe(', '.join(map(str,m.get('mgmt_ports_observed',[]))) or '—')+
+                    '</td><td>'+safe('; '.join(m.get('advisories',[])))+'</td></tr>' for m in tech['matches'])+'</tbody></table>')
     insights=json.loads((root/'UBDEN_INSIGHTS.json').read_text(encoding='utf-8')) if (root/'UBDEN_INSIGHTS.json').is_file() else {}
     preflight=json.loads((root/'PREFLIGHT.json').read_text(encoding='utf-8')) if (root/'PREFLIGHT.json').is_file() else {}
     preflight_html=''
@@ -1173,7 +1197,7 @@ def html_report(root,meta,steps,hosts,findings,review,report_errors=None):
             '<h3>CVSS önerileri</h3><table><thead><tr><th>Bulgu</th><th>Vektör</th><th>Taban puan</th></tr></thead><tbody>'+
             ''.join('<tr><td>'+safe(item.get('finding_id',''))+'</td><td>'+safe(item.get('vector',''))+'</td><td>'+safe(item.get('base_score',''))+'</td></tr>' for item in insights.get('cvss_suggestions',[]))+'</tbody></table>'+
             '<table><thead><tr><th>Bulgu</th><th>Varlık</th><th>Önerilen düzeltme</th></tr></thead><tbody>'+''.join('<tr><td>'+safe(', '.join(item['findings']))+'</td><td>'+safe(', '.join(item['assets'][:6]))+'</td><td>'+safe(item['recommendation'])+'</td></tr>' for item in insights.get('remediation',[]))+'</tbody></table>')
-    doc=_splice(doc,'<h2>Analist bulguları</h2>',correlation_html+risk_html+priority_html+network_html+ad_html+coverage_html+preflight_html+insight_html+analyst_html+'<h2>Analist bulguları</h2>')
+    doc=_splice(doc,'<h2>Analist bulguları</h2>',correlation_html+tech_html+risk_html+priority_html+network_html+ad_html+coverage_html+preflight_html+insight_html+analyst_html+'<h2>Analist bulguları</h2>')
     doc=_splice(doc,'<h2>Çalışma günlüğü</h2>',device_html+'<h2>Çalışma günlüğü</h2>')
     if (root/'STEP_AUDIT.json').is_file():
         doc=_splice(doc,'<h2>Çalışma günlüğü</h2>',
@@ -1205,14 +1229,15 @@ def main():
     plan=write_plan(root,meta,steps,review,device_inventory(root),findings)
     write_insights(root,meta,steps,findings,review)
     try:
-        import osint_facts
+        import osint_facts, tech_fingerprint
         osint=osint_facts.build(root,meta)
         temp=root/'.UBDEN_OSINT.pending.json'
         temp.write_text(json.dumps(osint,ensure_ascii=False,indent=2)+'\n',encoding='utf-8')
         temp.replace(root/'UBDEN_OSINT.json')
-        CORR.write(root,meta,hosts,findings,device_inventory(root),ad_result(root),osint=osint)
+        tech=tech_fingerprint.write(root,meta,hosts,device_inventory(root))
+        CORR.write(root,meta,hosts,findings,device_inventory(root),ad_result(root),osint=osint,tech=tech)
     except (OSError,ValueError,TypeError) as exc:
-        print(f'Korelasyon/OSINT üretilemedi: {type(exc).__name__}: {exc}',file=sys.stderr)
+        print(f'Korelasyon/OSINT/teknoloji üretilemedi: {type(exc).__name__}: {exc}',file=sys.stderr)
     errors={}
     for filename,executive in (('YONETICI_OZETI.pdf',True),('TEKNIK_RAPOR.pdf',False)):
         temp=root/('.'+filename+'.pending.pdf')

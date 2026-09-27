@@ -280,6 +280,29 @@ def build_plan(root: Path, meta: dict, steps: list, review: dict,
              "Sonuç: geçerli/geçersiz, redakte edilmiş kanıt"],
             request="Yazılı yetkili tek test hesabı, ≤2 aday parola (ayrı güvenli kanaldan), kilitleme eşiği ve test penceresi.")
 
+    try:
+        import tech_fingerprint
+        tech = tech_fingerprint.build(root, meta, [], inventory)
+    except Exception:
+        tech = {"matches": [], "families": {}}
+    tech_matches = [m for m in tech.get("matches", []) if _ip(m.get("ip", "")) and permitted(m["ip"])]
+    if tech_matches:
+        tech_targets = sorted({m["ip"] for m in tech_matches}, key=ipaddress.ip_address)
+        families = ", ".join(f"{k} ({v})" for k, v in tech.get("families", {}).items())
+        add("T-22", "PLATFORM", "P1", "Platform sürüm/CVE ve yönetim düzlemi kontrolü",
+            tech_targets,
+            "Kapsam içinde tanınan platformlar (inceleme adayı): " + (families or "—") +
+            ". Eşleşme kanıt tabanlıdır; listelenen CVE/danışmalar gözlenen sürüme karşı doğrulanmalıdır, mevcudiyet iddiası değildir.",
+            ["Her platform için gözlenen sürümü/firmware'i üretici danışmalarıyla (VMware VMSA, Fortinet/Sophos/Cisco PSIRT, Dell DSA, HPE, Synology-SA, kamera OEM) karşılaştırın.",
+             "Yönetim arayüzlerinin (hipervizör, güvenlik duvarı yönetimi, iLO/iDRAC/IPMI, NAS, kamera) yalnız ayrı yönetim ağından erişilebildiğini doğrulayın; internete/kullanıcı VLAN'ına açıklığı işaretleyin.",
+             "Varsayılan/zayıf hesap ve MFA durumunu yalnız müşterinin yazılı yetkilendirdiği test hesabıyla, kilitleme eşiği altında doğrulayın; istismar denemeyin.",
+             "Kamera/NVR için varsayılan kimlik bilgisi, RTSP ve bulut kaydını; SSL-VPN portalları için sürüm ve maruziyeti ayrıca doğrulayın.",
+             "Doğrulanan sürüm-açık eşleşmesini tekrar üretim ve iş etkisiyle analist kaydına girin; yalnız danışma başlığını bulgu saymayın."],
+            ["Platform–sürüm–danışma eşleştirme tablosu", "Yönetim düzlemi ağ izolasyonu teyidi",
+             "Varsayılan hesap/MFA durumu (parola içermez)", "Doğrulanan bulgular için kanıt"],
+            request="Platform envanteri: ürün, sürüm/firmware, yönetim IP/VLAN'ı ve bakım/yama penceresi.",
+            references=["UBDEN_TECH_PROFILE.json"])
+
     if web:
         add("T-10", "AUTH", "P1", "Web oturum ve test hesabı akışını incele", web,
             "HTTP(S) servisi görüldü; tarama oturum yaşam döngüsünü doğrulamaz.",
