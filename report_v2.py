@@ -25,6 +25,8 @@ from assessment_coverage import build_coverage, write_coverage
 from report_insights import write as write_insights
 from analyst_workplan import write_plan
 from device_inventory import build_inventory
+import report_visuals as V
+import correlation as CORR
 
 BASE = Path(__file__).resolve().parent
 NAVY = colors.HexColor('#101b32')
@@ -34,8 +36,42 @@ PALE = colors.HexColor('#edf7f8')
 GRAY = colors.HexColor('#65758b')
 SEVERITIES = {'critical':'Kritik','high':'Yüksek','medium':'Orta','low':'Düşük','info':'Bilgi'}
 SEVERITY_COLORS = {'critical':'#9d174d','high':'#d84734','medium':'#e49722','low':'#337ec6','info':'#73859c'}
-pdfmetrics.registerFont(TTFont('DV',str(BASE/'assets'/'DejaVuSans.ttf')))
-pdfmetrics.registerFont(TTFont('DVB',str(BASE/'assets'/'DejaVuSans-Bold.ttf')))
+# 'DV'/'DVB' anahtarlarına Türkçe destekli font kaydeder: assets DejaVu bulunursa
+# onu, yoksa sistem fontuna (Segoe UI/Arial/Liberation) düşerek — glif doğrulamalı.
+V.register_fonts()
+
+# Bulgu tipi/başlık/kategorisinden CWE zayıflık sınıfı çıkarımı (analist ayrıca
+# override edebilir). Eşleşme yalnız sınıflandırma içindir; istismar kanıtı değildir.
+CWE_RULES = (
+    ('kerberoast', 'CWE-522 · Yetersiz korunan kimlik bilgileri'),
+    ('asrep', 'CWE-522 · Yetersiz korunan kimlik bilgileri'),
+    ('cracked', 'CWE-521 · Zayıf parola gereksinimleri'),
+    ('zayıf parola', 'CWE-521 · Zayıf parola gereksinimleri'),
+    ('adcs', 'CWE-295 · Hatalı sertifika doğrulaması'),
+    ('telnet', 'CWE-319 · Hassas bilginin şifresiz iletimi'),
+    ('ftp servisi', 'CWE-319 · Hassas bilginin şifresiz iletimi'),
+    ('hsts', 'CWE-319 · Hassas bilginin şifresiz iletimi'),
+    ('x-content-type-options', 'CWE-693 · Koruma mekanizması eksikliği'),
+    ('http uç', 'CWE-319 · Hassas bilginin şifresiz iletimi'),
+    ('trace', 'CWE-16 · Güvensiz yapılandırma'),
+    ('sslv3', 'CWE-327 · Zayıf/eski kriptografik algoritma'),
+    ('tlsv1', 'CWE-327 · Zayıf/eski kriptografik algoritma'),
+    ('protokolü kabul', 'CWE-327 · Zayıf/eski kriptografik algoritma'),
+    ('public toplulu', 'CWE-1188 · Güvensiz varsayılan yapılandırma'),
+    ('snmpv1', 'CWE-319 · Hassas bilginin şifresiz iletimi'),
+    ('smb servisi', 'CWE-284 · Hatalı erişim denetimi'),
+    ('rdp servisi', 'CWE-284 · Hatalı erişim denetimi'),
+    ('veritabanı servisi', 'CWE-284 · Hatalı erişim denetimi'),
+    ('tls', 'CWE-295 · Hatalı sertifika doğrulaması'),
+)
+
+def infer_cwe(finding):
+    """Bulgu metninden CWE sınıfı önerir; eşleşme yoksa boş döner."""
+    haystack=' '.join(str(finding.get(k,'')) for k in ('type','title','category')).lower()
+    for keyword,label in CWE_RULES:
+        if keyword in haystack:
+            return label
+    return ''
 
 def safe(value):
     return html.escape(str(value or ''), quote=True)
@@ -309,6 +345,13 @@ def styles():
     s.add(ParagraphStyle(name='LabelX',fontName='DVB',fontSize=7.5,leading=12,textColor=GRAY,spaceAfter=3))
     s.add(ParagraphStyle(name='ValueX',fontName='DVB',fontSize=11,leading=15,textColor=NAVY,spaceAfter=8))
     s.add(ParagraphStyle(name='NoticeX',fontName='DVB',fontSize=9,leading=14,textColor=colors.HexColor('#8a5000'),backColor=colors.HexColor('#fff2d4'),borderPadding=9,spaceAfter=12))
+    # Koyu siber kapak için açık renkli metin stilleri.
+    s.add(ParagraphStyle(name='CoverBrandX',fontName='DVB',fontSize=30,leading=34,textColor=colors.white,spaceAfter=2))
+    s.add(ParagraphStyle(name='CoverBrandSubX',fontName='DVB',fontSize=11,leading=15,textColor=TEAL,spaceAfter=18))
+    s.add(ParagraphStyle(name='CoverTitleLightX',fontName='DVB',fontSize=22,leading=28,textColor=colors.white,spaceAfter=6))
+    s.add(ParagraphStyle(name='CoverLabelLightX',fontName='DVB',fontSize=7.5,leading=12,textColor=colors.HexColor('#90a0c4'),spaceAfter=1))
+    s.add(ParagraphStyle(name='CoverValueLightX',fontName='DVB',fontSize=12,leading=16,textColor=colors.white,spaceAfter=7))
+    s.add(ParagraphStyle(name='CoverNoticeLightX',fontName='DV',fontSize=8.6,leading=13,textColor=colors.HexColor('#c3ccdf'),spaceAfter=2))
     return s
 
 def P(value, style, limit=5000):
@@ -397,7 +440,8 @@ def finding_story(root,f,st,width):
               ('Diğer etkilenenler',', '.join(f.get('affected_assets',[]))),
               ('Kategori',f.get('category','')),('Erişim noktası',f.get('access_point','')),
               ('Kullanıcı profili',f.get('user_profile','')),('Kök neden',f.get('root_cause','')),
-              ('CVSS / referans', ' · '.join(x for x in (f.get('cvss',''),f.get('reference','')) if x))]
+              ('CVSS / referans', ' · '.join(x for x in (f.get('cvss',''),f.get('reference','')) if x)),
+              ('CWE sınıfı', f.get('cwe',''))]
     rows=[[P(label,st['LabelX']),P(value,st['SmallX'],limit=250)]
           for label,value in metadata if value]
     result.append(grid_table(rows,[width*.28,width*.72],header=False))
@@ -555,15 +599,17 @@ def read_data(root):
         elif item['evidence'] not in deduplicated[key]['evidence']:
             deduplicated[key]['evidence']+='; '+item['evidence']
     for i, item in enumerate(deduplicated.values(),1):
-        findings.append({'id':f'OBS-{i:03d}','status':'taslak','source':'Otomatik gözlem','reference':'','cvss':'',**item})
+        findings.append({'id':f'OBS-{i:03d}','status':'taslak','source':'Otomatik gözlem','reference':'','cvss':'','cwe':infer_cwe(item),**item})
     for i,item in enumerate(review.get('findings',[]),1):
         if not isinstance(item,dict): continue
-        finding={'id':str(item.get('id') or f'PX-{i:03d}'),'type':str(item.get('type') or '').lower(), 'title':str(item.get('title') or 'Başlıksız bulgu'), 'severity':str(item.get('severity') or 'info').lower(), 'status':str(item.get('status') or 'taslak').lower(), 'asset':str(item.get('asset') or ''), 'affected_assets':[str(x) for x in item.get('affected_assets',[]) if isinstance(x,str)] if isinstance(item.get('affected_assets',[]),list) else [], 'description':str(item.get('description') or ''), 'impact':str(item.get('impact') or ''), 'recommendation':str(item.get('recommendation') or ''), 'evidence':str(item.get('evidence') or ''), 'evidence_sha256':str(item.get('evidence_sha256') or ''), 'evidence_items':item.get('evidence_items',[]) if isinstance(item.get('evidence_items',[]),list) else [], 'reference':str(item.get('reference') or ''), 'cvss':str(item.get('cvss') or ''), 'reproduction':str(item.get('reproduction') or ''), 'reviewed_by':str(item.get('reviewed_by') or ''), 'category':str(item.get('category') or ''), 'access_point':str(item.get('access_point') or ''), 'user_profile':str(item.get('user_profile') or ''), 'root_cause':str(item.get('root_cause') or ''), 'remediation_priority':str(item.get('remediation_priority') or ''), 'retest_status':str(item.get('retest_status') or ''), 'disposition_reason':str(item.get('disposition_reason') or ''), 'source':'Analist'}
+        finding={'id':str(item.get('id') or f'PX-{i:03d}'),'type':str(item.get('type') or '').lower(), 'title':str(item.get('title') or 'Başlıksız bulgu'), 'severity':str(item.get('severity') or 'info').lower(), 'status':str(item.get('status') or 'taslak').lower(), 'asset':str(item.get('asset') or ''), 'affected_assets':[str(x) for x in item.get('affected_assets',[]) if isinstance(x,str)] if isinstance(item.get('affected_assets',[]),list) else [], 'description':str(item.get('description') or ''), 'impact':str(item.get('impact') or ''), 'recommendation':str(item.get('recommendation') or ''), 'evidence':str(item.get('evidence') or ''), 'evidence_sha256':str(item.get('evidence_sha256') or ''), 'evidence_items':item.get('evidence_items',[]) if isinstance(item.get('evidence_items',[]),list) else [], 'reference':str(item.get('reference') or ''), 'cvss':str(item.get('cvss') or ''), 'cwe':str(item.get('cwe') or ''), 'reproduction':str(item.get('reproduction') or ''), 'reviewed_by':str(item.get('reviewed_by') or ''), 'category':str(item.get('category') or ''), 'access_point':str(item.get('access_point') or ''), 'user_profile':str(item.get('user_profile') or ''), 'root_cause':str(item.get('root_cause') or ''), 'remediation_priority':str(item.get('remediation_priority') or ''), 'retest_status':str(item.get('retest_status') or ''), 'disposition_reason':str(item.get('disposition_reason') or ''), 'source':'Analist'}
         if finding['severity'] not in SEVERITIES: finding['severity']='info'
         if finding['status'] not in ('doğrulandı','taslak','yanlış pozitif','risk kabul edildi'): finding['status']='taslak'
         if finding['status']=='doğrulandı' and not verified_finding(root,item):
             finding['status']='taslak'
             finding['description'] += '\nKanıt / doğrulama alanları eksik veya dosya özeti değişmiş; doğrulandı sayılmadı.'
+        if not finding['cwe']:
+            finding['cwe']=infer_cwe(finding)
         findings.append(finding)
     findings.sort(key=lambda f:(list(SEVERITIES).index(f['severity']),f['id']))
     return meta,steps,hosts,findings,review
@@ -612,6 +658,10 @@ def audit_recorded_steps(root, steps):
     return corrected,changes
 
 def footer(canvas,doc):
+    if getattr(doc,'_ubden_cover',False) and doc.page==1:
+        V.cover_backdrop(canvas,*A4,'DV',footer_left='UBDEN CYBER SECURITY SYSTEMS',
+                         footer_right='GİZLİ · YETKİLİ ALICILAR')
+        return
     canvas.saveState()
     w,h=A4
     canvas.setStrokeColor(TEAL);canvas.setLineWidth(1)
@@ -692,20 +742,14 @@ def pdf(root, filename, meta, steps, hosts, findings, review, executive=False):
     doc=ReportDocument(str(root/filename),pagesize=A4,rightMargin=18*mm,leftMargin=18*mm,topMargin=23*mm,bottomMargin=22*mm,title='UBDEN Cyber Security Systems | Güvenlik Değerlendirmesi',author=meta.get('tester') or 'Test ekibi belirtilmedi')
     frame=Frame(doc.leftMargin,doc.bottomMargin,doc.width,doc.height,id='normal')
     doc.addPageTemplates(PageTemplate(id='main',frames=frame,onPage=footer))
-    story=[]
-    if logo():
-        from PIL import Image as PILImage
-        with PILImage.open(logo()) as im:
-            ratio=im.height/im.width
-        story.extend([Spacer(1,12*mm),Image(str(logo()),width=64*mm,height=min(64*mm*ratio,26*mm)),Spacer(1,23*mm)])
-    else:
-        story.append(P('UBDEN Cyber Security Systems',st['CoverTitleX']))
-    story.append(P(f"{meta.get('tester') or 'Test ekibi'} tarafından UBDEN Cyber Security Systems ile hazırlanmıştır.",st['SmallX']))
-    story.append(P('Yönetici Özeti' if executive else 'Teknik Güvenlik Değerlendirme Raporu',st['CoverTitleX']))
-    story.append(HRFlowable(width='100%',thickness=3,color=TEAL,spaceAfter=13))
+    doc._ubden_cover=True  # footer, 1. sayfaya koyu siber kapak zeminini çizer
+    story=[Spacer(1,30*mm),
+           P('UBDEN',st['CoverBrandX']),P('CYBER SECURITY SYSTEMS',st['CoverBrandSubX']),
+           P('Yönetici Özeti' if executive else 'Teknik Güvenlik Değerlendirme Raporu',st['CoverTitleLightX']),
+           HRFlowable(width='100%',thickness=3,color=TEAL,spaceAfter=14)]
     for key,value in [('MÜŞTERİ',meta.get('client')),('PROJE',meta.get('project')),('ÜRÜN',meta.get('product','UBDEN Cyber Security Systems')),('RAPOR TARİHİ',meta.get('finished_at',meta.get('started_at'))),('YETKİ REFERANSI',meta.get('authorization_reference')),('TEST SORUMLUSU',meta.get('tester')),('KAYIT KİMLİĞİ',meta.get('id'))]:
-        story += [P(key,st['LabelX']),P(value,st['ValueX'])]
-    story += [Spacer(1,10*mm),P('GİZLİ • Müşteri ve görevlendirilmiş ekip ile sınırlı dağıtım',st['NoticeX']),PageBreak()]
+        story += [P(key,st['CoverLabelLightX']),P(value,st['CoverValueLightX'])]
+    story += [Spacer(1,6*mm),P('GİZLİ • Müşteri ve görevlendirilmiş ekip ile sınırlı dağıtım',st['CoverNoticeLightX']),PageBreak()]
     toc=TableOfContents()
     toc.levelStyles=[st['TOCEntryX']]
     story.extend([P('İçindekiler',st['TOCTitleX']),
@@ -792,13 +836,69 @@ def pdf(root, filename, meta, steps, hosts, findings, review, executive=False):
     if meta.get('nuclei_templates'):
         story.append(P(f"Nuclei şablon kaynağı: {meta.get('nuclei_profile','custom')} | {meta.get('nuclei_template_count','?')} şablon. Sabit içerik özeti nuclei_template_manifest.json içinde kayıtlıdır. Adım durumunu günlükten kontrol edin; eşleşmeler analist doğrulaması bekler.",st['BodyX']))
     story.append(P('Doğrulanmış bulgular',st['SectionX']))
-    cells=[[P(x,st['SmallX']) for x in ('Kritik','Yüksek','Orta','Düşük','Bilgi')],[P(str(counts[x]),st['ValueX']) for x in SEVERITIES]]
-    t=Table(cells,colWidths=[doc.width/5]*5)
-    t.setStyle(TableStyle([('BACKGROUND',(0,0),(-1,-1),PALE),('BOX',(0,0),(-1,-1),0.5,TEAL),('VALIGN',(0,0),(-1,-1),'MIDDLE'),('LEFTPADDING',(0,0),(-1,-1),10),('TOPPADDING',(0,0),(-1,-1),8)]))
-    story += [t,Spacer(1,5*mm)]
+    posture=max(0,100-(counts['critical']*25+counts['high']*12+counts['medium']*5+counts['low']*2))
+    grade=V.grade_for_score(posture)
+    tiles=[(str(counts['critical']),'Kritik',V.SEVERITY_COLORS['critical']),
+           (str(counts['high']),'Yüksek',V.SEVERITY_COLORS['high']),
+           (str(counts['medium']),'Orta',V.SEVERITY_COLORS['medium']),
+           (str(counts['low']),'Düşük',V.SEVERITY_COLORS['low']),
+           (str(len(confirmed)),'Doğrulanmış',NAVY)]
+    story.append(V.stat_tiles(tiles,doc.width,'DVB','DV'))
+    story.append(Spacer(1,5*mm))
     if confirmed:
-        story.append(severity_chart(counts,doc.width))
+        gauge=V.donut_gauge(posture,grade,'DVB','DV',size=34*mm,caption='NOT')
+        narrative=P('Doğrulanmış bulgulara göre güvenlik duruşu skoru <b>%d/100</b> (Not %s). '
+                    'Skor kritik/yüksek bulgu sayısıyla düşer ve yalnız analistçe doğrulanmış '
+                    'bulguları yansıtır; otomatik gözlem adaylarını değil.'%(posture,grade),st['BodyX'])
+        row=Table([[gauge,narrative]],colWidths=[40*mm,doc.width-40*mm])
+        row.setStyle(TableStyle([('VALIGN',(0,0),(-1,-1),'MIDDLE'),
+                                 ('LEFTPADDING',(0,0),(-1,-1),0),('RIGHTPADDING',(0,0),(0,0),4*mm)]))
+        story += [row,Spacer(1,4*mm),
+                  V.hbars([(SEVERITIES[k],counts[k],V.SEVERITY_COLORS[k]) for k in SEVERITIES],
+                          doc.width,st['SmallX'],st['ValueX']),Spacer(1,3*mm)]
+        top=sorted(confirmed,key=lambda f:list(SEVERITIES).index(f['severity']))[:3]
+        if top:
+            story.append(P('Öne çıkan doğrulanmış riskler: '+'; '.join(
+                f"{f['id']} · {SEVERITIES.get(f['severity'],'Bilgi')} · {f['title']} ({f.get('asset') or '—'})"
+                for f in top),st['SmallX']))
+    else:
+        story.append(P('Analist tarafından doğrulanmış bulgu bulunmuyor; aşağıdaki gözlemler inceleme adayıdır.',st['BodyX']))
     story.append(P(f'Doğrulanmayı bekleyen bulgu: {len(pending)}. Tamamlanan adım: {sum(s.get("status")=="ok" for s in steps)}. Hatalı/eksik/atlanan adım: {sum(s.get("status") not in ("ok","excluded") for s in steps)}.',st['BodyX']))
+    corr=json.loads((root/'UBDEN_CORRELATION.json').read_text(encoding='utf-8')) if (root/'UBDEN_CORRELATION.json').is_file() else {}
+    if corr and (corr.get('correlations') or corr.get('graph',{}).get('nodes')):
+        story.append(P('Çapraz-katman maruziyet analizi',st['SectionX']))
+        story.append(P(corr.get('meaning',''),st['SmallX']))
+        ei=corr.get('exposure_index',{})
+        egauge=V.donut_gauge(ei.get('score',0),ei.get('grade','E'),'DVB','DV',size=32*mm,caption='MARUZİYET')
+        etext=P('Maruziyet indeksi <b>%s/100</b> (Not %s). %s'%(ei.get('score','?'),ei.get('grade','?'),ei.get('comment','')),st['BodyX'])
+        erow=Table([[egauge,etext]],colWidths=[36*mm,doc.width-36*mm])
+        erow.setStyle(TableStyle([('VALIGN',(0,0),(-1,-1),'MIDDLE'),('LEFTPADDING',(0,0),(-1,-1),0),('RIGHTPADDING',(0,0),(0,0),4*mm)]))
+        story += [erow,Spacer(1,3*mm)]
+        cors=corr.get('correlations',[])
+        if cors:
+            cor_cells=[[P(x,st['SmallWhiteX']) for x in ('Önem','Maruziyet kesişimi','Ayrıntı')]]
+            for c in cors:
+                cor_cells.append([P(SEVERITIES.get(c.get('severity'),'Bilgi'),st['SmallX']),
+                                  P(c.get('title',''),st['SmallX'],limit=140),
+                                  P(c.get('detail',''),st['SmallX'],limit=280)])
+            story.append(grid_table(cor_cells,[doc.width*.12,doc.width*.32,doc.width*.56]))
+        if corr.get('graph',{}).get('nodes'):
+            story += [P('Saldırı-yüzeyi ilişki ağı',st['SubX']),
+                      V.relationship_graph(corr['graph'],doc.width,'DVB','DV'),Spacer(1,3*mm)]
+        chains=corr.get('attack_chains',[])
+        if chains and not executive:
+            story.append(P('Olası saldırı zincirleri — analist doğrulaması gerekir',st['SubX']))
+            for ch in chains:
+                story.append(P(f"{ch.get('name','?')} — olasılık: {ch.get('likelihood','?')} · etki: {ch.get('impact','?')}",st['SmallX']))
+                for index,stp in enumerate(ch.get('steps',[]),1):
+                    story.append(P(f'{index}. {stp}',st['SmallX'],limit=220))
+        if corr.get('combined_actions'):
+            story.append(P('Öncelikli birleşik aksiyonlar',st['SubX']))
+            act_cells=[[P(x,st['SmallWhiteX']) for x in ('Öncelik','Aksiyon','Gerekçe / efor')]]
+            for a in corr['combined_actions'][:8]:
+                act_cells.append([P(a.get('priority',''),st['SmallX']),P(a.get('action',''),st['SmallX'],limit=200),
+                                  P((a.get('rationale','')+' · efor: '+a.get('effort','?')),st['SmallX'],limit=200)])
+            story.append(grid_table(act_cells,[doc.width*.14,doc.width*.44,doc.width*.42]))
     story += [P('Yönetici değerlendirmesi',st['SectionX']),P(review.get('analyst_summary') or 'Analist değerlendirmesi henüz eklenmedi. Teslim öncesi iş etkisi, öncelik ve önerilen aksiyonlar doğrulanmalıdır.',st['BodyX'])]
     story.append(P('Önerilen yaklaşım',st['SectionX']))
     story.append(P('Doğrulanmış bulguları önce iş etkisine göre önceliklendirin. Her düzeltmeden sonra aynı hedefte yeniden test yapın. Kapsam dışındaki varlıklar veya çalışmayan kontroller için ayrı çalışma planlayın.',st['BodyX']))
@@ -926,6 +1026,17 @@ def pdf(root, filename, meta, steps, hosts, findings, review, executive=False):
         story.append(P('Sınırlar ve takip: DNS değişiklikleri, erişilemeyen servisler, güvenlik cihazları, hız sınırları ve eksik araçlar görünürlüğü etkileyebilir. Hatalı veya zaman aşımına uğrayan adımlardan önce kapsam ve bakım penceresini yeniden doğrulayın. Düzeltme ve yeniden test tarihlerini müşteriyle kararlaştırın.',st['SmallX']))
     doc.multiBuild(story)
 
+def _splice(doc, anchor, insertion):
+    """Bölüm parçasını çapadan önce yerleştirir; çapa yoksa sessizce geçmez, hata verir.
+
+    HTML tek parça üretilip bölümler çapa metinlerinden enjekte ediliyor. Şablon
+    metni değişip çapa kaybolursa eski davranış sessiz no-op'tu (bölüm hiç eklenmezdi);
+    bu guard onu erken ve görünür bir hataya çevirir.
+    """
+    if anchor not in doc:
+        raise ValueError(f'HTML rapor şablonunda çapa bulunamadı: {anchor[:48]!r}')
+    return doc.replace(anchor, insertion, 1)
+
 def html_report(root,meta,steps,hosts,findings,review,report_errors=None):
     state=assess(root,review)
     discovery=discovery_summaries(root)
@@ -939,7 +1050,7 @@ def html_report(root,meta,steps,hosts,findings,review,report_errors=None):
     pdf_notice=('PDF üretim hatası: '+', '.join(f'{name}: {reason}' for name,reason in report_errors.items())) if report_errors else ''
     def li(v): return f'<li>{safe(v)}</li>'
     rows=''.join(f'<tr><td><a href="#bulgu-{i}">{safe(f.get("id"))}</a></td><td>{safe(f.get("title"))}</td><td>{safe(SEVERITIES.get(f.get("severity"),"Bilgi"))}</td><td>{safe(f.get("status"))}</td><td>{safe(f.get("asset"))}</td><td>{evidence_link(root,f.get("evidence"))}</td></tr>' for i,f in enumerate(findings,1))
-    detail_fields=(('Kaynak','source'),('Durum','status'),('Varlık','asset'),('Diğer etkilenenler','affected_assets'),('Kategori','category'),('Erişim noktası','access_point'),('Kullanıcı profili','user_profile'),('Kök neden','root_cause'),('CVSS','cvss'),('Açıklama','description'),('Tekrar üretim','reproduction'),('Doğrulayan','reviewed_by'),('İş etkisi','impact'),('Düzeltme önerisi','recommendation'),('Düzeltme önceliği','remediation_priority'),('Yeniden test','retest_status'),('Kapatma / kabul gerekçesi','disposition_reason'),('Referans','reference'))
+    detail_fields=(('Kaynak','source'),('Durum','status'),('Varlık','asset'),('Diğer etkilenenler','affected_assets'),('Kategori','category'),('Erişim noktası','access_point'),('Kullanıcı profili','user_profile'),('Kök neden','root_cause'),('CVSS','cvss'),('CWE sınıfı','cwe'),('Açıklama','description'),('Tekrar üretim','reproduction'),('Doğrulayan','reviewed_by'),('İş etkisi','impact'),('Düzeltme önerisi','recommendation'),('Düzeltme önceliği','remediation_priority'),('Yeniden test','retest_status'),('Kapatma / kabul gerekçesi','disposition_reason'),('Referans','reference'))
     finding_details=''.join(
         f'<section class="finding" id="bulgu-{i}"><h3>{safe(f.get("id"))} · {safe(f.get("title"))}</h3>'
         f'<p><b>Şiddet:</b> {safe(SEVERITIES.get(f.get("severity"),"Bilgi"))} · <b>Doğrulama:</b> {safe(f.get("status"))}</p>'+
@@ -1013,7 +1124,26 @@ def html_report(root,meta,steps,hosts,findings,review,report_errors=None):
     auth_html=f'<p class="notice">{safe(auth_note)}</p>' if meta.get('auth_probes') else ''
     role_html=(f'<p class="notice">{safe(role_note)}</p>' if meta.get('role_scenarios') or
                any(str(s.get('step','')).startswith('role_') for s in steps) else '')
-    doc=doc.replace('</p><h2>Yönetici özeti</h2>',f'</p>{auth_html}{role_html}{platform_html}{discover_html}{snmp_html}{ai_html}{review_table}{inventory_html}<h2>Yönetici özeti</h2>')
+    doc=_splice(doc,'</p><h2>Yönetici özeti</h2>',f'</p>{auth_html}{role_html}{platform_html}{discover_html}{snmp_html}{ai_html}{review_table}{inventory_html}<h2>Yönetici özeti</h2>')
+    corr=json.loads((root/'UBDEN_CORRELATION.json').read_text(encoding='utf-8')) if (root/'UBDEN_CORRELATION.json').is_file() else {}
+    correlation_html=''
+    if corr and (corr.get('correlations') or corr.get('graph',{}).get('nodes')):
+        ei=corr.get('exposure_index',{})
+        correlation_html=('<h2>Çapraz-katman maruziyet analizi</h2><p>'+safe(corr.get('meaning'))+'</p>'+
+            '<p><b>Maruziyet indeksi:</b> '+safe(ei.get('score'))+'/100 (Not '+safe(ei.get('grade'))+'). '+safe(ei.get('comment'))+
+            ' · <a href="UBDEN_CORRELATION.json">Korelasyon kaydı</a></p>'+
+            '<table><thead><tr><th>Önem</th><th>Maruziyet kesişimi</th><th>Ayrıntı</th></tr></thead><tbody>'+
+            ''.join('<tr><td>'+safe(SEVERITIES.get(c.get('severity'),'Bilgi'))+'</td><td>'+safe(c.get('title'))+'</td><td>'+safe(c.get('detail'))+'</td></tr>'
+                    for c in corr.get('correlations',[]))+'</tbody></table>')
+        chains=corr.get('attack_chains',[])
+        if chains:
+            correlation_html+='<h3>Olası saldırı zincirleri — analist doğrulaması gerekir</h3>'+''.join(
+                '<p><b>'+safe(ch.get('name'))+'</b> — olasılık: '+safe(ch.get('likelihood'))+' · etki: '+safe(ch.get('impact'))+'</p><ol>'+
+                ''.join('<li>'+safe(s)+'</li>' for s in ch.get('steps',[]))+'</ol>' for ch in chains)
+        if corr.get('combined_actions'):
+            correlation_html+=('<h3>Öncelikli birleşik aksiyonlar</h3><table><thead><tr><th>Öncelik</th><th>Aksiyon</th><th>Gerekçe / efor</th></tr></thead><tbody>'+
+                ''.join('<tr><td>'+safe(a.get('priority'))+'</td><td>'+safe(a.get('action'))+'</td><td>'+safe(a.get('rationale'))+' · efor: '+safe(a.get('effort'))+'</td></tr>'
+                        for a in corr['combined_actions'])+'</tbody></table>')
     insights=json.loads((root/'UBDEN_INSIGHTS.json').read_text(encoding='utf-8')) if (root/'UBDEN_INSIGHTS.json').is_file() else {}
     preflight=json.loads((root/'PREFLIGHT.json').read_text(encoding='utf-8')) if (root/'PREFLIGHT.json').is_file() else {}
     preflight_html=''
@@ -1031,13 +1161,12 @@ def html_report(root,meta,steps,hosts,findings,review,report_errors=None):
             '<h3>CVSS önerileri</h3><table><thead><tr><th>Bulgu</th><th>Vektör</th><th>Taban puan</th></tr></thead><tbody>'+
             ''.join('<tr><td>'+safe(item.get('finding_id',''))+'</td><td>'+safe(item.get('vector',''))+'</td><td>'+safe(item.get('base_score',''))+'</td></tr>' for item in insights.get('cvss_suggestions',[]))+'</tbody></table>'+
             '<table><thead><tr><th>Bulgu</th><th>Varlık</th><th>Önerilen düzeltme</th></tr></thead><tbody>'+''.join('<tr><td>'+safe(', '.join(item['findings']))+'</td><td>'+safe(', '.join(item['assets'][:6]))+'</td><td>'+safe(item['recommendation'])+'</td></tr>' for item in insights.get('remediation',[]))+'</tbody></table>')
-    doc=doc.replace('<h2>Analist bulguları</h2>',risk_html+priority_html+network_html+ad_html+coverage_html+preflight_html+insight_html+analyst_html+'<h2>Analist bulguları</h2>')
-    doc=doc.replace('<h2>Çalışma günlüğü</h2>',device_html+'<h2>Çalışma günlüğü</h2>')
+    doc=_splice(doc,'<h2>Analist bulguları</h2>',correlation_html+risk_html+priority_html+network_html+ad_html+coverage_html+preflight_html+insight_html+analyst_html+'<h2>Analist bulguları</h2>')
+    doc=_splice(doc,'<h2>Çalışma günlüğü</h2>',device_html+'<h2>Çalışma günlüğü</h2>')
     if (root/'STEP_AUDIT.json').is_file():
-        doc=doc.replace('<h2>Çalışma günlüğü</h2>',
+        doc=_splice(doc,'<h2>Çalışma günlüğü</h2>',
             '<p class="notice">Önceki adım durumları ham kanıta göre yeniden değerlendirildi. Orijinal steps.json korunmuştur. <a href="STEP_AUDIT.json">Yeniden değerlendirme kaydı</a></p><h2>Çalışma günlüğü</h2>')
-    doc=doc.replace('</style></head>', '.riskbars{max-width:700px}.riskrow{display:grid;grid-template-columns:70px 1fr 32px;gap:12px;align-items:center;margin:7px 0}.risktrack{height:12px;background:#edf1f6;border-radius:7px}.risktrack i{height:12px;display:block;border-radius:7px}</style></head>')
-    doc=doc.replace('Kimlik doğrulamalı iş akışları ve manuel istismar doğrulaması bu çıktıda yer almaz.', 'Otomatik kimlikli erişim kontrolü yalnızca durum kodlarını karşılaştırır. İnsan tarafından yapılan testler yalnızca yukarıdaki manuel test kayıtlarıyla belgelenmişse bu rapora dahildir.')
+    doc=_splice(doc,'</style></head>', '.riskbars{max-width:700px}.riskrow{display:grid;grid-template-columns:70px 1fr 32px;gap:12px;align-items:center;margin:7px 0}.risktrack{height:12px;background:#edf1f6;border-radius:7px}.risktrack i{height:12px;display:block;border-radius:7px}</style></head>')
     if not (root/'MANUEL_TEST_PLANI.md').is_file():
         doc=doc.replace('<a href="MANUEL_TEST_PLANI.md">manuel test planını</a>','manuel test planını')
     (root/'REPORT.html').write_text(doc,encoding='utf-8')
@@ -1063,6 +1192,10 @@ def main():
     write_coverage(root,meta,steps,review)
     plan=write_plan(root,meta,steps,review,device_inventory(root),findings)
     write_insights(root,meta,steps,findings,review)
+    try:
+        CORR.write(root,meta,hosts,findings,device_inventory(root),ad_result(root))
+    except (OSError,ValueError,TypeError) as exc:
+        print(f'Korelasyon üretilemedi: {type(exc).__name__}: {exc}',file=sys.stderr)
     errors={}
     for filename,executive in (('YONETICI_OZETI.pdf',True),('TEKNIK_RAPOR.pdf',False)):
         temp=root/('.'+filename+'.pending.pdf')
