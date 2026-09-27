@@ -28,6 +28,7 @@ CONTROLS = (
     ("AUTH-SESSION", "Kimlik", "Test hesabıyla erişim karşılaştırması", ("auth_",)),
     ("AUTH-ROLE", "Kimlik", "Rol ve nesne erişimi karşılaştırması", ("role_",)),
     ("AUTH-SSH", "Kimlik", "SSH test hesabı parola kontrolü", ("ssh_password_",)),
+    ("AUTH-DEFAULT", "Kimlik", "Varsayılan kimlik denemesi (opt-in)", ("default_cred",)),
     ("AD-READ", "Etki alanı", "Salt okunur AD envanteri", ("ad_assessment", "ad_rootdse")),
     ("BROWSER", "Web", "Ayrı test tarayıcısı", ("browser_",)),
     ("WIFI", "Kablosuz", "802.11 donanım ve görev kontrolleri", ("wireless_",)),

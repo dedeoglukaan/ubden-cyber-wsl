@@ -36,7 +36,7 @@ def main():
             "profile": "network",
             "max_rate": 250,
             "top_ports": 1000,
-            "tool_version": "UBDEN 4.8.3",
+            "tool_version": "UBDEN 5.0.0",
             "status": "example_only",
             "started_at": "2026-09-24T09:00:00+00:00",
             "finished_at": "2026-09-24T09:30:00+00:00",

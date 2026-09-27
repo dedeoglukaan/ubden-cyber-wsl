@@ -47,6 +47,8 @@ CWE_RULES = (
     ('asrep', 'CWE-522 · Yetersiz korunan kimlik bilgileri'),
     ('cracked', 'CWE-521 · Zayıf parola gereksinimleri'),
     ('zayıf parola', 'CWE-521 · Zayıf parola gereksinimleri'),
+    ('varsayılan/zayıf kimlik', 'CWE-1392 · Varsayılan kimlik bilgisi kullanımı'),
+    ('varsayılan kimlik', 'CWE-1392 · Varsayılan kimlik bilgisi kullanımı'),
     ('adcs', 'CWE-295 · Hatalı sertifika doğrulaması'),
     ('telnet', 'CWE-319 · Hassas bilginin şifresiz iletimi'),
     ('ftp servisi', 'CWE-319 · Hassas bilginin şifresiz iletimi'),
@@ -611,6 +613,20 @@ def read_data(root):
                              'description':'Tek salt okunur sysDescr sorgusuna SNMPv1/public yanıtı alındı. Erişim sınırları ve yanıtın kaynak cihazı analistçe doğrulanmalıdır.',
                              'impact':'Varsayılan toplulukla cihaz ve sürüm bilgisi edinilebilir; SNMPv1 trafik şifrelemez.',
                              'recommendation':'SNMPv1/v2c ve varsayılan toplulukları kapatın; gerekliyse SNMPv3, erişim kontrolü ve sınırlandırılmış yönetim ağı kullanın.',
+                             'evidence':str(path.relative_to(root))})
+    for path in sorted((root/'targets').glob('*/raw/cred_default_*.json')) if (root/'targets').exists() else []:
+        try:
+            item=json.loads(path.read_text(encoding='utf-8'))
+        except (OSError,ValueError,TypeError):
+            continue
+        if not isinstance(item,dict) or not item.get('valid'):
+            continue
+        service=str(item.get('service','')).upper()
+        observations.append({'title':f'{service} varsayılan/zayıf kimlik bilgisi geçerli',
+                             'severity':'high','asset':f"{item.get('ip','')}:{item.get('port','')}",
+                             'description':f"Kamuya açık üretici varsayılan kimlik bilgisi geçerli göründü (kullanıcı: {item.get('username','')}). Parola görev dosyasına yazılmadı; analist doğrulamalı ve iş etkisini kaydetmelidir.",
+                             'impact':'Varsayılan/zayıf kimlik bilgisiyle cihaz veya servis yönetimi ele geçirilebilir.',
+                             'recommendation':'Varsayılan hesabı devre dışı bırakın veya güçlü, benzersiz parolayla değiştirin; mümkünse MFA ve yönetim erişim sınırı ekleyin.',
                              'evidence':str(path.relative_to(root))})
     deduplicated={}
     for item in observations:

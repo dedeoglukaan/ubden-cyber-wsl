@@ -88,7 +88,7 @@ def _facts(meta: dict, hosts: list, findings: list, devices: dict, ad: dict) -> 
     return {
         "remote": remote, "database": database, "ad_hosts": ad_hosts,
         "ad_present": bool(ad) or bool(ad_hosts),
-        "weak_cred": has("cracked", "zayıf parola"),
+        "weak_cred": has("cracked", "zayıf parola", "varsayılan/zayıf kimlik", "varsayılan kimlik"),
         "ad_cred": has("kerberoast", "asrep", "adcs"),
         "default_snmp": has("public toplulu", "snmpv1"),
         "legacy_tls": has("sslv3", "tlsv1", "protokolü kabul"),

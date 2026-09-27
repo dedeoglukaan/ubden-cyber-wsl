@@ -39,10 +39,11 @@ from service_probes import web_extras, domain_recon, network_extras, snmp_extras
 from credential_assessment import run_ssh as run_ssh_passwords
 from sql_discovery import discover as discover_sql_browser
 from rootdse_probe import discover as discover_rootdse
+import credential_probes
 from environment_doctor import inspect as inspect_environment
 
 ROOT = Path(__file__).resolve().parent
-VERSION = "4.8.3"
+VERSION = "5.0.0"
 BASELINE = ROOT / "templates" / "baseline"
 MAX_SCOPED_ADDRESSES = 1024
 HOST_RE = re.compile(r"(?=^.{1,253}$)(?!-)[a-z0-9-]{1,63}(?<!-)(?:\.(?!-)[a-z0-9-]{1,63}(?<!-))+", re.I)
@@ -1149,6 +1150,7 @@ def scan_target(target, meta, root, events, credentials=(), index=1, total=1,
         discover_rootdse(assets,discovered_ports,raw,events)
         network_extras(assets,discovered_ports,raw,events,command)
         snmp_extras(assets,raw,events,command)
+        credential_probes.run(target,assets,discovered_ports,raw,events,meta)
         if 'supplemental_network' in meta.get('enabled_modules',[]):
             run_supplemental(target,assets,discovered_ports,raw,events,command,profile)
         for item in ssh_tests:
@@ -1620,15 +1622,20 @@ def collect_meta(args):
     wireless_spec=collect_wireless()
     ai_config=configure_ai()
     top_ports=4 if profile=='web' else min(max(args.top_ports if args.top_ports is not None else (100 if profile=='external' else 1000),1),1000)
+    default_cred_test=(profile in ('network','full') and UI.menu(
+        'Varsayılan kimlik denemesi (YALNIZ yazılı yetkiyle; hesap kilitlenme riski)',
+        [('0','Kapalı (önerilen)'),
+         ('1','Aç: tespit edilen markalarda kamuya açık varsayılanları sınırlı, tek denemeyle sına')],'0')=='1')
     enabled_modules=['core_scan']
     if profile in ('network','full'): enabled_modules.append('supplemental_network')
+    if default_cred_test: enabled_modules.append('default_cred_test')
     if ad_spec.get('mode')!='disabled': enabled_modules.append('ad')
     if browser_enabled: enabled_modules.append('browser')
     if wireless_spec.get('enabled'): enabled_modules.append('wireless')
     if ssh_specs: enabled_modules.append('ssh_test_account')
-    meta={"schema":8,"id":str(uuid.uuid4()),"client":client,"project":project,"authorization_reference":auth,"product":"UBDEN Cyber Security Systems","product_owner":"UBDEN®","tester":tester,"targets":targets,"exclusions":exclusions,"frozen_dns":scope_dns,"address_budget":address_budget,"selected_interfaces":selected_interfaces,"network_mode":os.environ.get('UBDEN_WSL_NETWORK_MODE','unknown'),"profile":profile,"enabled_modules":enabled_modules,"allowed_techniques":enabled_modules,"auth_probes":auth_specs,"role_scenarios":role_scenarios,"password_probes":ssh_specs,"ad":ad_spec,"browser_enabled":browser_enabled,"wireless":wireless_spec,"host_snapshot":host_snapshot,"limits":{"max_online_failures_per_test_account_service":2,"max_exploit_attempts_per_finding_host":1,"wireless_capture_seconds":600,"wireless_offline_seconds":1800,"wireless_deauth_events":3,"wireless_wps_attempts":10},"ai_enabled":bool(ai_config),"ai_raw_evidence":bool(ai_config and ai_config['raw']),"nuclei_templates":template_dir,"nuclei_profile":nuclei_profile,"nuclei_template_count":len(template_inventory(template_dir)) if template_dir else 0,"max_rate":min(max(args.max_rate,1),500),"top_ports":top_ports,"started_at":now(),"status":"planned","tool_version":VERSION}
+    meta={"schema":8,"id":str(uuid.uuid4()),"client":client,"project":project,"authorization_reference":auth,"product":"UBDEN Cyber Security Systems","product_owner":"UBDEN®","tester":tester,"targets":targets,"exclusions":exclusions,"frozen_dns":scope_dns,"address_budget":address_budget,"selected_interfaces":selected_interfaces,"network_mode":os.environ.get('UBDEN_WSL_NETWORK_MODE','unknown'),"profile":profile,"enabled_modules":enabled_modules,"allowed_techniques":enabled_modules,"auth_probes":auth_specs,"role_scenarios":role_scenarios,"password_probes":ssh_specs,"ad":ad_spec,"browser_enabled":browser_enabled,"default_cred_test":default_cred_test,"wireless":wireless_spec,"host_snapshot":host_snapshot,"limits":{"max_online_failures_per_test_account_service":2,"max_exploit_attempts_per_finding_host":1,"wireless_capture_seconds":600,"wireless_offline_seconds":1800,"wireless_deauth_events":3,"wireless_wps_attempts":10},"ai_enabled":bool(ai_config),"ai_raw_evidence":bool(ai_config and ai_config['raw']),"nuclei_templates":template_dir,"nuclei_profile":nuclei_profile,"nuclei_template_count":len(template_inventory(template_dir)) if template_dir else 0,"max_rate":min(max(args.max_rate,1),500),"top_ports":top_ports,"started_at":now(),"status":"planned","tool_version":VERSION}
     UI.section(4,5,"Ön izleme ve onay","Gerçek trafik başlamadan önce kapsamı kontrol edin")
-    UI.preview([("Müşteri",client),("Yetki",auth),("Ürün","UBDEN Cyber Security Systems"),("Test ekibi",tester),("Hedefler",", ".join(targets)),("Hariç",", ".join(exclusions) or "Yok"),("Windows adaptörleri",", ".join(map(str,selected_interfaces)) or "Köprü yok"),("Modüller",", ".join(enabled_modules)),("SSH test hesapları",str(len(ssh_specs))),("Profil",profile),("Kimlikli kontrol",", ".join(f"{x['target']} / {x['role']} ({x['method']})" for x in auth_specs) or "Atlanacak"),("Rol/IDOR",str(len(role_scenarios))+" salt okunur senaryo"),("AD",ad_spec.get('mode','disabled')),("Windows tarayıcı",'Açık' if browser_enabled else 'Kapalı'),("Ham Wi-Fi",'Açık' if wireless_spec['enabled'] else 'Kapalı'),("Claude",'Sınırlı ham kanıt' if ai_config and ai_config['raw'] else 'Anonim özet' if ai_config else 'Kapalı'),("Nuclei",f"{nuclei_profile} / {meta['nuclei_template_count']} şablon" if template_dir else "Atlanacak"),("Hız/port",f"{meta['max_rate']} paket/sn, {meta['top_ports']} TCP portu")])
+    UI.preview([("Müşteri",client),("Yetki",auth),("Ürün","UBDEN Cyber Security Systems"),("Test ekibi",tester),("Hedefler",", ".join(targets)),("Hariç",", ".join(exclusions) or "Yok"),("Windows adaptörleri",", ".join(map(str,selected_interfaces)) or "Köprü yok"),("Modüller",", ".join(enabled_modules)),("SSH test hesapları",str(len(ssh_specs))),("Profil",profile),("Kimlikli kontrol",", ".join(f"{x['target']} / {x['role']} ({x['method']})" for x in auth_specs) or "Atlanacak"),("Rol/IDOR",str(len(role_scenarios))+" salt okunur senaryo"),("AD",ad_spec.get('mode','disabled')),("Windows tarayıcı",'Açık' if browser_enabled else 'Kapalı'),("Varsayılan kimlik denemesi",'Açık (sınırlı)' if default_cred_test else 'Kapalı'),("Ham Wi-Fi",'Açık' if wireless_spec['enabled'] else 'Kapalı'),("Claude",'Sınırlı ham kanıt' if ai_config and ai_config['raw'] else 'Anonim özet' if ai_config else 'Kapalı'),("Nuclei",f"{nuclei_profile} / {meta['nuclei_template_count']} şablon" if template_dir else "Atlanacak"),("Hız/port",f"{meta['max_rate']} paket/sn, {meta['top_ports']} TCP portu")])
     required=["nmap"]
     if profile != "network": required += ["curl","sslscan"]
     if profile in ("external","full"): required += ["dig","whois"]

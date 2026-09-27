@@ -22,6 +22,14 @@ UBDEN, Windows ağ ortamı ile Kali araçlarını tek bir görev akışında bir
 
 Araç kataloğu 83 aracı kurulum, sürüm, yetenek ve görevde kullanım durumuyla izler. Hangi kontrollerin çalıştığı veya hangi ön koşul nedeniyle atlandığı raporda ayrı gösterilir. Cihaz envanteri Nmap OUI verisini ve Kali'nin `ieee-data` paketindeki IEEE MAC kayıtlarını kullanır; kurulum resmî IEEE kaynağından güncellemeyi de dener. AD, SQL Server, paylaşım, web ve ağ geçidi rol adayları ayrı gerekçelerle görünür; adaylar müşteri envanteriyle doğrulanır. SQL Browser yanıtı veren kapsam içi adreslerde adlandırılmış SQL örnekleri ve portları ayrıca listelenir.
 
+### v5 yenilikleri
+
+- **Platform ve teknoloji tespiti:** Sanallaştırma (VMware ESXi/vCenter, Proxmox, Hyper-V), ağ güvenliği (FortiGate, Sophos, Cisco IOS-XE/ASA/IOS, MikroTik, Ubiquiti, Zyxel, pfSense, OPNsense, Aruba, Ruijie), depolama/yönetim (Synology, QNAP, TrueNAS, Dell iDRAC, HPE iLO, IPMI/BMC) ve kamera (Dahua, Hikvision, Axis, Avenir, Neutron) platformları; gözlenen sürüm, yönetim portları ve doğrulanacak üretici/CVE danışmalarıyla.
+- **Canlı NVD CVE zenginleştirme:** Güvenilir CPE eşlemesi olan platform+sürümler için NVD 2.0'dan CVE adayları (çevrimdışı/hata durumunda raporu bloke etmez; adaylar analist doğrulaması bekler).
+- **Çapraz-katman maruziyet korelasyonu:** Dış e-posta duruşu (DMARC/SPF), keşfedilen kullanıcı adları ve iç ağ yüzeyi birleştirilerek adlandırılmış saldırı zincirleri, maruziyet indeksi ve saldırı-yüzeyi grafiği. İnternete açık yönetim düzlemi, veritabanı, uzaktan erişim, NAS ve kamera için ayrı maruziyet kuralları.
+- **CWE eşlemesi** ve geliştirilmiş görsel rapor (risk göstergeleri, KPI kutuları, ilişki grafiği, koyu siber kapak).
+- **Varsayılan kimlik denemesi (opt-in, sınırlı):** Yalnız operatör açıkça etkinleştirirse ve yazılı yetkili kapsamda; tespit edilen markalarda kamuya açık üretici varsayılanları servis başına sınırlı ve tek denemeyle bellek içinde sınanır. Sözlük/kaba-kuvvet değildir; parola görev dosyasına veya rapora yazılmaz. Telnet, FTP, SSH ve HTTP Basic servisleri kapsanır.
+
 ## Teste hazırlık: müşteriden gereken bilgiler
 
 Müşterinin mevcut bir Excel/CSV envanteri veya ağ çizimi varsa olduğu gibi paylaşması yeterlidir. Bilinmeyen alanlar `bilinmiyor` yazılabilir; test ekibi eksik veriyi görev başlangıcında işaretler. Şifreleri e-postaya veya bu tabloya koymayın; test hesapları oluşturulduğunda parolalar ayrı güvenli kanaldan iletilir.
@@ -88,16 +96,16 @@ UBDEN Cyber Security Systems test ekibi
 PowerShell:
 
 ```powershell
-irm 'https://raw.githubusercontent.com/ubden/ubden-cyber-wsl/v4.8.3-wsl.9/bootstrap.ps1' | iex
+irm 'https://raw.githubusercontent.com/ubden/ubden-cyber-wsl/v5.0.0-wsl.1/bootstrap.ps1' | iex
 ```
 
 CMD:
 
 ```cmd
-powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "irm 'https://raw.githubusercontent.com/ubden/ubden-cyber-wsl/v4.8.3-wsl.9/bootstrap.ps1' | iex"
+powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "irm 'https://raw.githubusercontent.com/ubden/ubden-cyber-wsl/v5.0.0-wsl.1/bootstrap.ps1' | iex"
 ```
 
-Komut [sürüm etiketli başlangıç betiğini](https://github.com/ubden/ubden-cyber-wsl/blob/v4.8.3-wsl.9/bootstrap.ps1) çalıştırır. Betik kaynak paketini indirir, mevcut Kali WSL kurulumunu kullanır veya eksikse kurar, bağımlılıkları hazırlar ve görev sihirbazını açar. Windows yeniden başlatması gerekirse işlem sonraki oturumda devam eder. Kurulum yönetici izni isteyebilir.
+Komut [sürüm etiketli başlangıç betiğini](https://github.com/ubden/ubden-cyber-wsl/blob/v5.0.0-wsl.1/bootstrap.ps1) çalıştırır. Betik kaynak paketini indirir, mevcut Kali WSL kurulumunu kullanır veya eksikse kurar, bağımlılıkları hazırlar ve görev sihirbazını açar. Windows yeniden başlatması gerekirse işlem sonraki oturumda devam eder. Kurulum yönetici izni isteyebilir.
 
 Kurulum önce mirrored ağı ve DNS tünellemeyi dener. Mirrored yapılandırması bilgisayardaki **tüm WSL 2 dağıtımlarını** etkiler. Mirrored başlatılamazsa Kali IPv4 adresi ve varsayılan rota doğrulanarak NAT ağında devam edilir. IP tabanlı LAN testlerinde Windows adaptör rotası ve Kali rotası her hedef için ayrıca denetlenir; hedefe erişim doğrulanmadan test başarılı sayılmaz. NAT modunda Kali fiziksel Windows ağ kartlarını doğrudan görmez. Ham katman-2, yayın trafiği, pasif fiziksel ağ yakalama ve bazı VPN yolları için ayrı uygunluk denetimi gerekir. Kullanılan ağ modu görev raporuna yazılır.
 
@@ -189,10 +197,10 @@ Resmî Kali `wordlists` paketi WSL kurulumuna dahildir. Sözlükler yalnız mü�
 
 ## Kurulum ve ortam yönetimi
 
-Tek satırlık kurulumdan sonra Windows giriş betiği `%LOCALAPPDATA%\Programs\UBDEN-Cyber\v4.8.3-wsl.9\ubden-wsl.ps1` konumundadır:
+Tek satırlık kurulumdan sonra Windows giriş betiği `%LOCALAPPDATA%\Programs\UBDEN-Cyber\v5.0.0-wsl.1\ubden-wsl.ps1` konumundadır:
 
 ```powershell
-$ubden = Join-Path $env:LOCALAPPDATA 'Programs\UBDEN-Cyber\v4.8.3-wsl.9\ubden-wsl.ps1'
+$ubden = Join-Path $env:LOCALAPPDATA 'Programs\UBDEN-Cyber\v5.0.0-wsl.1\ubden-wsl.ps1'
 & $ubden -Action status
 & $ubden -Action run
 ```
@@ -202,6 +210,6 @@ $ubden = Join-Path $env:LOCALAPPDATA 'Programs\UBDEN-Cyber\v4.8.3-wsl.9\ubden-ws
 **Tam WSL imhası:** `destroy`, raporları WSL dışındaki seçilen klasöre SHA-256 ile doğrulayarak aktarır ve açık son onaydan sonra **bilgisayardaki tüm WSL dağıtımlarını**, Ubuntu dahil, kalıcı olarak kaldırır. Bu işlem yalnız tüm WSL ortamının kaldırılması istendiğinde kullanılmalıdır.
 
 ```powershell
-$ubden = Join-Path $env:LOCALAPPDATA 'Programs\UBDEN-Cyber\v4.8.3-wsl.9\ubden-wsl.ps1'
+$ubden = Join-Path $env:LOCALAPPDATA 'Programs\UBDEN-Cyber\v5.0.0-wsl.1\ubden-wsl.ps1'
 & $ubden -Action destroy -ExportTo 'D:\UBDEN-Rapor-Devir'
 ```
