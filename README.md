@@ -88,20 +88,22 @@ UBDEN Cyber Security Systems test ekibi
 PowerShell:
 
 ```powershell
-irm 'https://raw.githubusercontent.com/ubden/ubden-cyber-wsl/v4.8.3-wsl.2/bootstrap.ps1' | iex
+irm 'https://raw.githubusercontent.com/ubden/ubden-cyber-wsl/v4.8.3-wsl.3/bootstrap.ps1' | iex
 ```
 
 CMD:
 
 ```cmd
-powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "irm 'https://raw.githubusercontent.com/ubden/ubden-cyber-wsl/v4.8.3-wsl.2/bootstrap.ps1' | iex"
+powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "irm 'https://raw.githubusercontent.com/ubden/ubden-cyber-wsl/v4.8.3-wsl.3/bootstrap.ps1' | iex"
 ```
 
-Komut [sürüm etiketli başlangıç betiğini](https://github.com/ubden/ubden-cyber-wsl/blob/v4.8.3-wsl.2/bootstrap.ps1) çalıştırır. Betik kaynak paketini indirir, mevcut Kali WSL kurulumunu kullanır veya eksikse kurar, bağımlılıkları hazırlar ve görev sihirbazını açar. Windows yeniden başlatması gerekirse işlem sonraki oturumda devam eder. Kurulum yönetici izni isteyebilir.
+Komut [sürüm etiketli başlangıç betiğini](https://github.com/ubden/ubden-cyber-wsl/blob/v4.8.3-wsl.3/bootstrap.ps1) çalıştırır. Betik kaynak paketini indirir, mevcut Kali WSL kurulumunu kullanır veya eksikse kurar, bağımlılıkları hazırlar ve görev sihirbazını açar. Windows yeniden başlatması gerekirse işlem sonraki oturumda devam eder. Kurulum yönetici izni isteyebilir.
 
 WSL için mirrored ağ ve DNS tünelleme ayarları uygulanır. Bu ayarlar bilgisayardaki **tüm WSL 2 dağıtımlarını** etkiler. UBDEN kurulum sırasında Windows ve Kali ağ görünürlüğünü denetler; VPN ve fiziksel adaptör davranışı kullanılan sürücü ve ağ yapılandırmasına bağlıdır.
 
 Windows kurulumunda `HypervisorPlatform` yeni etkinleştirildiyse **Windows'u yeniden başlatın**. UBDEN yeniden başlatma gerektiğini ağ testine geçmeden bildirir ve kurulumu sonraki oturum için kaydeder. Yeniden başlatmadan WSL dağıtımı açılmayabilir.
+
+Mirrored WSL `0x8007054f` hatası verirse ve Windows'un IPv4/IPv6 TCP dinamik port aralığı tam olarak `1024–65534` ise kurulum önce eski değerleri kaydeder, iki TCP aralığını Windows varsayılanı olan `49152–65535` aralığına alıp ağı yeniden doğrular. Doğrulama başarısızsa eski değerleri geri yüklemeyi dener; başarılı onarım `destroy` sırasında geri alınır. Geri yükleme yapılamazsa kayıt korunur ve işlem eksik olarak bildirilir. UDP aralıklarına dokunulmaz. Bu değişiklik Windows genelindeki yeni TCP bağlantılarının kaynak port seçimini etkiler.
 
 ## Bir görev nasıl yürür?
 
@@ -165,10 +167,10 @@ Resmî Kali `wordlists` paketi WSL kurulumuna dahildir. Sözlükler yalnız mü�
 
 ## Kurulum ve ortam yönetimi
 
-Tek satırlık kurulumdan sonra Windows giriş betiği `%LOCALAPPDATA%\Programs\UBDEN-Cyber\v4.8.3-wsl.2\ubden-wsl.ps1` konumundadır:
+Tek satırlık kurulumdan sonra Windows giriş betiği `%LOCALAPPDATA%\Programs\UBDEN-Cyber\v4.8.3-wsl.3\ubden-wsl.ps1` konumundadır:
 
 ```powershell
-$ubden = Join-Path $env:LOCALAPPDATA 'Programs\UBDEN-Cyber\v4.8.3-wsl.2\ubden-wsl.ps1'
+$ubden = Join-Path $env:LOCALAPPDATA 'Programs\UBDEN-Cyber\v4.8.3-wsl.3\ubden-wsl.ps1'
 & $ubden -Action status
 & $ubden -Action run
 ```
@@ -178,6 +180,6 @@ $ubden = Join-Path $env:LOCALAPPDATA 'Programs\UBDEN-Cyber\v4.8.3-wsl.2\ubden-ws
 **Tam WSL imhası:** `destroy`, raporları WSL dışındaki seçilen klasöre SHA-256 ile doğrulayarak aktarır ve açık son onaydan sonra **bilgisayardaki tüm WSL dağıtımlarını**, Ubuntu dahil, kalıcı olarak kaldırır. Bu işlem yalnız tüm WSL ortamının kaldırılması istendiğinde kullanılmalıdır.
 
 ```powershell
-$ubden = Join-Path $env:LOCALAPPDATA 'Programs\UBDEN-Cyber\v4.8.3-wsl.2\ubden-wsl.ps1'
+$ubden = Join-Path $env:LOCALAPPDATA 'Programs\UBDEN-Cyber\v4.8.3-wsl.3\ubden-wsl.ps1'
 & $ubden -Action destroy -ExportTo 'D:\UBDEN-Rapor-Devir'
 ```

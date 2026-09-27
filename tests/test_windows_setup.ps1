@@ -6,6 +6,7 @@ $tree = [System.Management.Automation.Language.Parser]::ParseFile($scriptPath, [
 if ($parseErrors.Count) { throw 'ubden-wsl.ps1 PowerShell sözdizimi geçersiz' }
 foreach ($name in @('Read-State', 'Save-State', 'Register-SetupResume',
                     'Set-MirroredConfig', 'Ensure-MirroredNetwork',
+                    'Get-DynamicTcpRange', 'Set-DynamicTcpRange', 'Repair-MirroredTcpRange',
                     'Copy-VerifiedTree', 'Assert-VerifiedManifest',
                     'Assert-ExportDestination', 'Invoke-Setup')) {
     $node = $tree.Find({ param($item)
@@ -67,6 +68,57 @@ try {
         (Read-State).config_managed) {
         throw 'Başarısız mirrored ağ denetimi önceki yapılandırmayı geri getirmedi'
     }
+
+    $script:tcpRanges = @{
+        ipv4 = [pscustomobject]@{ start = 1024; count = 64511 }
+        ipv6 = [pscustomobject]@{ start = 1024; count = 64511 }
+    }
+    function netsh.exe {
+        $family = [string]$args[1]
+        if ($args[2] -eq 'show') {
+            $range = $script:tcpRanges[$family]
+            $global:LASTEXITCODE = 0
+            "Start Port : $($range.start)"
+            "Number of Ports : $($range.count)"
+        } elseif ($args[2] -eq 'set') {
+            $startText = @($args | Where-Object { $_ -match '^startport=' })[0]
+            $countText = @($args | Where-Object { $_ -match '^numberofports=' })[0]
+            $start = [int]($startText -replace '^startport=', '')
+            $count = [int]($countText -replace '^numberofports=', '')
+            if ($script:failNextIpv6Default -and $family -eq 'ipv6' -and $start -eq 49152) {
+                $script:failNextIpv6Default = $false
+                $global:LASTEXITCODE = 1
+                return
+            }
+            $script:tcpRanges[$family] = [pscustomobject]@{ start = $start; count = $count }
+            $global:LASTEXITCODE = 0
+        } else { throw 'Unexpected netsh call in test' }
+    }
+    function Ensure-MirroredNetwork { $script:mirroredCalls++ }
+    $script:mirroredCalls = 0
+    if (-not (Repair-MirroredTcpRange) -or $script:mirroredCalls -ne 1 -or
+        $script:tcpRanges.ipv4.start -ne 49152 -or $script:tcpRanges.ipv6.start -ne 49152 -or
+        -not (Read-State).tcp_range_managed) {
+        throw 'WSL TCP araligi onarimi veya durum kaydi basarisiz'
+    }
+    Set-DynamicTcpRange ipv4 1024 64511
+    Set-DynamicTcpRange ipv6 1024 64511
+    function Ensure-MirroredNetwork { throw 'simulated post-repair failure' }
+    $repairFailed = $false
+    try { Repair-MirroredTcpRange | Out-Null } catch { $repairFailed = $true }
+    if (-not $repairFailed -or $script:tcpRanges.ipv4.start -ne 1024 -or
+        $script:tcpRanges.ipv6.start -ne 1024 -or (Read-State).tcp_range_managed) {
+        throw 'Basarisiz WSL onarimi Windows TCP araligini geri almadi'
+    }
+    $script:failNextIpv6Default = $true
+    $partialFailed = $false
+    try { Repair-MirroredTcpRange | Out-Null } catch { $partialFailed = $true }
+    if (-not $partialFailed -or $script:tcpRanges.ipv4.start -ne 1024 -or
+        $script:tcpRanges.ipv6.start -ne 1024 -or (Read-State).tcp_range_managed) {
+        throw 'IPv6 degisikligi basarisizken IPv4 geri alinmadi'
+    }
+    Set-DynamicTcpRange ipv4 49152 16384
+    Set-DynamicTcpRange ipv6 49152 16384
 
     $source = Join-Path $scratch 'source'
     $destination = Join-Path $scratch 'export'

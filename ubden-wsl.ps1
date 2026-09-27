@@ -143,6 +143,72 @@ function Ensure-Kali {
     }
 }
 
+function Get-DynamicTcpRange([ValidateSet('ipv4','ipv6')][string] $Family) {
+    $lines = @(& netsh.exe interface $Family show dynamicportrange protocol=tcp)
+    if ($LASTEXITCODE -ne 0) { throw "Windows $Family TCP dinamik port araligi okunamadi" }
+    $values = @($lines | ForEach-Object {
+        if ($_ -match ':\s*(\d+)\s*$') { [int]$Matches[1] }
+    })
+    if ($values.Count -ne 2 -or $values[0] -lt 1 -or $values[1] -lt 255 -or
+        ($values[0] + $values[1]) -gt 65536) {
+        throw "Windows $Family TCP dinamik port araligi cozumlenemedi"
+    }
+    return [pscustomobject]@{ start = $values[0]; count = $values[1] }
+}
+
+function Set-DynamicTcpRange([ValidateSet('ipv4','ipv6')][string] $Family,
+                              [int] $Start, [int] $Count) {
+    if ($Start -lt 1024 -or $Count -lt 255 -or ($Start + $Count) -gt 65536) {
+        throw "Gecersiz $Family TCP port araligi"
+    }
+    & netsh.exe interface $Family set dynamicportrange protocol=tcp `
+        "startport=$Start" "numberofports=$Count" | Out-Null
+    if ($LASTEXITCODE -ne 0) { throw "Windows $Family TCP dinamik port araligi degistirilemedi" }
+    $actual = Get-DynamicTcpRange $Family
+    if ($actual.start -ne $Start -or $actual.count -ne $Count) {
+        throw "Windows $Family TCP dinamik port araligi dogrulanamadi"
+    }
+}
+
+function Repair-MirroredTcpRange {
+    $v4 = Get-DynamicTcpRange ipv4
+    $v6 = Get-DynamicTcpRange ipv6
+    # Restrict automatic repair to the exact, documented WSL failure pattern.
+    if ($v4.start -ne 1024 -or $v4.count -ne 64511 -or
+        $v6.start -ne 1024 -or $v6.count -ne 64511) { return $false }
+    Write-Host 'Windows TCP dinamik port araligi mirrored WSL ile cakismis olabilir.'
+    Write-Host 'IPv4 ve IPv6 TCP araligi Windows varsayilanina (49152-65535) alinip WSL yeniden denenecek.'
+    $state = Read-State
+    $state | Add-Member -NotePropertyName tcp_range_original_v4 -NotePropertyValue $v4 -Force
+    $state | Add-Member -NotePropertyName tcp_range_original_v6 -NotePropertyValue $v6 -Force
+    $state | Add-Member -NotePropertyName tcp_range_managed -NotePropertyValue $true -Force
+    Save-State $state
+    try {
+        Set-DynamicTcpRange ipv4 49152 16384
+        Set-DynamicTcpRange ipv6 49152 16384
+        & wsl.exe --shutdown | Out-Null
+        if ($LASTEXITCODE -ne 0) { throw 'WSL yeniden baslatilamadi' }
+        Ensure-MirroredNetwork
+        Write-Host 'Windows TCP araligi onarildi; mirrored WSL dogrulandi.'
+        return $true
+    }
+    catch {
+        $failure = $_.Exception.Message
+        try {
+            Set-DynamicTcpRange ipv4 $v4.start $v4.count
+            Set-DynamicTcpRange ipv6 $v6.start $v6.count
+            $state = Read-State
+            $state | Add-Member -NotePropertyName tcp_range_managed -NotePropertyValue $false -Force
+            Save-State $state
+            & wsl.exe --shutdown | Out-Null
+        }
+        catch {
+            throw ("WSL onarimi basarisiz: $failure. TCP port araligi geri alinamadi: " + $_.Exception.Message)
+        }
+        throw "WSL onarimi basarisiz; TCP port araligi geri alindi: $failure"
+    }
+}
+
 function Test-MirroredNetwork {
     $windows = @((Get-NetIPAddress -AddressFamily IPv4 -ErrorAction SilentlyContinue |
         Where-Object { $_.AddressState -eq 'Preferred' -and $_.IPAddress -notmatch '^(127|169\.254)\.' }).IPAddress)
@@ -247,6 +313,7 @@ function Invoke-Setup {
         throw ('Windows yeniden baslatilmali: ' + $beforeNetwork.setup_pending_reboot +
             '. Yeniden baslattiktan sonra UBDEN kurulumu devam eder.')
     }
+    $networkRecovered = $false
     try { Ensure-MirroredNetwork }
     catch {
         if ($_.Exception.Message -match '0x8007054f|IPv4 adresleri eslesmiyor') {
@@ -268,7 +335,10 @@ function Invoke-Setup {
                 Register-SetupResume
                 throw 'Mirrored WSL 0x8007054f: HypervisorPlatform acildi; Windows yeniden baslatilinca setup surdurulecek'
             }
-            if ($rebootWasDone) {
+            if ($_.Exception.Message -match '0x8007054f') {
+                $networkRecovered = Repair-MirroredTcpRange
+            }
+            if ($rebootWasDone -and -not $networkRecovered) {
                 $failed = Read-State
                 $failed | Add-Member -NotePropertyName setup_pending_reboot -NotePropertyValue '' -Force
                 $failed | Add-Member -NotePropertyName setup_error `
@@ -276,11 +346,16 @@ function Invoke-Setup {
                 Save-State $failed
             }
         }
-        throw
+        if ($networkRecovered) {
+            Write-Host 'Mirrored WSL agi Windows TCP araligi onarimiyla acildi.'
+        } else {
+            throw
+        }
     }
     $state = Read-State
-    if ($state.setup_pending_reboot) {
+    if ($state.setup_pending_reboot -or $state.setup_error) {
         $state | Add-Member -NotePropertyName setup_pending_reboot -NotePropertyValue '' -Force
+        $state | Add-Member -NotePropertyName setup_error -NotePropertyValue '' -Force
         Save-State $state
     }
     $sourceFiles = @(Get-ChildItem -LiteralPath $SourceRoot -File |
@@ -325,6 +400,9 @@ function Invoke-Status {
     if ($state.setup_error) { Write-Host ('Kurulum hatasi: ' + $state.setup_error) }
     if ($state.hypervisor_platform_added) {
         Write-Host 'HypervisorPlatform: UBDEN kurulumu tarafindan acildi; destroy geri alacak'
+    }
+    if ($state.tcp_range_managed) {
+        Write-Host 'Windows TCP dinamik port araligi: UBDEN mirrored WSL icin varsayilana aldi; destroy eski degeri geri getirecek'
     }
     $shell = if (Get-Command pwsh.exe -ErrorAction SilentlyContinue) { 'pwsh.exe' } else { 'powershell.exe' }
     $snapshot = (& $shell -NoProfile -NonInteractive -ExecutionPolicy Bypass -File `
@@ -551,8 +629,26 @@ print(json.dumps(matches))
         }
         $results.Add('restored-wsl-config')
     }
+    $tcpRestoreFailed = $false
+    if ($state.tcp_range_managed) {
+        try {
+            $current4 = Get-DynamicTcpRange ipv4
+            $current6 = Get-DynamicTcpRange ipv6
+            if ($current4.start -ne 49152 -or $current4.count -ne 16384 -or
+                $current6.start -ne 49152 -or $current6.count -ne 16384) {
+                throw 'TCP dinamik port araligi kurulumdan sonra degismis; baska degisiklik ezilmedi'
+            }
+            Set-DynamicTcpRange ipv4 $state.tcp_range_original_v4.start $state.tcp_range_original_v4.count
+            Set-DynamicTcpRange ipv6 $state.tcp_range_original_v6.start $state.tcp_range_original_v6.count
+            $results.Add('restored-windows-tcp-dynamic-port-ranges')
+        }
+        catch {
+            $tcpRestoreFailed = $true
+            $failures.Add('Windows TCP port araligi geri alinamadi: ' + $_.Exception.Message)
+        }
+    }
     $expectedState = [IO.Path]::GetFullPath((Join-Path $env:LOCALAPPDATA 'UBDEN'))
-    if ((Test-Path -LiteralPath $StateRoot) -and
+    if (-not $tcpRestoreFailed -and (Test-Path -LiteralPath $StateRoot) -and
         [IO.Path]::GetFullPath($StateRoot) -eq $expectedState) {
         Remove-Item -LiteralPath $StateRoot -Recurse -Force
         $results.Add('removed-ubden-windows-state')
