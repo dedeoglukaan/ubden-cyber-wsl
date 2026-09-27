@@ -58,30 +58,51 @@ function Install-TestMachineMarker {
         }
     }
     Add-Type -AssemblyName System.Drawing
-    $width = 1920; $height = 1080
-    $bmp = New-Object System.Drawing.Bitmap($width, $height)
-    $g = [System.Drawing.Graphics]::FromImage($bmp)
-    $g.SmoothingMode = [System.Drawing.Drawing2D.SmoothingMode]::AntiAlias
-    $g.Clear([System.Drawing.Color]::FromArgb(8, 13, 27))
-    $green = New-Object System.Drawing.SolidBrush([System.Drawing.Color]::FromArgb(34, 211, 160))
-    $teal = New-Object System.Drawing.SolidBrush([System.Drawing.Color]::FromArgb(0, 185, 189))
-    $dim = New-Object System.Drawing.SolidBrush([System.Drawing.Color]::FromArgb(144, 160, 196))
-    $pen = New-Object System.Drawing.Pen([System.Drawing.Color]::FromArgb(0, 133, 138), 3)
-    $g.DrawRectangle($pen, 40, 40, ($width - 80), ($height - 80))
-    $fTitle = New-Object System.Drawing.Font('Consolas', 46, [System.Drawing.FontStyle]::Bold)
-    $fSub = New-Object System.Drawing.Font('Consolas', 26, [System.Drawing.FontStyle]::Bold)
-    $fInfo = New-Object System.Drawing.Font('Consolas', 22)
-    $fFoot = New-Object System.Drawing.Font('Consolas', 20)
-    $g.DrawString('UBDEN CYBER SECURITY', $fTitle, $green, 90, 110)
-    $g.DrawString('YETKILI PENTEST — TEST MAKINESI', $fSub, $teal, 92, 200)
-    $os = (Get-CimInstance Win32_OperatingSystem -ErrorAction SilentlyContinue).Caption
-    $info = "Host      : $env:COMPUTERNAME`nKullanici : $env:USERNAME`nISletim S.: $os`nISaret    : " + (Get-Date -Format 'yyyy-MM-dd HH:mm')
-    $g.DrawString($info, $fInfo, $dim, 92, 290)
-    $g.DrawString('https://www.ubden.com  |  security@ubden.com', $fFoot, $teal, 92, ($height - 110))
-    $g.Dispose()
     $wall = Join-Path $StateRoot 'ubden-testmachine.bmp'
-    $bmp.Save($wall, [System.Drawing.Imaging.ImageFormat]::Bmp)
-    $bmp.Dispose()
+    $assetPng = Join-Path $SourceRoot 'assets\wallpaper.png'
+    if (Test-Path -LiteralPath $assetPng) {
+        # Kaynaktaki hazir duvar kagidini kullan. SystemParametersInfo tum Windows
+        # surumlerinde guvenilir sekilde BMP ister; PNG'yi BMP'ye cevirip kaydet.
+        $img = [System.Drawing.Image]::FromFile($assetPng)
+        try {
+            $bmp = New-Object System.Drawing.Bitmap($img)
+            $bmp.Save($wall, [System.Drawing.Imaging.ImageFormat]::Bmp)
+            $bmp.Dispose()
+        }
+        finally { $img.Dispose() }
+    }
+    else {
+        # Kaynak bulunamazsa markali duvar kagidini uret (yedek).
+        $width = 1920; $height = 1080
+        $bmp = New-Object System.Drawing.Bitmap($width, $height)
+        $g = [System.Drawing.Graphics]::FromImage($bmp)
+        $g.SmoothingMode = [System.Drawing.Drawing2D.SmoothingMode]::AntiAlias
+        $g.Clear([System.Drawing.Color]::FromArgb(8, 13, 27))
+        $green = New-Object System.Drawing.SolidBrush([System.Drawing.Color]::FromArgb(34, 211, 160))
+        $teal = New-Object System.Drawing.SolidBrush([System.Drawing.Color]::FromArgb(0, 185, 189))
+        $dim = New-Object System.Drawing.SolidBrush([System.Drawing.Color]::FromArgb(144, 160, 196))
+        $pen = New-Object System.Drawing.Pen([System.Drawing.Color]::FromArgb(0, 133, 138), 3)
+        $g.DrawRectangle($pen, 40, 40, ($width - 80), ($height - 80))
+        $fTitle = New-Object System.Drawing.Font('Consolas', 46, [System.Drawing.FontStyle]::Bold)
+        $fSub = New-Object System.Drawing.Font('Consolas', 26, [System.Drawing.FontStyle]::Bold)
+        $fInfo = New-Object System.Drawing.Font('Consolas', 22)
+        $fFoot = New-Object System.Drawing.Font('Consolas', 20)
+        $g.DrawString('UBDEN CYBER SECURITY', $fTitle, $green, 90, 110)
+        $g.DrawString('YETKILI PENTEST — TEST MAKINESI', $fSub, $teal, 92, 200)
+        $os = (Get-CimInstance Win32_OperatingSystem -ErrorAction SilentlyContinue).Caption
+        $info = "Host      : $env:COMPUTERNAME`nKullanici : $env:USERNAME`nISletim S.: $os`nISaret    : " + (Get-Date -Format 'yyyy-MM-dd HH:mm')
+        $g.DrawString($info, $fInfo, $dim, 92, 290)
+        $g.DrawString('https://www.ubden.com  |  security@ubden.com', $fFoot, $teal, 92, ($height - 110))
+        $g.Dispose()
+        $bmp.Save($wall, [System.Drawing.Imaging.ImageFormat]::Bmp)
+        $bmp.Dispose()
+    }
+    # Duvar kagidini "Doldur" bicimine ayarla (best-effort).
+    try {
+        Set-ItemProperty -Path 'HKCU:\Control Panel\Desktop' -Name WallpaperStyle -Value '10' -ErrorAction Stop
+        Set-ItemProperty -Path 'HKCU:\Control Panel\Desktop' -Name TileWallpaper -Value '0' -ErrorAction Stop
+    }
+    catch { }
     if (-not ([System.Management.Automation.PSTypeName]'UbdenWallpaper').Type) {
         Add-Type @'
 using System; using System.Runtime.InteropServices;

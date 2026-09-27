@@ -1562,6 +1562,7 @@ def collect_meta(args):
     tester=ask("Tester / test ekibi adı", required=True)
     UI.section(2,5,"Kapsam","Hedefleri ve hariç tutulan adresleri açıkça tanımlayın")
     while True:
+        UI.say('  Ağ adaptörleri tespit ediliyor, lütfen bekleyin...','dim')
         host_snapshot=windows_invoke('inventory',timeout=20)
         show_windows_network(host_snapshot)
         choices=selectable_adapters(host_snapshot) if host_snapshot.get('status')=='ok' else []

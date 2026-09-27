@@ -101,12 +101,20 @@ class Console:
             tty.setraw(fd)
             key = sys.stdin.read(1)
             if key == "\x1b":
-                if select.select([sys.stdin], [], [], .08)[0]:
+                # Ok tuşları ESC ile başlayan çok baytlı diziler gönderir. WSL ve
+                # uzak terminallerde baytlar arasında gecikme olabildiği için geniş
+                # pencere kullanılır; aksi halde ok tuşu çıplak ESC sanılıp sihirbaz
+                # yanlışlıkla iptal edilir.
+                if select.select([sys.stdin], [], [], .5)[0]:
                     next_key = sys.stdin.read(1)
-                    if next_key in ("[", "O") and select.select([sys.stdin], [], [], .08)[0]:
-                        key += next_key + sys.stdin.read(1)
-                    else:
-                        key += next_key
+                    key += next_key
+                    if next_key in ("[", "O"):
+                        # Dizinin kalanını (ör. "A" veya "1;5A") tükenene kadar oku.
+                        while select.select([sys.stdin], [], [], .5)[0]:
+                            char = sys.stdin.read(1)
+                            key += char
+                            if char.isalpha() or char == "~":
+                                break
             return key
         finally:
             termios.tcsetattr(fd, termios.TCSADRAIN, previous)
