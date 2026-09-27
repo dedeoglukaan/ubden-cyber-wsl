@@ -72,28 +72,35 @@ function Ensure-WinPython {
     & $VenvPython -m pip install --disable-pip-version-check 'playwright>=1.54,<2' | Out-Null
 }
 
+function Install-Winget([string] $Id, [string] $Label) {
+    if (-not (Get-Command winget.exe -ErrorAction SilentlyContinue)) {
+        Write-Host "  winget yok; $Label elle kurulmali." -ForegroundColor DarkYellow
+        return
+    }
+    Write-Host "  $Label kuruluyor (winget: $Id)..." -ForegroundColor Cyan
+    & winget.exe install --exact --id $Id --accept-source-agreements --accept-package-agreements | Out-Null
+    if ($LASTEXITCODE -ne 0) {
+        Write-Host "  $Label otomatik kurulamadi (bilgilendirme)." -ForegroundColor DarkYellow
+    }
+}
+
 function Ensure-ScanTools {
-    # Nmap + Npcap cekirdektir (ARP/MAC/L2). Diger araclar Faz 2'de genisletilir.
-    $nmap = (Get-Command nmap.exe -ErrorAction SilentlyContinue)
+    # "Tum araclar": Windows'ta temiz kurulabilenleri kur; kalanlar icin probe suite
+    # Nmap NSE / yerlesik esdegerleri kullanir, gercekten yoksa missing_tool yazar.
     $nmapPaths = @('C:\Program Files (x86)\Nmap\nmap.exe', 'C:\Program Files\Nmap\nmap.exe')
-    if (-not $nmap -and -not ($nmapPaths | Where-Object { Test-Path $_ })) {
-        if (Get-Command winget.exe -ErrorAction SilentlyContinue) {
-            Write-Host '  Nmap + Npcap kuruluyor (winget)...' -ForegroundColor Cyan
-            & winget.exe install --exact --id Insecure.Nmap `
-                --accept-source-agreements --accept-package-agreements | Out-Null
-            if ($LASTEXITCODE -ne 0) {
-                Write-Host '  Nmap otomatik kurulamadi; https://nmap.org/download.html adresinden kurun.' -ForegroundColor DarkYellow
-            }
-        }
-        else {
-            Write-Host '  winget yok; Nmap+Npcap gerekli: https://nmap.org/download.html' -ForegroundColor DarkYellow
-        }
+    if (-not (Get-Command nmap.exe -ErrorAction SilentlyContinue) -and
+        -not ($nmapPaths | Where-Object { Test-Path $_ })) {
+        Install-Winget 'Insecure.Nmap' 'Nmap + Npcap'   # cekirdek: ARP/MAC/L2
     }
-    if (-not (Get-Command nuclei.exe -ErrorAction SilentlyContinue) -and
-        (Get-Command winget.exe -ErrorAction SilentlyContinue)) {
-        & winget.exe install --exact --id ProjectDiscovery.Nuclei `
-            --accept-source-agreements --accept-package-agreements | Out-Null
+    if (-not (Get-Command nuclei.exe -ErrorAction SilentlyContinue)) {
+        Install-Winget 'ProjectDiscovery.Nuclei' 'Nuclei'
     }
+    if (-not (Get-Command whois.exe -ErrorAction SilentlyContinue)) {
+        Install-Winget 'Microsoft.Sysinternals.Whois' 'Sysinternals Whois'
+    }
+    # pip tabanli CLI araclari (wafw00f, fierce, theHarvester) venv'e kur.
+    Write-Host '  pip araclari kuruluyor (wafw00f, fierce, theHarvester)...' -ForegroundColor Cyan
+    try { & $VenvPython (Join-Path $SourceRoot 'win_tools.py') install | Out-Null } catch {}
 }
 
 function Add-ScanToolsToPath {
@@ -132,6 +139,11 @@ function Invoke-Status {
     Write-Host "  Nmap (Npcap)        : $nm"
     Write-Host "  Nuclei              : $np"
     Write-Host "  Raporlar            : $(Join-Path $env:LOCALAPPDATA 'UBDEN-Cyber\Reports')"
+    if (Test-Path -LiteralPath $VenvPython) {
+        Write-Host ''
+        Write-Host '  Arac envanteri (present/total):' -ForegroundColor Cyan
+        try { & $VenvPython (Join-Path $SourceRoot 'win_tools.py') report } catch {}
+    }
 }
 
 try {

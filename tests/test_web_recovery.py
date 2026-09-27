@@ -1,4 +1,5 @@
 """HTTP observations retain TLS identity failures and tool diagnostics."""
+import os
 from pathlib import Path
 import tempfile
 import unittest
@@ -23,7 +24,7 @@ class WebRecoveryTests(unittest.TestCase):
             get_args=run.call_args_list[1].args[1]
             self.assertIn('--resolve',get_args)
             self.assertIn('--max-filesize',get_args)
-            self.assertEqual(get_args[get_args.index('--output')+1],'/dev/null')
+            self.assertEqual(get_args[get_args.index('--output')+1],os.devnull)
             self.assertNotIn('--head',get_args)
 
     def test_named_target_never_uses_insecure_retry(self):

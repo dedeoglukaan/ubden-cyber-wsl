@@ -221,6 +221,10 @@ def build_inventory(root,meta,neighbours=None,oui_paths=None):
     snapshot=meta.get('host_snapshot') if isinstance(meta.get('host_snapshot'),dict) else {}
     gateways={str(row.get('gateway')) for row in snapshot.get('default_routes',[])
               if isinstance(row,dict) and row.get('gateway')}
+    # Ayni IP birden cok nmap_*.xml'de gorulebilir (kesif+surum, platform portlari,
+    # NSE denetimi). Once ham gercekleri BIRLESTIR (MAC'i koru, portlari birlestir),
+    # sonra tek seferde siniflandir; boylece MAC'siz bir dosya MAC'li olani ezmez.
+    facts={}
     for path in sorted((root/'targets').glob('*/raw/nmap_*.xml')) if (root/'targets').exists() else []:
         try:
             tree=ET.parse(path)
@@ -235,57 +239,76 @@ def build_inventory(root,meta,neighbours=None,oui_paths=None):
                         continue
                 except ValueError:
                     continue
-                ports=[]
+                entry=facts.setdefault(ip,{'ports':[],'seen':set(),'xml_mac':'','hostnames':[],
+                                           'os_matches':[],'evidence':[],'raws':[]})
                 for port in host.findall('./ports/port'):
                     state=port.find('state')
                     if state is None or state.get('state')!='open':
                         continue
+                    key=(port.get('portid',''),port.get('protocol',''))
+                    if key in entry['seen']:
+                        continue
+                    entry['seen'].add(key)
                     svc=port.find('service')
-                    ports.append({'port':port.get('portid',''),'protocol':port.get('protocol',''),
+                    entry['ports'].append({'port':port.get('portid',''),'protocol':port.get('protocol',''),
                                   'service':svc.get('name','') if svc is not None else '',
                                   'product':svc.get('product','')[:100] if svc is not None else '',
                                   'version':svc.get('version','')[:70] if svc is not None else '',
                                   'extra_info':svc.get('extrainfo','')[:100] if svc is not None else ''})
-                hostnames=[name.get('name','')[:120] for name in host.findall('./hostnames/hostname')
-                           if name.get('name')][:5]
-                os_matches=[{'name': item.get('name','')[:120], 'accuracy': item.get('accuracy','')}
-                            for item in host.findall('./os/osmatch')][:3]
-                xml_mac=next((normalize_mac(a.get('addr')) for a in host.findall('./address') if a.get('addrtype')=='mac'), '')
-                neighbour=neighbours.get(ip,{})
-                neighbour_mac=normalize_mac(neighbour.get('mac'))
-                mac=xml_mac or neighbour_mac
-                vendor,source=vendor_for(mac,vendors) if mac else ('Bilinmiyor','unavailable')
-                snmp_path=path.parent/f'snmp_v1_public_{re.sub(r"[^A-Za-z0-9._-]","_",ip)[:90]}.json'
-                snmp_description=''
-                if snmp_path.is_file():
-                    try:
-                        snmp_data=json.loads(snmp_path.read_text(encoding='utf-8'))
-                        if (snmp_data.get('target')==ip and snmp_data.get('confirmed_response') is True
-                                and snmp_data.get('version')=='1' and snmp_data.get('community')=='public'):
-                            snmp_description=str(snmp_data.get('sysDescr',''))[:160]
-                    except (ValueError,OSError,AttributeError):
-                        pass
-                category,confidence,signals=classify(vendor,ports,snmp_description)
-                roles=role_candidates(ports,vendor,ip in gateways)
-                notices=[]
-                if xml_mac and neighbour_mac and xml_mac!=neighbour_mac:
-                    notices.append('Nmap MAC ve yerel komşu önbelleği uyuşmuyor; MAC doğrulanmalı')
-                if mac and int(mac[:2],16)&2:
-                    notices.append('Yerel/rastgele MAC: OUI fiziksel cihazı doğrulamaz')
-                if not mac:
-                    notices.append('Uzak rota veya L2 komşuluk yok; MAC tespit edilmedi')
-                review=[f'{REVIEW_PORTS[int(p["port"])]} ({p["port"]}) için erişim ve yapılandırmayı inceleyin'
-                        for p in ports if str(p['port']).isdigit() and int(p['port']) in REVIEW_PORTS]
-                if snmp_description:
-                    review.append('SNMPv1/public ile kimlik bilgisi okunuyor; SNMPv3 ve erişim kısıtlarını değerlendirin')
-                devices[ip]={'ip':ip,'mac':mac,'mac_source':'nmap' if xml_mac else 'yerel komşu önbelleği' if mac else 'yok',
-                             'interface':neighbour.get('device','') if not xml_mac else '',
-                             'vendor':vendor,'vendor_source':source,'category':category,
-                             'confidence':confidence,'signals':signals,'ports':ports,
-                             'role_candidates':roles,
-                             'hostnames':hostnames,'os_matches':os_matches,
-                             'review_notes':review,'notices':notices,'snmp_sysdescr':snmp_description,
-                             'evidence':str(path.relative_to(root))}
+                if not entry['xml_mac']:
+                    entry['xml_mac']=next((normalize_mac(a.get('addr')) for a in host.findall('./address')
+                                           if a.get('addrtype')=='mac'), '')
+                if not entry['hostnames']:
+                    entry['hostnames']=[name.get('name','')[:120] for name in host.findall('./hostnames/hostname')
+                                        if name.get('name')][:5]
+                if not entry['os_matches']:
+                    entry['os_matches']=[{'name': item.get('name','')[:120], 'accuracy': item.get('accuracy','')}
+                                         for item in host.findall('./os/osmatch')][:3]
+                rel=str(path.relative_to(root))
+                if rel not in entry['evidence']:
+                    entry['evidence'].append(rel)
+                if path.parent not in entry['raws']:
+                    entry['raws'].append(path.parent)
+    for ip,entry in facts.items():
+        ports=entry['ports']
+        xml_mac=entry['xml_mac']
+        neighbour=neighbours.get(ip,{})
+        neighbour_mac=normalize_mac(neighbour.get('mac'))
+        mac=xml_mac or neighbour_mac
+        vendor,source=vendor_for(mac,vendors) if mac else ('Bilinmiyor','unavailable')
+        snmp_description=''
+        for rawdir in entry['raws']:
+            snmp_path=rawdir/f'snmp_v1_public_{re.sub(r"[^A-Za-z0-9._-]","_",ip)[:90]}.json'
+            if snmp_path.is_file():
+                try:
+                    snmp_data=json.loads(snmp_path.read_text(encoding='utf-8'))
+                    if (snmp_data.get('target')==ip and snmp_data.get('confirmed_response') is True
+                            and snmp_data.get('version')=='1' and snmp_data.get('community')=='public'):
+                        snmp_description=str(snmp_data.get('sysDescr',''))[:160]
+                        break
+                except (ValueError,OSError,AttributeError):
+                    pass
+        category,confidence,signals=classify(vendor,ports,snmp_description)
+        roles=role_candidates(ports,vendor,ip in gateways)
+        notices=[]
+        if xml_mac and neighbour_mac and xml_mac!=neighbour_mac:
+            notices.append('Nmap MAC ve yerel komşu önbelleği uyuşmuyor; MAC doğrulanmalı')
+        if mac and int(mac[:2],16)&2:
+            notices.append('Yerel/rastgele MAC: OUI fiziksel cihazı doğrulamaz')
+        if not mac:
+            notices.append('Uzak rota veya L2 komşuluk yok; MAC tespit edilmedi')
+        review=[f'{REVIEW_PORTS[int(p["port"])]} ({p["port"]}) için erişim ve yapılandırmayı inceleyin'
+                for p in ports if str(p['port']).isdigit() and int(p['port']) in REVIEW_PORTS]
+        if snmp_description:
+            review.append('SNMPv1/public ile kimlik bilgisi okunuyor; SNMPv3 ve erişim kısıtlarını değerlendirin')
+        devices[ip]={'ip':ip,'mac':mac,'mac_source':'nmap' if xml_mac else 'yerel komşu önbelleği' if mac else 'yok',
+                     'interface':neighbour.get('device','') if not xml_mac else '',
+                     'vendor':vendor,'vendor_source':source,'category':category,
+                     'confidence':confidence,'signals':signals,'ports':ports,
+                     'role_candidates':roles,
+                     'hostnames':entry['hostnames'],'os_matches':entry['os_matches'],
+                     'review_notes':review,'notices':notices,'snmp_sysdescr':snmp_description,
+                     'evidence':'; '.join(entry['evidence'])}
     for path in sorted((root/'targets').glob('*/raw/sql_browser_*.json')) if (root/'targets').exists() else []:
         try:
             result=json.loads(path.read_text(encoding='utf-8'))

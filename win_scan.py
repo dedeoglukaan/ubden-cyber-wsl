@@ -33,6 +33,10 @@ import sys
 import wizard  # imports cleanly on Windows (pwd is guarded); reuse pure helpers
 import device_inventory
 import win_proc
+try:
+    import win_tools
+except Exception:
+    win_tools = None
 # report_v2 is invoked as a subprocess (its main() reads sys.argv), never imported
 # here, so win_scan stays importable for tests even without reportlab installed.
 
@@ -171,7 +175,13 @@ def build_meta(form: dict, host_snapshot: dict) -> dict:
         max_rate = 100
     enabled = ["nmap-service", "device-inventory"]
     if profile in ("network", "full"):
-        enabled += ["nse-audit"]
+        enabled += ["nse-audit", "snmp", "sql-browser", "rootdse", "network-extras", "snmp-extras"]
+    if profile == "full":
+        enabled += ["supplemental_network"]  # enables run_supplemental in the probe suite
+    if profile in ("web", "full"):
+        enabled += ["web-headers", "tls", "nikto"]
+    if profile in ("external", "full"):
+        enabled += ["dns-osint"]
     return {
         "schema": 8, "id": str(uuid.uuid4()),
         "client": (form.get("client") or "").strip() or "Belirtilmedi",
@@ -243,20 +253,6 @@ def _scan_scope(target, assets, meta, raw, events, progress):
             win_proc.run(name, argv, raw, events, timeout=600,
                          on_tick=lambda n, e, t: progress(f"{n}: {int(e)}s / {int(t)}s", "tick"))
             open_ports[ip] = wizard.open_tcp_ports(raw / f"{name}.xml")
-    # Low-impact NSE audit (explicit scripts only) on hosts with open ports.
-    if meta["profile"] in ("network", "full"):
-        audited = [ip for ip in assets if open_ports.get(ip)]
-        if audited:
-            scripts = "ssl-cert,ssl-enum-ciphers,ssh2-enum-algos,http-security-headers"
-            listfile = raw / "audit_targets.txt"
-            listfile.write_text("\n".join(audited) + "\n", encoding="ascii")
-            name = "audit_cidr" if wizard.is_network(target) else "audit_" + wizard.safe_filename(audited[0])
-            argv = (["nmap"] + (["-6"] if ":" in audited[0] else []) +
-                    ["-Pn", "-n", "-sT", "-T3", "--max-rate", str(meta["max_rate"]),
-                     "--script", scripts, "-oX", str(raw / f"{name}.xml"), "-iL", str(listfile)])
-            progress(f"{target}: NSE guvenlik denetimi ({len(audited)} host)", "info")
-            win_proc.run(name, argv, raw, events, timeout=min(7200, len(audited) * 60 + 600),
-                         on_tick=lambda n, e, t: progress(f"{n}: {int(e)}s / {int(t)}s", "tick"))
     return open_ports
 
 
@@ -307,7 +303,17 @@ def scan_target(target, meta, root, events, progress):
             progress(f"{target}: secilen adaptor uzerinden erisim yok", "warn")
             return
     progress(f"{target}: {len(assets)} adres taraniyor", "info")
-    _scan_scope(target, assets, meta, raw, events, progress)
+    open_ports = _scan_scope(target, assets, meta, raw, events, progress)
+    # Full tool breadth (NSE audit, platform ports, SNMP/SQL/RootDSE, network & SNMP
+    # extras, credential probes, supplemental, HTTP/TLS/nikto/nuclei, DNS/OSINT) via
+    # the SAME suite the Kali wizard runs; absent tools are recorded as missing_tool.
+    progress(f"{target}: servis/guvenlik problari calisiyor (tum araclar)", "info")
+    try:
+        wizard.run_probe_suite(target, meta, root, raw, events, assets, open_ports)
+    except Exception as exc:
+        events.append({"step": "probe_suite_error", "target": target, "status": "error",
+                       "detail": f"{type(exc).__name__}: {exc}"})
+        progress(f"{target}: prob paketi hatasi - {exc}", "warn")
 
 
 def run_scan(form: dict, progress=None) -> dict:
@@ -322,6 +328,8 @@ def run_scan(form: dict, progress=None) -> dict:
             except Exception:
                 pass
 
+    if win_tools is not None:
+        win_tools.ensure_path()  # make pip/winget-installed CLIs discoverable via which()
     host_snapshot = windows_inventory()
     meta = build_meta(form, host_snapshot)
     emit("Kapsam donduruluyor (DNS/adres butcesi)", "info")

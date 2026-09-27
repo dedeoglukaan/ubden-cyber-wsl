@@ -15,10 +15,13 @@ class CidrDiscoveryTests(unittest.TestCase):
     META={'profile':'network','exclusions':[],'max_rate':20,'top_ports':100,'nuclei_templates':''}
 
     def setUp(self):
-        # Service-scan fixtures must never perform the SQL Browser network probe.
-        probe=patch.object(wizard,'discover_sql_browser')
-        probe.start()
-        self.addCleanup(probe.stop)
+        # These tests assert exact nmap call sequences; neutralise the environment-
+        # dependent probe helpers (SQL Browser, traceroute/tracert, SNMP extras) so
+        # the result is deterministic on both Kali and Windows (where tracert exists).
+        for name in ('discover_sql_browser', 'network_extras', 'snmp_extras'):
+            probe = patch.object(wizard, name)
+            probe.start()
+            self.addCleanup(probe.stop)
 
     @staticmethod
     def fake_command(up, calls, fail=False):

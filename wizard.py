@@ -535,7 +535,7 @@ def role_probe(root, scenario, ip, credentials, events, attempt=1):
         secret=next(secret for spec,secret in credentials if spec['target']==target and spec['port']==port and spec['role']==role)
         argv=['curl','-q','--silent','--show-error','--noproxy','*','--proto','=https','--max-time','15',
               '--connect-timeout','5','--max-redirs','0','--max-filesize','65536','--request','GET',
-              '--output','/dev/null','--write-out','%{http_code}\n%{size_download}',
+              '--output',os.devnull,'--write-out','%{http_code}\n%{size_download}',
               '--resolve',f'{target}:{port}:{pin}','--config','-',url]
         started=time.monotonic()
         try:
@@ -566,7 +566,7 @@ def access_probe(target, ip, spec, secret, folder, events):
     host=f"[{target}]" if ":" in target else target
     pinned=f"[{ip}]" if ":" in ip else ip
     url=f"https://{host}:{spec['port']}{spec['path']}"
-    argv=["curl","-q","--silent","--show-error","--noproxy","*","--proto","=https","--max-time","15","--connect-timeout","5","--max-redirs","0","--head","--output","/dev/null","--write-out","%{http_code}","--resolve",f"{target}:{spec['port']}:{pinned}"]
+    argv=["curl","-q","--silent","--show-error","--noproxy","*","--proto","=https","--max-time","15","--connect-timeout","5","--max-redirs","0","--head","--output",os.devnull,"--write-out","%{http_code}","--resolve",f"{target}:{spec['port']}:{pinned}"]
     outcomes={}
     for mode in ("anonymous","authenticated"):
         config=None
@@ -775,6 +775,35 @@ def discover_cidr_hosts(target, net, raw, events, exclusions, max_rate, selected
            'green' if status=='ok' else 'yellow')
     return live
 
+_CREATE_NEW_PROCESS_GROUP = getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0)
+
+
+def _spawn_process(argv, handle):
+    """Start a child in its own group so a timeout can kill the whole tree.
+
+    Windows has no ``start_new_session``/``killpg``; use a new process group and
+    ``taskkill /T`` instead so the same code path serves Kali WSL and native Windows.
+    """
+    if os.name == "nt":
+        return subprocess.Popen(argv, stdout=handle, stderr=subprocess.STDOUT,
+                                creationflags=_CREATE_NEW_PROCESS_GROUP)
+    return subprocess.Popen(argv, stdout=handle, stderr=subprocess.STDOUT, start_new_session=True)
+
+
+def _kill_process_tree(process):
+    if os.name == "nt":
+        try:
+            subprocess.run(["taskkill", "/T", "/F", "/PID", str(process.pid)],
+                           capture_output=True, timeout=15, check=False)
+        except (OSError, subprocess.TimeoutExpired):
+            pass
+    else:
+        try:
+            os.killpg(process.pid, signal.SIGKILL)
+        except ProcessLookupError:
+            pass
+
+
 def command(name, argv, folder, events, timeout=900, stop_on=()):
     folder.mkdir(parents=True, exist_ok=True)
     path = folder / f"{name}.txt"
@@ -794,7 +823,7 @@ def command(name, argv, folder, events, timeout=900, stop_on=()):
         try:
             if argv[0] in ('curl','nikto','nuclei'): web_budget_wait()
             with path.open("w", encoding="utf-8", errors="replace") as handle:
-                process = subprocess.Popen(argv, stdout=handle, stderr=subprocess.STDOUT, start_new_session=True)
+                process = _spawn_process(argv, handle)
                 try:
                     while True:
                         try:
@@ -829,10 +858,7 @@ def command(name, argv, folder, events, timeout=900, stop_on=()):
                             if time.monotonic() - started >= timeout:
                                 raise subprocess.TimeoutExpired(argv, timeout)
                 except (subprocess.TimeoutExpired, KeyboardInterrupt, StopPattern) as exc:
-                    try:
-                        os.killpg(process.pid, signal.SIGKILL)
-                    except ProcessLookupError:
-                        pass
+                    _kill_process_tree(process)
                     process.wait()
                     if isinstance(exc, KeyboardInterrupt):
                         interrupted = True
@@ -898,7 +924,7 @@ def recover_http_probe(name, argv, result, raw, events, target, ip, scheme, allo
         elif '--request' in get_args and get_args[get_args.index('--request')+1]=='HEAD':
             get_args[get_args.index('--request')+1]='GET'
         if '--output' in get_args:
-            get_args[get_args.index('--output')+1]='/dev/null'
+            get_args[get_args.index('--output')+1]=os.devnull
         if '--dump-header' not in get_args:
             get_args[-1:-1]=['--dump-header','-']
         get_args[-1:-1]=['--range','0-0','--max-filesize','32768']
@@ -977,7 +1003,7 @@ def scan_cidr_web(target, assets, discovered_ports, raw, events, meta):
                 argv = ['curl', '--silent', '--show-error', '--noproxy', '*',
                         '--max-time', '15', '--connect-timeout', '5',
                         '--max-redirs', '0', '--proto', '=http,https',
-                        '--request', method, '--output', '/dev/null',
+                        '--request', method, '--output', os.devnull,
                         '--dump-header', '-', url]
                 result=command(name, argv, raw, events, 25)
                 result['target']=ip
@@ -1002,6 +1028,169 @@ def scan_cidr_web(target, assets, discovered_ports, raw, events, meta):
                     name, argv = nuclei_args(ip, ip, scheme, templates,
                                              meta.get('nuclei_profile'), meta['max_rate'], raw)
                     command(name, argv, raw, events, 1200)['target'] = ip
+
+
+def run_probe_suite(target, meta, root, raw, events, assets, discovered_ports,
+                    credentials=(), ssh_tests=()):
+    """Post-discovery probe breadth shared by the Kali wizard and Windows uPenetrator.
+
+    Runs every catalogued tool (NSE audit, platform ports, SNMP/SQL/RootDSE, network
+    and SNMP extras, credential probes, supplemental scans, HTTP/TLS/nikto/nuclei,
+    DNS/OSINT). Each tool is gated by shutil.which via command(); absent tools are
+    recorded as missing_tool. Callers pass their own already-discovered ports so the
+    ARP-enabled Windows discovery (with on-link MAC) is preserved.
+    """
+    profile = meta["profile"]
+    if profile in ("network","full"):
+        # Explicit low-impact NSE scripts; never the entire 'vuln' category.
+        scripts='ssl-cert,ssl-enum-ciphers,ssh2-enum-algos,http-security-headers'
+        if is_network(target):
+            audited=[ip for ip in assets if discovered_ports.get(ip)]
+            if audited:
+                audit_list=raw/'audit_targets.txt'
+                audit_list.write_text('\n'.join(audited)+'\n',encoding='ascii')
+                opened=sorted({port for ip in audited for port in discovered_ports[ip]})
+                command('audit_cidr',["nmap"]+(["-6"] if ':' in audited[0] else [])+
+                        ["-Pn","-n","-sS","-T3","--stats-every","10s","--max-rate",str(meta["max_rate"]),
+                         "--max-retries","1","--script-timeout","30s",
+                         "--script",scripts,"-p",','.join(map(str,opened)),
+                         "-oX",str(raw/'audit_cidr.xml'),"-iL",str(audit_list)],raw,events,
+                        min(86400,max(3600,math.ceil(len(audited)*len(opened)/max(1,meta['max_rate']))*3+1200)))
+        else:
+            for ip in assets:
+                opened=discovered_ports.get(ip,[])
+                if opened:
+                    key=safe_filename(ip)
+                    command("audit_"+key,["nmap"] + (["-6"] if ":" in ip else []) + ["-Pn","-sT","-sV","-T3","--stats-every","10s","--max-rate",str(meta["max_rate"]),"--max-retries","1","--script-timeout","30s","--host-timeout","5m","--script",scripts,"-p",",".join(map(str,opened)),"-oX",str(raw/("audit_"+key+".xml")),ip],raw,events,360)
+    if profile in ('network','full'):
+        # Platform/yönetim portları (Forti SSL-VPN, ESXi/vCenter, Proxmox, iLO/iDRAC,
+        # NAS, kamera) çoğu top-1000 dışıdır; canlı hostlarda sınırlı ek tarama.
+        live_hosts=[ip for ip in assets if discovered_ports.get(ip)]
+        if live_hosts and shutil.which('nmap'):
+            platform_ports="541,902,2179,4443,5000,5001,5480,5900,5989,8000,8006,10443,17988,17990,37777,37778"
+            plat_list=raw/'platform_targets.txt'
+            plat_list.write_text('\n'.join(live_hosts)+'\n',encoding='ascii')
+            plat_xml=raw/'nmap_platform.xml'
+            command('nmap_platform',["nmap"]+(['-6'] if ':' in live_hosts[0] else [])+
+                    ["-Pn","-n","-sS","-sV","--version-light","-T3","--max-rate",str(meta['max_rate']),
+                     "--max-retries","1","-p",platform_ports,"-oX",str(plat_xml),"-iL",str(plat_list)],
+                    raw,events,min(3600,max(600,len(live_hosts)*len(platform_ports.split(','))//max(1,meta['max_rate'])*3+300)))
+            for ip,extra in open_tcp_ports_by_host(plat_xml,live_hosts).items():
+                if extra:
+                    discovered_ports[ip]=sorted(set(discovered_ports.get(ip,[]))|set(extra))
+        discover_sql_browser(assets,raw,events,meta['max_rate'])
+        probe_snmp(target,assets,raw,events,meta['max_rate'])
+        discover_rootdse(assets,discovered_ports,raw,events)
+        network_extras(assets,discovered_ports,raw,events,command)
+        snmp_extras(assets,raw,events,command)
+        credential_probes.run(target,assets,discovered_ports,raw,events,meta)
+        if 'supplemental_network' in meta.get('enabled_modules',[]):
+            run_supplemental(target,assets,discovered_ports,raw,events,command,profile)
+        for item in ssh_tests:
+            ip=item['target_ip']
+            if not item['used'] and ip in assets and 22 in discovered_ports.get(ip,[]):
+                item['used']=True
+                spec=next((row for row in meta.get('password_probes',[])
+                           if row['target_ip']==ip and row['username']==item['username']),None)
+                if spec:
+                    run_ssh_passwords(spec,item['passwords'],events)
+    if is_network(target):
+        if profile in ('web', 'full'):
+            scan_cidr_web(target, assets, discovered_ports, raw, events, meta)
+        return
+    if profile == "network":
+        return
+    # CURL pins the destination IP and disallows redirects, preventing off-scope traversal.
+    host = target if not is_ip(target) else target
+    url_host = f"[{host}]" if ":" in host else host
+    for ip in assets:
+        opened=set(discovered_ports.get(ip,[]))
+        candidates=[("https",443),("http",80)]
+        if profile in ("web","full"):
+            candidates += [("http",8080),("https",8443)]
+        web_ports=[(scheme,port) for scheme,port in candidates if port in opened]
+        if not web_ports:
+            events.append({'step':'web_preflight','target':ip,'status':'skipped',
+                           'detail':'Nmap ciktisinda acik HTTP(S) portu dogrulanmadi'})
+        pinned_ip=f"[{ip}]" if ":" in ip else ip
+        for scheme, port in web_ports:
+            port_suffix=f":{port}" if port not in (80,443) else ""
+            url = f"{scheme}://{url_host}{port_suffix}/"
+            args = ["curl","--silent","--show-error","--noproxy","*","--max-time","15","--connect-timeout","5","--max-redirs","0","--proto","=http,https","--head","--output","-","--resolve",f"{host}:{port}:{pinned_ip}",url]
+            name=f"headers_{safe_filename(ip)}_{scheme}_{port}"
+            result=command(name,args,raw,events,25)
+            recover_http_probe(name,args,result,raw,events,target,ip,scheme,True)
+            if profile in ("web","full"):
+                options=["curl","--silent","--show-error","--noproxy","*","--max-time","15","--connect-timeout","5","--max-redirs","0","--proto","=http,https","--request","OPTIONS","--output",os.devnull,"--dump-header","-","--resolve",f"{host}:{port}:{pinned_ip}",url]
+                name=f"methods_{safe_filename(ip)}_{scheme}_{port}"
+                result=command(name,options,raw,events,25)
+                recover_http_probe(name,options,result,raw,events,target,ip,scheme)
+        if 443 in opened and shutil.which("sslscan"):
+            command(f"tls_{safe_filename(ip)}",["sslscan","--no-colour",f"{pinned_ip}:443"],raw,events,75)
+        if profile in ('web','full') and web_ports:
+            fscheme,fport=web_ports[0]
+            fsuffix=f":{fport}" if fport not in (80,443) else ""
+            web_extras(f"{safe_filename(ip)}_{fscheme}_{fport}",f"{fscheme}://{url_host}{fsuffix}/",ip,raw,events,command)
+    if profile in ('web','full'):
+        web_hosts=[ip for ip in assets if set(discovered_ports.get(ip,[])) & {80,443}]
+        if not shutil.which('nikto') and web_hosts:
+            events.append({'step':'nikto_preflight','tool':'nikto','target':target,
+                           'status':'missing_tool','detail':'nikto kurulu degil'})
+        for ip in web_hosts[:16] if shutil.which('nikto') else []:
+            ports=set(discovered_ports.get(ip,[]))
+            port=443 if 443 in ports else 80
+            ip_host=f'[{ip}]' if ':' in ip else ip
+            args=['nikto','-host',ip_host,'-port',str(port),'-Tuning','123b',
+                  '-Pause','0.2','-maxtime','60s','-timeout','5',
+                  '-nocheck','-nolookup','-nointeractive']
+            if port==443: args.append('-ssl')
+            if not is_ip(target): args.extend(['-vhost',target])
+            result=command(f'nikto_{safe_filename(ip)}_{port}',args,raw,events,70)
+            result['target']=ip
+            result['detail']='Sinirli bilgi/yapilandirma adaylari; analist dogrulamasi gerekir'
+        if len(web_hosts)>16:
+            events.append({'step':'nikto_budget','tool':'nikto','target':target,
+                           'status':'skipped','detail':f'{len(web_hosts)-16} web hostu 16-host is yukunde atlandi'})
+    if profile == "full":
+        matches=[(spec,secret) for spec,secret in credentials if spec["target"]==target]
+        if matches and not is_ip(target):
+            try: current=set(resolve(target))
+            except socket.gaierror: current=set()
+            if current != set(assets):
+                events.append({"step":"auth_scope","target":target,"status":"blocked","detail":"DNS adresleri değişti; kimlik doğrulamalı istekler atlandı"})
+                matches=[]
+        for ip in assets:
+            for spec,secret in matches:
+                if spec['port'] in discovered_ports.get(ip,[]):
+                    access_probe(target,ip,spec,secret,raw,events)
+                else:
+                    events.append({'step':'auth_preflight','target':ip,'status':'skipped',
+                                   'detail':'Secilen kimlikli HTTPS portu acik dogrulanmadi'})
+            if matches:
+                for scenario in meta.get('role_scenarios',[]):
+                    if scenario['target']==target and scenario['port'] in discovered_ports.get(ip,[]):
+                        role_probe(root,scenario,ip,matches,events)
+    templates=meta.get("nuclei_templates")
+    # Use numeric destination addresses. Host header and SNI preserve virtual host
+    # semantics without letting Nuclei resolve a new, out-of-scope address.
+    if templates and profile in ("web","full"):
+        selection=meta.get("nuclei_profile")
+        for ip in assets:
+            for scheme,port in (("https",443),("http",80)):
+                if port not in discovered_ports.get(ip,[]):
+                    continue
+                name,argv=nuclei_args(target,ip,scheme,templates,selection,meta["max_rate"],raw)
+                command(name,argv,raw,events,1200)
+    if not is_ip(target) and profile in ("external","full"):
+        command("whois",["whois",target],raw,events,25)
+        command("nslookup",["nslookup",target],raw,events,15)
+        command("dns_a",["dig","+time=3","+tries=1","+noall","+answer",target,"A"],raw,events,15)
+        command("dns_aaaa",["dig","+time=3","+tries=1","+noall","+answer",target,"AAAA"],raw,events,15)
+        command("dns_mx",["dig","+time=3","+tries=1","+noall","+answer",target,"MX"],raw,events,15)
+        command("dns_caa",["dig","+time=3","+tries=1","+noall","+answer",target,"CAA"],raw,events,15)
+        command("dns_txt",["dig","+time=3","+tries=1","+noall","+answer",target,"TXT"],raw,events,15)
+        command("dns_dmarc",["dig","+time=3","+tries=1","+noall","+answer","_dmarc."+target,"TXT"],raw,events,15)
+        domain_recon(target,raw,events,command)
 
 
 def scan_target(target, meta, root, events, credentials=(), index=1, total=1,
@@ -1108,156 +1297,8 @@ def scan_target(target, meta, root, events, credentials=(), index=1, total=1,
             discovered_ports[ip]=open_tcp_ports(xml)
             if discovered_ports[ip]:
                 UI.say(f"  {ip} acik TCP portlari: {', '.join(map(str,discovered_ports[ip]))}. HTTP ve TLS yanitlari ayri denetlenir.",'cyan')
-    if profile in ("network","full"):
-        # Explicit low-impact NSE scripts; never the entire 'vuln' category.
-        scripts='ssl-cert,ssl-enum-ciphers,ssh2-enum-algos,http-security-headers'
-        if is_network(target):
-            audited=[ip for ip in assets if discovered_ports.get(ip)]
-            if audited:
-                audit_list=raw/'audit_targets.txt'
-                audit_list.write_text('\n'.join(audited)+'\n',encoding='ascii')
-                opened=sorted({port for ip in audited for port in discovered_ports[ip]})
-                command('audit_cidr',["nmap"]+(["-6"] if ':' in audited[0] else [])+
-                        ["-Pn","-n","-sS","-T3","--stats-every","10s","--max-rate",str(meta["max_rate"]),
-                         "--max-retries","1","--script-timeout","30s",
-                         "--script",scripts,"-p",','.join(map(str,opened)),
-                         "-oX",str(raw/'audit_cidr.xml'),"-iL",str(audit_list)],raw,events,
-                        min(86400,max(3600,math.ceil(len(audited)*len(opened)/max(1,meta['max_rate']))*3+1200)))
-        else:
-            for ip in assets:
-                opened=discovered_ports.get(ip,[])
-                if opened:
-                    key=safe_filename(ip)
-                    command("audit_"+key,["nmap"] + (["-6"] if ":" in ip else []) + ["-Pn","-sT","-sV","-T3","--stats-every","10s","--max-rate",str(meta["max_rate"]),"--max-retries","1","--script-timeout","30s","--host-timeout","5m","--script",scripts,"-p",",".join(map(str,opened)),"-oX",str(raw/("audit_"+key+".xml")),ip],raw,events,360)
-    if profile in ('network','full'):
-        # Platform/yönetim portları (Forti SSL-VPN, ESXi/vCenter, Proxmox, iLO/iDRAC,
-        # NAS, kamera) çoğu top-1000 dışıdır; canlı hostlarda sınırlı ek tarama.
-        live_hosts=[ip for ip in assets if discovered_ports.get(ip)]
-        if live_hosts and shutil.which('nmap'):
-            platform_ports="541,902,2179,4443,5000,5001,5480,5900,5989,8000,8006,10443,17988,17990,37777,37778"
-            plat_list=raw/'platform_targets.txt'
-            plat_list.write_text('\n'.join(live_hosts)+'\n',encoding='ascii')
-            plat_xml=raw/'nmap_platform.xml'
-            command('nmap_platform',["nmap"]+(['-6'] if ':' in live_hosts[0] else [])+
-                    ["-Pn","-n","-sS","-sV","--version-light","-T3","--max-rate",str(meta['max_rate']),
-                     "--max-retries","1","-p",platform_ports,"-oX",str(plat_xml),"-iL",str(plat_list)],
-                    raw,events,min(3600,max(600,len(live_hosts)*len(platform_ports.split(','))//max(1,meta['max_rate'])*3+300)))
-            for ip,extra in open_tcp_ports_by_host(plat_xml,live_hosts).items():
-                if extra:
-                    discovered_ports[ip]=sorted(set(discovered_ports.get(ip,[]))|set(extra))
-        discover_sql_browser(assets,raw,events,meta['max_rate'])
-        probe_snmp(target,assets,raw,events,meta['max_rate'])
-        discover_rootdse(assets,discovered_ports,raw,events)
-        network_extras(assets,discovered_ports,raw,events,command)
-        snmp_extras(assets,raw,events,command)
-        credential_probes.run(target,assets,discovered_ports,raw,events,meta)
-        if 'supplemental_network' in meta.get('enabled_modules',[]):
-            run_supplemental(target,assets,discovered_ports,raw,events,command,profile)
-        for item in ssh_tests:
-            ip=item['target_ip']
-            if not item['used'] and ip in assets and 22 in discovered_ports.get(ip,[]):
-                item['used']=True
-                spec=next((row for row in meta.get('password_probes',[])
-                           if row['target_ip']==ip and row['username']==item['username']),None)
-                if spec:
-                    run_ssh_passwords(spec,item['passwords'],events)
-    if is_network(target):
-        if profile in ('web', 'full'):
-            scan_cidr_web(target, assets, discovered_ports, raw, events, meta)
-        return
-    if profile == "network":
-        return
-    # CURL pins the destination IP and disallows redirects, preventing off-scope traversal.
-    host = target if not is_ip(target) else target
-    url_host = f"[{host}]" if ":" in host else host
-    for ip in assets:
-        opened=set(discovered_ports.get(ip,[]))
-        candidates=[("https",443),("http",80)]
-        if profile in ("web","full"):
-            candidates += [("http",8080),("https",8443)]
-        web_ports=[(scheme,port) for scheme,port in candidates if port in opened]
-        if not web_ports:
-            events.append({'step':'web_preflight','target':ip,'status':'skipped',
-                           'detail':'Nmap ciktisinda acik HTTP(S) portu dogrulanmadi'})
-        pinned_ip=f"[{ip}]" if ":" in ip else ip
-        for scheme, port in web_ports:
-            port_suffix=f":{port}" if port not in (80,443) else ""
-            url = f"{scheme}://{url_host}{port_suffix}/"
-            args = ["curl","--silent","--show-error","--noproxy","*","--max-time","15","--connect-timeout","5","--max-redirs","0","--proto","=http,https","--head","--output","-","--resolve",f"{host}:{port}:{pinned_ip}",url]
-            name=f"headers_{safe_filename(ip)}_{scheme}_{port}"
-            result=command(name,args,raw,events,25)
-            recover_http_probe(name,args,result,raw,events,target,ip,scheme,True)
-            if profile in ("web","full"):
-                options=["curl","--silent","--show-error","--noproxy","*","--max-time","15","--connect-timeout","5","--max-redirs","0","--proto","=http,https","--request","OPTIONS","--output","/dev/null","--dump-header","-","--resolve",f"{host}:{port}:{pinned_ip}",url]
-                name=f"methods_{safe_filename(ip)}_{scheme}_{port}"
-                result=command(name,options,raw,events,25)
-                recover_http_probe(name,options,result,raw,events,target,ip,scheme)
-        if 443 in opened and shutil.which("sslscan"):
-            command(f"tls_{safe_filename(ip)}",["sslscan","--no-colour",f"{pinned_ip}:443"],raw,events,75)
-        if profile in ('web','full') and web_ports:
-            fscheme,fport=web_ports[0]
-            fsuffix=f":{fport}" if fport not in (80,443) else ""
-            web_extras(f"{safe_filename(ip)}_{fscheme}_{fport}",f"{fscheme}://{url_host}{fsuffix}/",ip,raw,events,command)
-    if profile in ('web','full'):
-        web_hosts=[ip for ip in assets if set(discovered_ports.get(ip,[])) & {80,443}]
-        if not shutil.which('nikto') and web_hosts:
-            events.append({'step':'nikto_preflight','tool':'nikto','target':target,
-                           'status':'missing_tool','detail':'nikto kurulu degil'})
-        for ip in web_hosts[:16] if shutil.which('nikto') else []:
-            ports=set(discovered_ports.get(ip,[]))
-            port=443 if 443 in ports else 80
-            ip_host=f'[{ip}]' if ':' in ip else ip
-            args=['nikto','-host',ip_host,'-port',str(port),'-Tuning','123b',
-                  '-Pause','0.2','-maxtime','60s','-timeout','5',
-                  '-nocheck','-nolookup','-nointeractive']
-            if port==443: args.append('-ssl')
-            if not is_ip(target): args.extend(['-vhost',target])
-            result=command(f'nikto_{safe_filename(ip)}_{port}',args,raw,events,70)
-            result['target']=ip
-            result['detail']='Sinirli bilgi/yapilandirma adaylari; analist dogrulamasi gerekir'
-        if len(web_hosts)>16:
-            events.append({'step':'nikto_budget','tool':'nikto','target':target,
-                           'status':'skipped','detail':f'{len(web_hosts)-16} web hostu 16-host is yukunde atlandi'})
-    if profile == "full":
-        matches=[(spec,secret) for spec,secret in credentials if spec["target"]==target]
-        if matches and not is_ip(target):
-            try: current=set(resolve(target))
-            except socket.gaierror: current=set()
-            if current != set(assets):
-                events.append({"step":"auth_scope","target":target,"status":"blocked","detail":"DNS adresleri değişti; kimlik doğrulamalı istekler atlandı"})
-                matches=[]
-        for ip in assets:
-            for spec,secret in matches:
-                if spec['port'] in discovered_ports.get(ip,[]):
-                    access_probe(target,ip,spec,secret,raw,events)
-                else:
-                    events.append({'step':'auth_preflight','target':ip,'status':'skipped',
-                                   'detail':'Secilen kimlikli HTTPS portu acik dogrulanmadi'})
-            if matches:
-                for scenario in meta.get('role_scenarios',[]):
-                    if scenario['target']==target and scenario['port'] in discovered_ports.get(ip,[]):
-                        role_probe(root,scenario,ip,matches,events)
-    templates=meta.get("nuclei_templates")
-    # Use numeric destination addresses. Host header and SNI preserve virtual host
-    # semantics without letting Nuclei resolve a new, out-of-scope address.
-    if templates and profile in ("web","full"):
-        selection=meta.get("nuclei_profile")
-        for ip in assets:
-            for scheme,port in (("https",443),("http",80)):
-                if port not in discovered_ports.get(ip,[]):
-                    continue
-                name,argv=nuclei_args(target,ip,scheme,templates,selection,meta["max_rate"],raw)
-                command(name,argv,raw,events,1200)
-    if not is_ip(target) and profile in ("external","full"):
-        command("whois",["whois",target],raw,events,25)
-        command("nslookup",["nslookup",target],raw,events,15)
-        command("dns_a",["dig","+time=3","+tries=1","+noall","+answer",target,"A"],raw,events,15)
-        command("dns_aaaa",["dig","+time=3","+tries=1","+noall","+answer",target,"AAAA"],raw,events,15)
-        command("dns_mx",["dig","+time=3","+tries=1","+noall","+answer",target,"MX"],raw,events,15)
-        command("dns_caa",["dig","+time=3","+tries=1","+noall","+answer",target,"CAA"],raw,events,15)
-        command("dns_txt",["dig","+time=3","+tries=1","+noall","+answer",target,"TXT"],raw,events,15)
-        command("dns_dmarc",["dig","+time=3","+tries=1","+noall","+answer","_dmarc."+target,"TXT"],raw,events,15)
-        domain_recon(target,raw,events,command)
+    run_probe_suite(target, meta, root, raw, events, assets, discovered_ports,
+                    credentials, ssh_tests)
 
 
 def show_windows_network(snapshot):

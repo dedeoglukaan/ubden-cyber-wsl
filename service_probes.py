@@ -69,6 +69,11 @@ def network_extras(assets, opened: dict, raw, events, command) -> None:
             command(f"traceroute_{_tag(ip)}",
                     ["traceroute", "-n", "-q", "1", "-w", "1", "-m", "15", str(ip)],
                     raw, events, 45)["target"] = str(ip)
+    elif shutil.which("tracert"):  # Windows yerleşik eşdeğeri
+        for ip in list(assets)[:4]:
+            command(f"traceroute_{_tag(ip)}",
+                    ["tracert", "-d", "-h", "15", "-w", "1000", str(ip)],
+                    raw, events, 60)["target"] = str(ip)
     if shutil.which("ike-scan"):
         for ip in list(assets)[:8]:
             command(f"ikescan_{_tag(ip)}", ["ike-scan", "-r", "1", str(ip)],
