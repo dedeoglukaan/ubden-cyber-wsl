@@ -1,5 +1,5 @@
 param(
-    [ValidateSet('inventory','route','domain','browser','usb_list','usb_attach')]
+    [ValidateSet('inventory','route','domain','browser','usb_list','usb_attach','neighbours')]
     [string] $Action = 'inventory'
 )
 
@@ -68,6 +68,19 @@ try {
             }
         }
         Emit-Json @{ status = 'ok'; routes = @($routes) }
+    }
+    elseif ($Action -eq 'neighbours') {
+        # Yerel L2 ARP/ND onbellegi: fiziksel adaptorde gozlenen komsu cihazlarin
+        # IP -> MAC eslesmesi. WSL NAT'ta gorulemeyen, cihaz tanimlamayi besleyen veri.
+        $rows = @(Get-NetNeighbor -AddressFamily IPv4 -ErrorAction SilentlyContinue |
+            Where-Object { $_.State -in @('Reachable','Stale','Permanent') -and
+                           $_.LinkLayerAddress -and $_.LinkLayerAddress -ne '00-00-00-00-00-00' -and
+                           $_.LinkLayerAddress -ne 'FF-FF-FF-FF-FF-FF' } |
+            ForEach-Object {
+                @{ ip = "$($_.IPAddress)"; mac = "$($_.LinkLayerAddress)";
+                   device = "$($_.InterfaceAlias)"; state = "$($_.State)" }
+            })
+        Emit-Json @{ status = 'ok'; schema = 1; neighbours = @($rows) }
     }
     elseif ($Action -eq 'domain') {
         $computer = Get-CimInstance Win32_ComputerSystem

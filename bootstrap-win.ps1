@@ -3,15 +3,19 @@ param(
     [string] $Action = 'run'
 )
 
+# UBDEN uPenetrator - Windows-native (WSL YOK) tek-satirlik kurucu. WSL surumunun
+# (bootstrap.ps1) ikizidir: ayni repo/tag, ayni sertlestirilmis indirme/kurulum
+# deseni, ancak Kali WSL yerine Windows'ta calisan ubden-win.ps1'i baslatir.
+
 $ErrorActionPreference = 'Stop'
 $repo = 'ubden/ubden-cyber-wsl'
 $tag = 'v5.0.0-wsl.12'
 $installBase = Join-Path $env:LOCALAPPDATA 'Programs\UBDEN-Cyber'
 $releaseRoot = Join-Path $installBase $tag
-$entryPoint = Join-Path $releaseRoot 'ubden-wsl.ps1'
+$entryPoint = Join-Path $releaseRoot 'ubden-win.ps1'
 $requiredFiles = @(
-    'ubden-wsl.ps1', 'windows-bridge.ps1', 'windows-browser.py',
-    'wsl-bootstrap.sh', 'install.sh', 'wizard.py', 'report_delivery.py', 'requirements.txt'
+    'ubden-win.ps1', 'windows-bridge.ps1', 'webapp.py', 'win_scan.py', 'win_proc.py',
+    'report_v2.py', 'device_inventory.py', 'wizard.py', 'requirements.txt'
 )
 
 function Assert-InstallChild([string] $Path) {
@@ -33,10 +37,14 @@ function Test-ReleaseFiles([string] $Root) {
 }
 
 if (-not (Test-ReleaseFiles $releaseRoot)) {
-    if (Test-Path -LiteralPath $releaseRoot) {
+    if ((Test-Path -LiteralPath $releaseRoot) -and -not (Test-Path -LiteralPath (Join-Path $releaseRoot 'ubden-wsl.ps1'))) {
+        # Ayni tag'in WSL kurulumu zaten tam bir release birakmis olabilir; yalniz
+        # gercekten eksik/bos ise hata ver.
         throw "Eksik kurulum dizini bulundu: $releaseRoot. Icerigini inceleyip yeniden deneyin."
     }
+}
 
+if (-not (Test-ReleaseFiles $releaseRoot)) {
     New-Item -ItemType Directory -Path $installBase -Force | Out-Null
     $staging = Assert-InstallChild (Join-Path $installBase ('.staging-' + [guid]::NewGuid().ToString('N')))
     New-Item -ItemType Directory -Path $staging | Out-Null
@@ -73,11 +81,25 @@ if (-not (Test-ReleaseFiles $releaseRoot)) {
             throw 'GitHub kaynak arsivinin kok dizini beklenenden farkli'
         }
         if (-not (Test-ReleaseFiles $roots[0].FullName)) {
-            throw 'GitHub kaynak arsivinde gerekli UBDEN dosyalari eksik'
+            throw 'GitHub kaynak arsivinde gerekli UBDEN Windows dosyalari eksik'
         }
-        $destination = Assert-InstallChild $releaseRoot
-        Move-Item -LiteralPath $roots[0].FullName -Destination $destination
-        Write-Host "Kaynak dosyalari: $destination"
+        if (Test-Path -LiteralPath $releaseRoot) {
+            # WSL kurulumu ayni tag'i birakmissa ustune kopyalama; sadece eksikleri tamamla.
+            foreach ($file in (Get-ChildItem -LiteralPath $roots[0].FullName -Recurse)) {
+                $rel = $file.FullName.Substring($roots[0].FullName.Length).TrimStart('\', '/')
+                $dest = Join-Path $releaseRoot $rel
+                if ($file.PSIsContainer) { New-Item -ItemType Directory -Path $dest -Force | Out-Null }
+                elseif (-not (Test-Path -LiteralPath $dest)) {
+                    New-Item -ItemType Directory -Path (Split-Path -Parent $dest) -Force | Out-Null
+                    Copy-Item -LiteralPath $file.FullName -Destination $dest
+                }
+            }
+        }
+        else {
+            $destination = Assert-InstallChild $releaseRoot
+            Move-Item -LiteralPath $roots[0].FullName -Destination $destination
+        }
+        Write-Host "Kaynak dosyalari: $releaseRoot"
     }
     finally {
         $staging = Assert-InstallChild $staging
@@ -87,24 +109,20 @@ if (-not (Test-ReleaseFiles $releaseRoot)) {
     }
 }
 
-if (-not (Test-ReleaseFiles $releaseRoot)) { throw 'UBDEN kaynak dosyalari dogrulanamadi' }
+if (-not (Test-ReleaseFiles $releaseRoot)) { throw 'UBDEN Windows kaynak dosyalari dogrulanamadi' }
 
-# 'irm | iex' ile calisildiginda kurulum/gorev AYRI, kalici bir yonetici
-# penceresinde calisir. Boylece: (1) etkilesimli oturum 'exit' ile ANI kapanmaz,
-# (2) UAC bir kez istenir, (3) ilerleme ve olasi hatalar pencerede gorunur kalir
-# (Enter'a basana kadar) ve bir log dosyasina yazilir.
+# 'irm | iex' ile calisildiginda gorev AYRI, kalici bir yonetici penceresinde
+# calisir: etkilesimli oturum 'exit' ile ANI kapanmaz, UAC bir kez istenir,
+# ilerleme/hatalar pencerede gorunur kalir ve bir log dosyasina yazilir.
 $shell = if (Get-Command pwsh.exe -ErrorAction SilentlyContinue) { 'pwsh.exe' } else { 'powershell.exe' }
-# Log RELEASE dizininin DISINDA tutulur: entry betigi kaynak dizinindeki her
-# dosyanin SHA256'sini alir; log orada olursa transcript kilidi 'baska islem
-# kullaniyor' hatasi verir. Ust dizin ($installBase) hash'lenmez.
-$log = Join-Path $installBase 'setup-log.txt'
+$log = Join-Path $installBase 'setup-win-log.txt'
 $inner = @"
 `$ErrorActionPreference = 'Stop'
 try { Start-Transcript -Path '$log' -Append | Out-Null } catch {}
 try {
     & '$entryPoint' -Action '$Action'
     Write-Host ''
-    Write-Host 'UBDEN islemi tamamlandi.' -ForegroundColor Green
+    Write-Host 'UBDEN uPenetrator hazir.' -ForegroundColor Green
 } catch {
     Write-Host ''
     Write-Host ('UBDEN kurulum hatasi: ' + `$_.Exception.Message) -ForegroundColor Red
@@ -116,11 +134,11 @@ try {
 }
 "@
 $encoded = [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($inner))
-Write-Host 'UBDEN ayri bir yonetici penceresinde baslatiliyor (UAC izni istenebilir)...'
+Write-Host 'UBDEN uPenetrator ayri bir yonetici penceresinde baslatiliyor (UAC izni istenebilir)...'
 try {
     Start-Process -FilePath $shell -Verb RunAs -WindowStyle Normal `
         -ArgumentList @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-EncodedCommand', $encoded) | Out-Null
-    Write-Host 'Kurulum penceresi acildi. Ilerleme ve hatalar orada gorunur; bu pencereyi kapatabilirsiniz.'
+    Write-Host 'Pencere acildi. Tarayici arayuzu orada baslar; bu pencereyi kapatabilirsiniz.'
 }
 catch {
     Write-Host "Yonetici penceresi acilamadi (UAC reddedilmis olabilir): $($_.Exception.Message)" -ForegroundColor Red

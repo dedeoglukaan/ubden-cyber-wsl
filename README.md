@@ -96,20 +96,53 @@ UBDEN Cyber Security Systems test ekibi
 PowerShell:
 
 ```powershell
-irm 'https://raw.githubusercontent.com/ubden/ubden-cyber-wsl/v5.0.0-wsl.11/bootstrap.ps1' | iex
+irm 'https://raw.githubusercontent.com/ubden/ubden-cyber-wsl/v5.0.0-wsl.12/bootstrap.ps1' | iex
 ```
 
 CMD:
 
 ```cmd
-powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "irm 'https://raw.githubusercontent.com/ubden/ubden-cyber-wsl/v5.0.0-wsl.11/bootstrap.ps1' | iex"
+powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "irm 'https://raw.githubusercontent.com/ubden/ubden-cyber-wsl/v5.0.0-wsl.12/bootstrap.ps1' | iex"
 ```
 
-Komut [sürüm etiketli başlangıç betiğini](https://github.com/ubden/ubden-cyber-wsl/blob/v5.0.0-wsl.11/bootstrap.ps1) çalıştırır. Betik kaynak paketini indirir, mevcut Kali WSL kurulumunu kullanır veya eksikse kurar, bağımlılıkları hazırlar ve görev sihirbazını açar. Windows yeniden başlatması gerekirse işlem sonraki oturumda devam eder. Kurulum yönetici izni isteyebilir.
+Komut [sürüm etiketli başlangıç betiğini](https://github.com/ubden/ubden-cyber-wsl/blob/v5.0.0-wsl.12/bootstrap.ps1) çalıştırır. Betik kaynak paketini indirir, mevcut Kali WSL kurulumunu kullanır veya eksikse kurar, bağımlılıkları hazırlar ve görev sihirbazını açar. Windows yeniden başlatması gerekirse işlem sonraki oturumda devam eder. Kurulum yönetici izni isteyebilir.
 
 Kurulum önce mirrored ağı ve DNS tünellemeyi dener. Mirrored yapılandırması bilgisayardaki **tüm WSL 2 dağıtımlarını** etkiler. Mirrored başlatılamazsa Kali IPv4 adresi ve varsayılan rota doğrulanarak NAT ağında devam edilir. IP tabanlı LAN testlerinde Windows adaptör rotası ve Kali rotası her hedef için ayrıca denetlenir; hedefe erişim doğrulanmadan test başarılı sayılmaz. NAT modunda Kali fiziksel Windows ağ kartlarını doğrudan görmez. Ham katman-2, yayın trafiği, pasif fiziksel ağ yakalama ve bazı VPN yolları için ayrı uygunluk denetimi gerekir. Kullanılan ağ modu görev raporuna yazılır.
 
 Windows'un kendi Wi‑Fi IP adresine Windows'tan `ping` atılması, aynı adrese Kali WSL'den erişilebildiğini göstermez. Kapsam içindeki seçili Windows adaptör adresleri cihaz envanterinde ayrı bir kanıt sınıfı olarak gösterilir. Kali yanıt alamazsa bu adresler servis taraması yapılmış cihaz sayısına eklenmez; raporda erişim doğrulanamadı olarak görünür. CIDR keşfi, ICMP'ye ek olarak 16 yaygın servis portunda sınırlı TCP SYN yoklaması yapar. İkisine de yanıt vermeyen bir cihazın kapalı olduğu varsayılmaz.
+
+## Windows-native alternatif: uPenetrator (tarayıcı arayüzü, WSL'siz)
+
+WSL NAT ağında Kali fiziksel adaptörün L2 komşuluğuna giremediği için ARP/MAC ve
+cihaz tanımlama boş kalabilir. **uPenetrator**, tamamen Windows'ta çalışan ve
+Npcap ile gerçek L2/ARP erişimi olan alternatif bir tarayıcıdır: **aynı rapor
+motorunu** kullanır ama MAC adresi ile üretici/kategori/rol alanlarını doldurur.
+Tarayıcı üzerinden bir arayüzle (yerel `127.0.0.1`) çalışır; WSL gerektirmez.
+
+**Gereksinimler:** Windows 10 2004+ / Windows 11, yönetici yetkisi, Npcap
+(Nmap ile birlikte kurulur), kurulum için internet. Kurucu Python 3.13'ü (winget)
+ve Nmap+Npcap'i kurar.
+
+İkinci tek satırlık kurulum — PowerShell:
+
+```powershell
+irm 'https://raw.githubusercontent.com/ubden/ubden-cyber-wsl/v5.0.0-wsl.12/bootstrap-win.ps1' | iex
+```
+
+CMD:
+
+```cmd
+powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "irm 'https://raw.githubusercontent.com/ubden/ubden-cyber-wsl/v5.0.0-wsl.12/bootstrap-win.ps1' | iex"
+```
+
+Kurucu kaynağı indirir, ayrı bir yönetici penceresinde `ubden-win.ps1`'i çalıştırır,
+Python ortamını ve Nmap+Npcap'i hazırlar ve varsayılan tarayıcıda yerel arayüzü
+açar. Arayüzde müşteri/proje/yetki bilgisi, hedefler ve fiziksel adaptör seçilir;
+tarama Nmap ile ARP açık (fiziksel adaptörde MAC yakalanır) çalışır ve WSL sürümüyle
+**birebir aynı** REPORT.html + PDF raporlarını üretir. Raporlar
+`%LOCALAPPDATA%\UBDEN-Cyber\Reports\<GOREV>` altına yazılır. Arayüz yalnızca
+`127.0.0.1`'e bağlanır ve tek kullanımlık bir jeton ile korunur; dışarı açılmaz.
+Bu sürüm WSL kurulumunu değiştirmez; ikisi yan yana kullanılabilir.
 
 Windows kurulumunda `HypervisorPlatform` yeni etkinleştirildiyse **Windows'u yeniden başlatın**. UBDEN yeniden başlatma gerektiğini ağ testine geçmeden bildirir ve kurulumu sonraki oturum için kaydeder. Yeniden başlatmadan WSL dağıtımı açılmayabilir.
 
@@ -197,10 +230,10 @@ Resmî Kali `wordlists` paketi WSL kurulumuna dahildir. Sözlükler yalnız mü�
 
 ## Kurulum ve ortam yönetimi
 
-Tek satırlık kurulumdan sonra Windows giriş betiği `%LOCALAPPDATA%\Programs\UBDEN-Cyber\v5.0.0-wsl.11\ubden-wsl.ps1` konumundadır:
+Tek satırlık kurulumdan sonra Windows giriş betiği `%LOCALAPPDATA%\Programs\UBDEN-Cyber\v5.0.0-wsl.12\ubden-wsl.ps1` konumundadır:
 
 ```powershell
-$ubden = Join-Path $env:LOCALAPPDATA 'Programs\UBDEN-Cyber\v5.0.0-wsl.11\ubden-wsl.ps1'
+$ubden = Join-Path $env:LOCALAPPDATA 'Programs\UBDEN-Cyber\v5.0.0-wsl.12\ubden-wsl.ps1'
 & $ubden -Action status
 & $ubden -Action run
 ```
@@ -210,6 +243,6 @@ $ubden = Join-Path $env:LOCALAPPDATA 'Programs\UBDEN-Cyber\v5.0.0-wsl.11\ubden-w
 **Tam WSL imhası:** `destroy`, raporları WSL dışındaki seçilen klasöre SHA-256 ile doğrulayarak aktarır ve açık son onaydan sonra **bilgisayardaki tüm WSL dağıtımlarını**, Ubuntu dahil, kalıcı olarak kaldırır. Bu işlem yalnız tüm WSL ortamının kaldırılması istendiğinde kullanılmalıdır.
 
 ```powershell
-$ubden = Join-Path $env:LOCALAPPDATA 'Programs\UBDEN-Cyber\v5.0.0-wsl.11\ubden-wsl.ps1'
+$ubden = Join-Path $env:LOCALAPPDATA 'Programs\UBDEN-Cyber\v5.0.0-wsl.12\ubden-wsl.ps1'
 & $ubden -Action destroy -ExportTo 'D:\UBDEN-Rapor-Devir'
 ```

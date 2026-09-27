@@ -14,7 +14,7 @@ def available() -> bool:
 
 
 def invoke(action: str, payload: dict | None = None, timeout: int = 30) -> dict:
-    if action not in ("inventory", "route", "domain", "browser", "usb_list", "usb_attach"):
+    if action not in ("inventory", "route", "domain", "browser", "usb_list", "usb_attach", "neighbours"):
         raise ValueError("Windows koprusu islemi desteklenmiyor")
     bridge = os.environ.get("UBDEN_WINDOWS_BRIDGE")
     shell = shutil.which("pwsh.exe") or shutil.which("powershell.exe")
