@@ -35,6 +35,7 @@ from supplemental_scans import run as run_supplemental
 from service_probes import web_extras, domain_recon
 from credential_assessment import run_ssh as run_ssh_passwords
 from sql_discovery import discover as discover_sql_browser
+from rootdse_probe import discover as discover_rootdse
 from environment_doctor import inspect as inspect_environment
 
 ROOT = Path(__file__).resolve().parent
@@ -1127,6 +1128,7 @@ def scan_target(target, meta, root, events, credentials=(), index=1, total=1,
     if profile in ('network','full'):
         discover_sql_browser(assets,raw,events,meta['max_rate'])
         probe_snmp(target,assets,raw,events,meta['max_rate'])
+        discover_rootdse(assets,discovered_ports,raw,events)
         if 'supplemental_network' in meta.get('enabled_modules',[]):
             run_supplemental(target,assets,discovered_ports,raw,events,command,profile)
         for item in ssh_tests:

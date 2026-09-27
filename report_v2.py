@@ -293,6 +293,14 @@ def platform_lines(root, meta, steps):
         lines.append(f"AD değerlendirmesi: {ad.get('status','?')} — {ad.get('domain',ad.get('reason',''))}")
     except (OSError,ValueError):
         pass
+    for path in sorted((root/'targets').glob('*/raw/ad_rootdse_summary.json'))[:1] if (root/'targets').exists() else []:
+        try:
+            rootdse=json.loads(path.read_text(encoding='utf-8'))
+        except (OSError,ValueError):
+            continue
+        domains=', '.join(sorted({str(item.get('domain')) for item in rootdse.get('evidence',[]) if item.get('is_ad') and item.get('domain')}))
+        lines.append(f"Anonim RootDSE: {rootdse.get('ad_count',0)}/{rootdse.get('target_count',0)} adreste AD dizini kimlik doğrulamasız gözlendi"
+                     +(f"; alan: {domains}" if domains else '')+". Yetki/parola ilkesi bu okumayla test edilmiş sayılmaz.")
     browser=[s for s in steps if str(s.get('step','')).startswith('browser_')]
     wireless=[s for s in steps if str(s.get('step','')).startswith('wireless_')]
     if browser:
