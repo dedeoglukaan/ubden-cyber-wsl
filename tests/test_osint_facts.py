@@ -1,0 +1,72 @@
+import sys
+import tempfile
+import unittest
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
+import osint_facts
+import correlation
+
+
+def _run(dmarc_text, spf_text="", target="ornek.com"):
+    folder = Path(tempfile.mkdtemp())
+    raw = folder / "targets" / target / "raw"
+    raw.mkdir(parents=True)
+    (raw / "dns_dmarc.txt").write_text(dmarc_text, encoding="utf-8")
+    (raw / "dns_txt.txt").write_text(spf_text, encoding="utf-8")
+    return osint_facts.build(folder, {"targets": [target]})
+
+
+class OsintFactsTests(unittest.TestCase):
+    def test_no_dmarc_is_spoofable(self):
+        facts = _run("", spf_text='ornek.com. IN TXT "v=spf1 ~all"')
+        self.assertTrue(facts["email_spoofable"])
+        self.assertEqual(facts["email_posture"], "yok")
+        self.assertTrue(facts["spf_present"])
+        self.assertLess(facts["human_score"], 100)
+
+    def test_reject_dmarc_not_spoofable(self):
+        facts = _run('_dmarc.ornek.com. IN TXT "v=DMARC1; p=reject; rua=mailto:x@ornek.com"',
+                     spf_text='ornek.com. IN TXT "v=spf1 -all"')
+        self.assertFalse(facts["email_spoofable"])
+        self.assertEqual(facts["email_posture"], "korumalı")
+        self.assertEqual(facts["human_score"], 100)
+
+    def test_quarantine_is_partial(self):
+        facts = _run('_dmarc.ornek.com. IN TXT "v=DMARC1; p=quarantine"')
+        self.assertTrue(facts["email_spoofable"])
+        self.assertEqual(facts["email_posture"], "kısmi")
+
+    def test_ip_only_target_has_no_domain(self):
+        facts = osint_facts.build(Path(tempfile.mkdtemp()), {"targets": ["192.0.2.10"]})
+        self.assertFalse(facts["available"])
+        self.assertFalse(facts["email_spoofable"])
+
+
+class CorrelationOsintBridgeTests(unittest.TestCase):
+    def test_spoofable_email_creates_phishing_chain_and_bridge(self):
+        meta = {"targets": ["ornek.com"]}
+        hosts = [{"ip": "10.0.0.5", "ports": [{"port": "3389", "protocol": "tcp"}]}]
+        osint = {"email_spoofable": True, "email_posture": "yok", "human_score": 60,
+                 "human_grade": "D", "domains": ["ornek.com"]}
+        result = correlation.build(meta, hosts, [], {"categories": {}}, {}, osint)
+        titles = [c["title"] for c in result["correlations"]]
+        self.assertTrue(any("Sahtelenebilir e-posta" in t for t in titles))
+        self.assertTrue(any(ch["name"].startswith("Oltalama") for ch in result["attack_chains"]))
+        # Exposure index blends network and human sides.
+        self.assertIn("human_score", result["exposure_index"])
+        graph = result["graph"]
+        self.assertTrue(any(n["type"] == "email" for n in graph["nodes"]))
+        self.assertTrue(any(e.get("label") == "oltalama" for e in graph["edges"]))
+
+    def test_no_osint_means_no_phishing(self):
+        result = correlation.build({"targets": ["10.0.0.1"]},
+                                   [{"ip": "10.0.0.5", "ports": [{"port": "3389", "protocol": "tcp"}]}],
+                                   [], {"categories": {}}, {})
+        self.assertFalse(any("e-posta" in c["title"].lower() for c in result["correlations"]))
+        self.assertNotIn("human_score", result["exposure_index"])
+
+
+if __name__ == "__main__":
+    unittest.main()

@@ -874,6 +874,8 @@ def pdf(root, filename, meta, steps, hosts, findings, review, executive=False):
         erow=Table([[egauge,etext]],colWidths=[36*mm,doc.width-36*mm])
         erow.setStyle(TableStyle([('VALIGN',(0,0),(-1,-1),'MIDDLE'),('LEFTPADDING',(0,0),(-1,-1),0),('RIGHTPADDING',(0,0),(0,0),4*mm)]))
         story += [erow,Spacer(1,3*mm)]
+        if ei.get('human_score') is not None:
+            story.append(P('İnsan-riski / e-posta duruşu skoru: <b>%s/100</b> (Not %s). Maruziyet indeksi ağ ve insan tarafının ortalamasıdır.'%(ei.get('human_score'),ei.get('human_grade','?')),st['SmallX']))
         cors=corr.get('correlations',[])
         if cors:
             cor_cells=[[P(x,st['SmallWhiteX']) for x in ('Önem','Maruziyet kesişimi','Ayrıntı')]]
@@ -1132,6 +1134,8 @@ def html_report(root,meta,steps,hosts,findings,review,report_errors=None):
         correlation_html=('<h2>Çapraz-katman maruziyet analizi</h2><p>'+safe(corr.get('meaning'))+'</p>'+
             '<p><b>Maruziyet indeksi:</b> '+safe(ei.get('score'))+'/100 (Not '+safe(ei.get('grade'))+'). '+safe(ei.get('comment'))+
             ' · <a href="UBDEN_CORRELATION.json">Korelasyon kaydı</a></p>'+
+            (('<p><b>İnsan-riski / e-posta duruşu:</b> '+safe(ei.get('human_score'))+'/100 (Not '+safe(ei.get('human_grade'))+
+              '). <a href="UBDEN_OSINT.json">OSINT kaydı</a></p>') if ei.get('human_score') is not None else '')+
             '<table><thead><tr><th>Önem</th><th>Maruziyet kesişimi</th><th>Ayrıntı</th></tr></thead><tbody>'+
             ''.join('<tr><td>'+safe(SEVERITIES.get(c.get('severity'),'Bilgi'))+'</td><td>'+safe(c.get('title'))+'</td><td>'+safe(c.get('detail'))+'</td></tr>'
                     for c in corr.get('correlations',[]))+'</tbody></table>')
@@ -1193,9 +1197,14 @@ def main():
     plan=write_plan(root,meta,steps,review,device_inventory(root),findings)
     write_insights(root,meta,steps,findings,review)
     try:
-        CORR.write(root,meta,hosts,findings,device_inventory(root),ad_result(root))
+        import osint_facts
+        osint=osint_facts.build(root,meta)
+        temp=root/'.UBDEN_OSINT.pending.json'
+        temp.write_text(json.dumps(osint,ensure_ascii=False,indent=2)+'\n',encoding='utf-8')
+        temp.replace(root/'UBDEN_OSINT.json')
+        CORR.write(root,meta,hosts,findings,device_inventory(root),ad_result(root),osint=osint)
     except (OSError,ValueError,TypeError) as exc:
-        print(f'Korelasyon üretilemedi: {type(exc).__name__}: {exc}',file=sys.stderr)
+        print(f'Korelasyon/OSINT üretilemedi: {type(exc).__name__}: {exc}',file=sys.stderr)
     errors={}
     for filename,executive in (('YONETICI_OZETI.pdf',True),('TEKNIK_RAPOR.pdf',False)):
         temp=root/('.'+filename+'.pending.pdf')

@@ -171,6 +171,24 @@ def build(meta: dict, hosts: list, findings: list, devices: dict,
                     "action": "Sunucu, istemci ve IoT segmentlerini VLAN/erişim listeleriyle ayır",
                     "rationale": "Düz ağ bir cihazdan diğerine yanal hareketi kolaylaştırır"})
 
+    # OSINT çapraz-katman köprüsü (Faz C beslemesi): zayıf e-posta duruşu + iç yüzey.
+    if osint and osint.get("email_spoofable"):
+        internal = ("AD ortamı" if facts["ad_present"] else
+                    "uzaktan erişim servisleri" if facts["remote"] else
+                    "iç ağ uç noktaları")
+        posture = osint.get("email_posture", "yok")
+        add("Sahtelenebilir e-posta + iç ağ uç noktaları", "high",
+            f"Alan e-posta duruşu '{posture}' (DMARC uygulaması zayıf/yok) ve {internal} erişilebilir; "
+            "oltalama ile ilk erişim riski yükselir.",
+            chain={"name": "Oltalama → uç nokta → iç ağ", "likelihood": "orta",
+                   "impact": "İlk erişim ve yanal hareket başlangıcı",
+                   "steps": ["Yetkili senaryoda alanın DMARC/SPF zayıflığıyla sahte e-posta hazırla",
+                             "Hedef çalışan uç noktasında kod çalıştırmayı değerlendir",
+                             "İç ağa erişim doğrulanırsa yanal hareket yolunu haritala"]},
+            action={"priority": "yüksek", "effort": "düşük",
+                    "action": "DMARC'ı p=reject'e taşı; SPF/DKIM'i sıkılaştır; oltalama farkındalık eğitimi ver",
+                    "rationale": "Zayıf e-posta kimlik doğrulaması en yaygın ilk erişim vektörüdür"})
+
     confirmed_penalty = sum(_SEV_PENALTY.get(f.get("severity"), 0) for f in facts["confirmed"])
     corr_penalty = min(45, sum({"critical": 8, "high": 5, "medium": 2, "low": 1}.get(c["severity"], 0)
                                for c in correlations))
@@ -194,15 +212,15 @@ def build(meta: dict, hosts: list, findings: list, devices: dict,
         "correlations": sorted(correlations, key=lambda c: -_SEV_RANK.get(c["severity"], 0)),
         "attack_chains": chains,
         "combined_actions": sorted(actions, key=lambda a: {"kritik": 0, "yüksek": 1, "orta": 2, "düşük": 3}.get(a["priority"], 4)),
-        "graph": _build_graph(facts),
+        "graph": _build_graph(facts, osint),
         "source": "kural",
         "meaning": ("Korelasyon dış/iç kanıtı birbirine bağlar; skor ve graf yalnız kurallardan üretilir. "
                     "Zincirler saldırı başarısı değil, analist doğrulaması bekleyen maruziyet hipotezleridir."),
     }
 
 
-def _build_graph(facts: dict) -> dict:
-    """Saldırı-yüzeyi grafiği: kapsam (dış) ↔ servis/veritabanı/AD (iç)."""
+def _build_graph(facts: dict, osint: dict | None = None) -> dict:
+    """Saldırı-yüzeyi grafiği: kapsam/e-posta (dış) ↔ servis/veritabanı/AD (iç)."""
     nodes, edges = [], []
     seen = set()
 
@@ -213,6 +231,20 @@ def _build_graph(facts: dict) -> dict:
 
     scope_id = "scope"
     node(scope_id, "Yetkili kapsam", "external", "info")
+    # OSINT dış düğümleri: alan ve (varsa) sahtelenebilir e-posta yüzeyi.
+    first_internal = None
+    if facts["ad_hosts"]:
+        first_internal = f"ad-{facts['ad_hosts'][0]}"
+    elif facts["remote"]:
+        ip, port, _ = facts["remote"][0]
+        first_internal = f"svc-{ip}-{port}"
+    if osint:
+        for dom in (osint.get("domains") or [])[:2]:
+            node(f"dom-{dom}", dom, "domain", "info")
+            edges.append({"source": scope_id, "target": f"dom-{dom}", "label": "alan"})
+        if osint.get("email_spoofable"):
+            node("email", "Sahtelenebilir e-posta", "email", "high")
+            edges.append({"source": scope_id, "target": "email", "label": "DMARC zayıf"})
     for ip, port, name in facts["remote"][:8]:
         nid = f"svc-{ip}-{port}"
         node(nid, f"{ip}:{port} {name}", "service", "high")
@@ -232,6 +264,9 @@ def _build_graph(facts: dict) -> dict:
             node(nid, f"{f.get('id')} {f.get('title','')}", "cve",
                  "critical" if f.get("severity") == "critical" else "high")
             edges.append({"source": scope_id, "target": nid, "label": f.get("severity")})
+    # Çapraz köprü: sahtelenebilir e-posta → ilk iç uç nokta (oltalama ile ilk erişim).
+    if osint and osint.get("email_spoofable") and first_internal and first_internal in seen:
+        edges.append({"source": "email", "target": first_internal, "label": "oltalama"})
     return {"nodes": nodes, "edges": edges}
 
 
