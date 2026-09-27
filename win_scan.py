@@ -370,12 +370,18 @@ def scan_target(target, meta, root, events, progress):
             return
     progress(f"{target}: {len(assets)} adres taraniyor", "info")
     open_ports = _scan_scope(target, assets, meta, raw, events, progress)
+    # Narrow the per-host probe suite to LIVE hosts (those with an open port) for a
+    # CIDR sweep, so SNMP/NetBIOS/web probes don't run against all 254 addresses.
+    if wizard.is_network(target):
+        probe_assets = [ip for ip in assets if open_ports.get(ip)]
+    else:
+        probe_assets = assets
     # Full tool breadth (NSE audit, platform ports, SNMP/SQL/RootDSE, network & SNMP
     # extras, credential probes, supplemental, HTTP/TLS/nikto/nuclei, DNS/OSINT) via
     # the SAME suite the Kali wizard runs; absent tools are recorded as missing_tool.
-    progress(f"{target}: servis/guvenlik problari calisiyor (tum araclar)", "info")
+    progress(f"{target}: {len(probe_assets)} canli hostta servis/guvenlik problari (tum araclar)", "info")
     try:
-        wizard.run_probe_suite(target, meta, root, raw, events, assets, open_ports)
+        wizard.run_probe_suite(target, meta, root, raw, events, probe_assets, open_ports)
     except Exception as exc:
         events.append({"step": "probe_suite_error", "target": target, "status": "error",
                        "detail": f"{type(exc).__name__}: {exc}"})

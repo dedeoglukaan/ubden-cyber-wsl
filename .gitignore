@@ -25,3 +25,6 @@ review.json
 
 # Referans/örnek uygulama — depoya dahil değil
 parsDedector/
+
+run_real_scan.py
+runs_real/

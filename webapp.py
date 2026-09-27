@@ -63,15 +63,27 @@ def _run_job(job_id: str, form: dict) -> None:
 # NOT str.format) — so braces below are literal CSS/JS braces.
 PAGE = """<!doctype html><html lang="tr"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>UBDEN uPenetrator</title><style>
-:root{--bg:#080d1b;--panel:#0f1830;--line:#1e2b4a;--ink:#e8f0fc;--dim:#93a6c8;
---green:#22d3a0;--teal:#00b9bd;--red:#ef6a6a;--yellow:#e9c46a}
-*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);
-font:15px/1.5 "Segoe UI",system-ui,Arial,sans-serif}
-header{padding:18px 22px;border-bottom:1px solid var(--line);display:flex;
-align-items:center;gap:14px;flex-wrap:wrap;background:linear-gradient(180deg,#0c1a33,transparent)}
-h1{font-size:18px;margin:0;letter-spacing:.5px}h1 b{color:var(--green)}
-.sub{color:var(--dim);font-size:13px}main{max-width:900px;margin:0 auto;padding:22px}
+<title>UBDEN uPenetrator</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@600;800&family=IBM+Plex+Mono:wght@400;600&display=swap" rel="stylesheet">
+<style>
+:root{--bg-deep:#05080f;--bg:#080d1b;--panel:#0c1426;--surface:#101a31;--line:#1e2b4a;
+--ink:#e6ecf9;--dim:#90a0c4;--faint:#5c6c90;--accent:#3b6bff;--teal:#00b9bd;
+--green:#22d3a0;--red:#ff5c6e;--critical:#ff2d4e;--yellow:#ffb020;--glow:rgba(59,107,255,.28)}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg-deep);color:var(--ink);
+font:15px/1.55 "Segoe UI",system-ui,Arial,sans-serif;min-height:100vh}
+body::before{content:"";position:fixed;inset:0;z-index:0;pointer-events:none;
+background:radial-gradient(1200px 620px at 12% -8%,rgba(59,107,255,.16),transparent 60%),
+linear-gradient(rgba(126,158,224,.05) 1px,transparent 1px) 0 0/34px 34px,
+linear-gradient(90deg,rgba(126,158,224,.05) 1px,transparent 1px) 0 0/34px 34px}
+code,.mono,.ip,.mac{font-family:"IBM Plex Mono",Consolas,monospace;font-variant-numeric:tabular-nums}
+header{position:relative;z-index:1;padding:18px 26px;border-bottom:1px solid var(--line);display:flex;
+align-items:center;gap:14px;flex-wrap:wrap;background:linear-gradient(180deg,#0b1730,transparent)}
+.shield{width:30px;height:30px;filter:drop-shadow(0 0 6px var(--glow))}
+h1{font-family:Archivo,sans-serif;font-size:19px;margin:0;letter-spacing:.3px;font-weight:800}h1 b{color:var(--green)}
+.sub{color:var(--dim);font-size:13px}main{position:relative;z-index:1;max-width:1040px;margin:0 auto;padding:22px}
+h2,h3{font-family:Archivo,sans-serif;letter-spacing:.2px}
 .card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:18px;margin-bottom:18px}
 label{display:block;font-size:13px;color:var(--dim);margin:10px 0 4px}
 input,select,textarea{width:100%;background:#0a1226;color:var(--ink);
@@ -97,10 +109,41 @@ border-radius:8px;padding:8px 12px}
 .lane .cnt{font:12px Consolas,monospace;color:var(--dim)}.lane .cnt b{color:var(--red)}
 a{color:var(--teal)}.pill{display:inline-block;background:#16233f;border:1px solid var(--line);
 border-radius:999px;padding:3px 10px;font-size:12px;color:var(--dim);margin-left:8px}
+.eyebrow{font-family:"IBM Plex Mono",monospace;text-transform:uppercase;letter-spacing:.14em;
+font-size:11px;color:var(--teal);margin-bottom:6px}
+.hostgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-top:6px}
+.hostgrid .k{font-size:11px;color:var(--faint);text-transform:uppercase;letter-spacing:.08em}
+.hostgrid .v{font-family:"IBM Plex Mono",monospace;font-size:13.5px;color:var(--ink);margin-top:2px;word-break:break-word}
+.chip{display:inline-block;border-radius:999px;padding:2px 10px;font-size:12px;border:1px solid var(--line)}
+.chip.ok{color:var(--green);border-color:rgba(34,211,160,.4)}.chip.warn{color:var(--yellow);border-color:rgba(255,176,32,.4)}
+.adp{display:flex;align-items:center;gap:10px;background:#0a1226;border:1px solid var(--line);
+border-radius:9px;padding:9px 12px;margin:7px 0;cursor:pointer;transition:border-color .15s}
+.adp:has(input:checked){border-color:var(--accent);box-shadow:0 0 0 1px var(--glow)}
+.adp .an{font-weight:600;min-width:150px}.adp .ai{color:var(--dim);font-family:"IBM Plex Mono",monospace;font-size:12.5px;flex:1}
+.adp .ac{font-family:"IBM Plex Mono",monospace;color:var(--teal)}.adp .kind{font-size:11px;color:var(--faint)}
+.statrow{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:12px;margin:12px 0}
+.stat{background:var(--surface);border:1px solid var(--line);border-top:3px solid var(--teal);border-radius:10px;padding:12px 14px}
+.stat .n{font-family:Archivo,sans-serif;font-size:26px;font-weight:800}.stat .l{font-size:12px;color:var(--dim)}
+.dtbl{width:100%;border-collapse:collapse;font-size:13px;margin-top:8px}
+.dtbl th,.dtbl td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--line);vertical-align:top}
+.dtbl th{color:var(--dim);font-size:11px;text-transform:uppercase;letter-spacing:.06em}
+.dtbl code{color:#7fe0e4}.catrow td{background:#0b1428;font-family:Archivo,sans-serif;color:var(--teal);font-weight:600}
+.cm{display:inline-block;width:70px;height:8px;background:#20304d;border-radius:5px;overflow:hidden;vertical-align:middle}
+.cm i{display:block;height:8px;background:linear-gradient(90deg,var(--teal),var(--green))}
+.pchip{display:inline-block;background:#12203c;border:1px solid var(--line);border-radius:5px;padding:0 6px;margin:1px;
+font-family:"IBM Plex Mono",monospace;font-size:11.5px}.pchip.risk{color:var(--red);border-color:rgba(255,92,110,.5)}
+.toast{position:fixed;right:18px;bottom:18px;z-index:50;background:var(--surface);border:1px solid var(--line);
+border-left:3px solid var(--teal);border-radius:8px;padding:11px 16px;color:var(--ink);box-shadow:0 8px 30px #0008;animation:sl .26s}
+@keyframes sl{from{transform:translateX(40px);opacity:0}to{transform:none;opacity:1}}
+@media(prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
 </style></head><body>
-<header><h1><b>UBDEN</b> uPenetrator <span class="pill">Windows-native</span></h1>
-<span class="sub">Yetkili, kayitli ve sinirli guvenlik degerlendirmesi &middot; https://www.ubden.com</span></header>
+<header>
+<svg class="shield" viewBox="0 0 24 24" fill="none"><path d="M12 2l8 3v6c0 5-3.4 8.5-8 11-4.6-2.5-8-6-8-11V5l8-3z" stroke="#22d3a0" stroke-width="1.6" fill="rgba(34,211,160,.08)"/><path d="M8.5 12l2.4 2.4 4.6-5" stroke="#00b9bd" stroke-width="1.6" stroke-linecap="round"/></svg>
+<h1><b>UBDEN</b> uPenetrator <span class="pill">Windows-native</span></h1>
+<span class="sub">Yetkili, kayıtlı ve sınırlı güvenlik değerlendirmesi &middot; https://www.ubden.com</span></header>
 <main>
+<div class="card" id="hostcard"><div class="eyebrow">Bu Makine — Test Bilgisayarı</div>
+<div id="hostgrid" class="hostgrid"><div class="v">Bilgiler yükleniyor…</div></div></div>
 <div class="card"><div class="row">
 <div><label>Musteri</label><input id="client" placeholder="Musteri adi"></div>
 <div><label>Proje</label><input id="project" placeholder="Gorev adi"></div>
@@ -138,15 +181,32 @@ border-radius:999px;padding:3px 10px;font-size:12px;color:var(--dim);margin-left
 </main>
 <script>
 const T="__TOKEN__";
+function kv(k,v){return `<div><div class="k">${esc(k)}</div><div class="v">${esc(v||"—")}</div></div>`;}
 async function loadAdapters(){
- try{const r=await fetch("/api/adapters?t="+T);const d=await r.json();
+ let d={};
+ try{const r=await fetch("/api/adapters?t="+T);d=await r.json();}catch(e){}
+ renderHost(d);
  const box=document.getElementById("adapters");box.innerHTML="";
  const ad=(d.adapters||[]).filter(a=>(a.addresses||[]).length);
- if(!ad.length){box.innerHTML="<label>Adresli adaptor bulunamadi (kopru yoksa tarama yine calisir).</label>";return;}
- ad.forEach(a=>{const ips=(a.addresses||[]).map(x=>x.address).join(", ");
+ if(!ad.length){box.innerHTML="<div class='hint'>Adresli adaptör bulunamadı (köprü yoksa tarama yine çalışır).</div>";return;}
+ ad.forEach(a=>{const ips=(a.addresses||[]).map(x=>x.address);
+ const v4=ips.filter(x=>x.indexOf(":")<0).length;
+ const kind=a.is_vpn?"VPN":"fiziksel";
  box.insertAdjacentHTML("beforeend",
- `<label><input type="checkbox" class="adp" value="${a.index}" ${/Up/i.test(a.status)?"checked":""}> ${a.name} &mdash; <span class="sub">${ips||a.status}</span></label>`);});
- }catch(e){document.getElementById("adapters").innerHTML="<label>Adaptor listesi alinamadi.</label>";}
+ `<label class="adp"><input type="checkbox" class="adpk" value="${a.index}" ${/Up/i.test(a.status)?"checked":""}>`+
+ `<span class="an">${esc(a.name)}</span>`+
+ `<span class="ai">${esc(ips.slice(0,3).join(", ")||a.status)}</span>`+
+ `<span class="ac">${ips.length} IP</span> <span class="kind">${kind}</span></label>`);});
+}
+function renderHost(d){const g=document.getElementById("hostgrid");
+ if(!d||d.status!=="ok"){g.innerHTML="<div class='v'>Windows köprüsü yok; bilgiler kısıtlı.</div>";return;}
+ const dom = d.part_of_domain ? `<span class="chip warn">Domain: ${esc(d.domain)}</span>`
+   : (d.aad_joined ? `<span class="chip ok">Entra/AAD üyesi</span>` : `<span class="chip">Çalışma grubu</span>`);
+ g.innerHTML=kv("Bilgisayar",d.fqdn||d.host)+kv("Aktif kullanıcı",d.active_user)+
+ kv("İşletim sistemi",d.os_caption)+kv("Üretici / Model",(d.manufacturer||"")+" "+(d.model||""))+
+ kv("CPU",d.cpu)+kv("Bellek",(d.memory_mb?Math.round(d.memory_mb)+" MB":""))+
+ kv("Çalışma süresi",d.uptime)+kv("Toplam IPv4",d.ipv4_total)+
+ `<div><div class="k">AD / katılım</div><div class="v">${dom} ${d.domain_role?('<span class="chip">'+esc(d.domain_role)+'</span>'):''}</div></div>`;
 }
 function lines(v){return v.split("\\n").map(s=>s.trim()).filter(Boolean);}
 let JOB=null,timer=null;
@@ -155,7 +215,7 @@ async function start(){
  tester:c("tester"),targets:lines(v("targets")),exclusions:lines(v("exclusions")),
  profile:v("profile"),top_ports:v("top_ports"),max_rate:v("max_rate"),lanes:v("lanes"),
  default_cred_test:document.getElementById("defcred").checked,
- selected_interfaces:[...document.querySelectorAll(".adp:checked")].map(x=>x.value)};
+ selected_interfaces:[...document.querySelectorAll(".adpk:checked")].map(x=>x.value)};
  if(!body.targets.length){alert("En az bir hedef girin.");return;}
  document.getElementById("go").disabled=true;
  document.getElementById("progress").style.display="block";
@@ -183,16 +243,50 @@ function renderLanes(lanes){const box=document.getElementById("lanes");
  `<span class="cnt">${l.steps||0} adim ${issues}</span>`+
  `<span class="badge ${done?"done":"run"}">${done?"bitti":"calisiyor"}</span></div>`;}).join("");
 }
-function showDone(d){const el=document.getElementById("done");el.style.display="block";
+const RISKY=new Set([21,23,135,139,445,3389,5900,1433,3306,5432,6379,9200,161]);
+async function showDone(d){const el=document.getElementById("done");el.style.display="block";
  const s=(d.result&&d.result.device_summary)||{};
- let out=`<div><strong>Cihaz envanteri:</strong> ${s.host_count||0} cihaz &middot; <b>${s.mac_count||0} MAC</b> &middot; ${s.unknown_count||0} siniflandirilmamis</div>`;
+ let out="";
  if(d.result&&d.result.report_html){
- out+=`<p><a href="/r/REPORT.html?t=${T}&job=${JOB}" target="_blank">HTML raporu ac</a> &middot; `;
- out+=`<a href="/r/YONETICI_OZETI.pdf?t=${T}&job=${JOB}" target="_blank">Yonetici ozeti (PDF)</a> &middot; `;
- out+=`<a href="/r/TEKNIK_RAPOR.pdf?t=${T}&job=${JOB}" target="_blank">Teknik rapor (PDF)</a></p>`;
- out+=`<button class="sec" onclick="openFolder()">Rapor klasorunu ac</button>`;}
- else{out+=`<p class="l-warn">Rapor uretilemedi; ilerleme kaydini inceleyin.</p>`;}
- el.innerHTML=out;}
+ out+=`<p><a href="/r/REPORT.html?t=${T}&job=${JOB}" target="_blank">HTML raporu aç</a> &middot; `;
+ out+=`<a href="/r/YONETICI_OZETI.pdf?t=${T}&job=${JOB}" target="_blank">Yönetici özeti (PDF)</a> &middot; `;
+ out+=`<a href="/r/TEKNIK_RAPOR.pdf?t=${T}&job=${JOB}" target="_blank">Teknik rapor (PDF)</a> &middot; `;
+ out+=`<a href="#" onclick="openFolder();return false;">Klasörü aç</a></p>`;}
+ else{out+=`<p class="l-warn">Rapor üretilemedi; ilerleme kaydını inceleyin.</p>`;}
+ el.innerHTML=out;
+ // Rich device results from DEVICE_INVENTORY.json (category-grouped, like the report).
+ try{
+ const r=await fetch(`/r/DEVICE_INVENTORY.json?t=${T}&job=${JOB}`);const inv=await r.json();
+ const devs=inv.devices||[];
+ const cats=Object.keys(inv.categories||{}).length;
+ const openPorts=devs.reduce((n,x)=>n+((x.ports||[]).length),0);
+ el.insertAdjacentHTML("beforeend",
+  `<div class="statrow">`+
+  stat(inv.host_count||devs.length,"Cihaz")+stat(inv.mac_count||0,"MAC görüldü")+
+  stat(cats,"Kategori")+stat(openPorts,"Açık port")+stat(inv.unknown_count||0,"Sınıflandırılmamış")+`</div>`);
+ el.insertAdjacentHTML("beforeend",deviceTable(devs));
+ toast(`${devs.length} cihaz, ${inv.mac_count||0} MAC tespit edildi`);
+ }catch(e){}
+}
+function stat(n,l){return `<div class="stat"><div class="n">${esc(n)}</div><div class="l">${esc(l)}</div></div>`;}
+function deviceTable(devs){
+ if(!devs.length)return "";
+ const order=["firewall","router","switch","ap","hypervisor","server","db","nas","printer","camera","voip","pc","mobile","iot","ups","unknown"];
+ const groups={};devs.forEach(x=>{(groups[x.category_key||"unknown"]=groups[x.category_key||"unknown"]||[]).push(x);});
+ let rows="";
+ const keys=order.filter(k=>groups[k]).concat(Object.keys(groups).filter(k=>order.indexOf(k)<0));
+ keys.forEach(k=>{const g=groups[k];const label=(g[0].category||k);
+  rows+=`<tr class="catrow"><td colspan="5">${esc(label)} &middot; ${g.length}</td></tr>`;
+  g.forEach(x=>{const pct=x.confidence_pct||0;
+   const ports=(x.ports||[]).map(p=>`<span class="pchip ${RISKY.has(+p.port)?"risk":""}">${esc(p.port)}</span>`).join("")||'<span class="dim">—</span>';
+   rows+=`<tr><td><code>${esc(x.ip)}</code></td><td>${esc(x.display_name||(x.hostnames||[])[0]||"—")}</td>`+
+   `<td>${esc(x.vendor||"—")}<br><span class="dim mac">${esc(x.mac||"görülmedi")}</span></td>`+
+   `<td>${ports}</td><td><span class="cm"><i style="width:${Math.max(4,Math.min(100,pct))}%"></i></span> ${pct}%</td></tr>`;});
+ });
+ return `<h3 style="margin-top:16px">Cihaz envanteri</h3><table class="dtbl"><thead><tr><th>IP</th><th>Ad</th><th>Üretici / MAC</th><th>Portlar</th><th>Güven</th></tr></thead><tbody>${rows}</tbody></table>`;
+}
+function toast(msg){const t=document.createElement("div");t.className="toast";t.textContent=msg;
+ document.body.appendChild(t);setTimeout(()=>t.remove(),4200);}
 async function openFolder(){await fetch("/api/open?t="+T+"&job="+JOB,{method:"POST"});}
 function v(id){return document.getElementById(id).value;}
 function c(id){return document.getElementById(id).value.trim();}

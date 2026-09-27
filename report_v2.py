@@ -24,7 +24,7 @@ from analyst_review import assess, verified_finding
 from assessment_coverage import build_coverage, write_coverage
 from report_insights import write as write_insights
 from analyst_workplan import write_plan
-from device_inventory import build_inventory
+from device_inventory import build_inventory, CATEGORY_ORDER, CATEGORY_ICONS
 import report_visuals as V
 import correlation as CORR
 
@@ -1121,15 +1121,69 @@ def html_report(root,meta,steps,hosts,findings,review,report_errors=None):
         for i,f in enumerate(findings,1))
     inventory=''.join(f'<tr><td>{safe(h.get("ip"))}</td><td>{safe(", ".join(str(p.get("port",""))+"/"+str(p.get("service","")) for p in h.get("ports",[])))}</td><td>{evidence_link(root,h.get("evidence"))}</td></tr>' for h in hosts)
     devices=device_inventory(root)
-    device_rows=''.join('<tr>'+
-        ''.join(f'<td>{safe(value)}</td>' for value in (item.get('ip'),', '.join(item.get('hostnames',[])) or '—',
-                ', '.join(x.get('name','')+' (%'+x.get('accuracy','?')+')' for x in item.get('os_matches',[])) or '—',
-                item.get('mac') or 'görülmedi',item.get('vendor'),item.get('category'),item.get('confidence')))+
-        '<td>'+safe(' · '.join(item.get('signals',[])+[r.get('role','')+': '+r.get('reason','') for r in item.get('role_candidates',[])]+item.get('notices',[])+item.get('review_notes',[])))+'</td><td>'+evidence_link(root,item.get('evidence'))+'</td></tr>'
-        for item in devices.get('devices',[]))
-    category_rows=''.join(f'<tr><td>{safe(name)}</td><td>{count}</td></tr>' for name,count in sorted(devices.get('categories',{}).items(),key=lambda row:(-row[1],row[0])))
-    service_rows=''.join(f'<tr><td>{safe(name)}</td><td>{count}</td></tr>' for name,count in sorted(devices.get('services',{}).items(),key=lambda row:(-row[1],row[0])))
-    device_html=('<h2>Cihaz ve MAC envanteri</h2><p>'+safe(devices.get('limits'))+'</p><p>Adres: '+safe(devices.get('host_count'))+' · MAC görülen: '+safe(devices.get('mac_count'))+' · Belirsiz sınıf: '+safe(devices.get('unknown_count'))+'</p><p>Rol adayları (gözlenen alt sınır): '+safe(', '.join(f'{name}: {count}' for name,count in devices.get('role_counts_lower_bound',{}).items()))+' · Güvenlik duvarı kimliği: '+safe(devices.get('firewall_identity_status','doğrulanmadı'))+'</p><p>OUI kaynakları: '+safe(', '.join(devices.get('oui_sources',[])) or 'yüklenemedi')+'</p><p><a href="DEVICE_INVENTORY.json">Makine tarafından okunabilir envanter (JSON)</a></p><h3>Cihaz sınıfları</h3><table><thead><tr><th>Sınıf adayı</th><th>Adres</th></tr></thead><tbody>'+category_rows+'</tbody></table><h3>Servis dağılımı</h3><table><thead><tr><th>Port / servis</th><th>Adres</th></tr></thead><tbody>'+service_rows+'</tbody></table><h3>Cihaz kayıtları</h3><table><thead><tr><th>IP</th><th>Ad</th><th>OS tahmini</th><th>MAC</th><th>Üretici</th><th>Cihaz adayı</th><th>Güven</th><th>Gerekçe ve inceleme</th><th>Kanıt</th></tr></thead><tbody>'+device_rows+'</tbody></table>') if devices else ''
+    dev_list=devices.get('devices',[])
+
+    def _meter(pct):
+        pct=int(pct or 0)
+        return f'<span class="cmeter"><i style="width:{max(4,min(100,pct))}%"></i></span> <b>%{pct}</b>'
+
+    def _ports_tbl(item):
+        ps=item.get('ports',[])
+        if not ps:
+            return '<p class="dim">Açık TCP portu görülmedi.</p>'
+        rows=''.join('<tr><td><code>'+safe(p.get('port'))+'/'+safe(p.get('protocol'))+'</code></td><td>'+
+                     safe(p.get('service') or '—')+'</td><td>'+
+                     safe(' '.join(x for x in (p.get('product'),p.get('version'),p.get('extra_info')) if x) or '—')+
+                     '</td></tr>' for p in ps)
+        return '<table class="ports"><thead><tr><th>Port</th><th>Servis</th><th>Ürün / sürüm / banner</th></tr></thead><tbody>'+rows+'</tbody></table>'
+
+    # Group by fixed taxonomy order (parsDedector-style category cards).
+    order=[k for k in CATEGORY_ORDER if any(d.get('category_key')==k for d in dev_list)]
+    for d in dev_list:
+        k=d.get('category_key')
+        if k and k not in order:
+            order.append(k)
+    group_html=''
+    for key in order:
+        members=[d for d in dev_list if d.get('category_key')==key]
+        if not members:
+            continue
+        label=members[0].get('category') or key
+        cards=''
+        for item in members:
+            name=item.get('display_name') or (item.get('hostnames') or [''])[0] or '—'
+            os_txt=', '.join(x.get('name','')+' (%'+str(x.get('accuracy','?'))+')' for x in item.get('os_matches',[])) or '—'
+            reason=' · '.join(item.get('signals',[])[:5])
+            roles=', '.join(r.get('role','') for r in item.get('role_candidates',[]))
+            notes=' · '.join(item.get('notices',[])+item.get('review_notes',[]))
+            cards+=('<div class="devcard"><div class="devhead"><span class="dip"><code>'+safe(item.get('ip'))+'</code></span>'
+                    '<span class="dname">'+safe(name)+'</span><span class="dconf">'+_meter(item.get('confidence_pct'))+'</span></div>'
+                    '<div class="devmeta"><span>MAC <code>'+safe(item.get('mac') or 'görülmedi')+'</code></span>'
+                    '<span>Üretici: '+safe(item.get('vendor'))+'</span><span>OS: '+safe(os_txt)+'</span>'
+                    +('<span>Kanıt: '+evidence_link(root,item.get('evidence'))+'</span>' if item.get('evidence') else '')+'</div>'
+                    +_ports_tbl(item)
+                    +('<p class="devsig"><b>Sınıflandırma:</b> '+safe(reason)+'</p>' if reason else '')
+                    +('<p class="devrole"><b>Rol adayları:</b> '+safe(roles)+'</p>' if roles else '')
+                    +('<p class="devnote">'+safe(notes)+'</p>' if notes else '')
+                    +'</div>')
+        group_html+='<h3 class="catgroup">'+safe(CATEGORY_ICONS.get(key,'')+' '+label)+' <span class="pill">'+str(len(members))+'</span></h3>'+cards
+
+    # Network overview: gateways + per-adapter IP counts + discovery totals.
+    gateways=devices.get('observed_gateways',[])
+    snap=meta.get('host_snapshot') if isinstance(meta.get('host_snapshot'),dict) else {}
+    adp_rows=''.join('<tr><td>'+safe(a.get('name'))+'</td><td>'+safe(a.get('status'))+'</td><td>'+
+                     str(len(a.get('addresses',[])))+'</td><td>'+
+                     safe(', '.join(x.get('address','') for x in a.get('addresses',[])[:4]))+'</td></tr>'
+                     for a in snap.get('adapters',[]) if a.get('addresses'))
+    netov=('<h3>Ağ genel görünümü</h3><p>Kapsam: '+safe(', '.join(meta.get('targets',[])))+
+           ' · Bulunan cihaz: <b>'+str(len(dev_list))+'</b> · MAC görülen: <b>'+safe(devices.get('mac_count'))+
+           '</b> · Sınıflandırılmamış: '+safe(devices.get('unknown_count'))+
+           ' · Ağ geçidi: '+safe(', '.join(gateways) or '—')+'</p>')
+    if adp_rows:
+        netov+='<table><thead><tr><th>Test makinesi adaptörü</th><th>Durum</th><th>IP sayısı</th><th>Adresler</th></tr></thead><tbody>'+adp_rows+'</tbody></table>'
+    device_html=('<h2>Cihaz envanteri</h2><p>'+safe(devices.get('limits'))+'</p>'+netov+
+                 '<p><a href="DEVICE_INVENTORY.json">Makine tarafından okunabilir envanter (JSON)</a></p>'+
+                 group_html) if devices else ''
     if devices.get('local_interface_addresses'):
         local_rows=''.join('<tr><td>'+safe(item.get('ip'))+'</td><td>'+safe(item.get('adapter'))+'</td><td>'+
             safe(item.get('status'))+'</td><td>'+evidence_link(root,item.get('evidence'))+'</td></tr>'
@@ -1251,7 +1305,16 @@ def html_report(root,meta,steps,hosts,findings,review,report_errors=None):
     if (root/'STEP_AUDIT.json').is_file():
         doc=_splice(doc,'<h2>Çalışma günlüğü</h2>',
             '<p class="notice">Önceki adım durumları ham kanıta göre yeniden değerlendirildi. Orijinal steps.json korunmuştur. <a href="STEP_AUDIT.json">Yeniden değerlendirme kaydı</a></p><h2>Çalışma günlüğü</h2>')
-    doc=_splice(doc,'</style></head>', '.riskbars{max-width:700px}.riskrow{display:grid;grid-template-columns:70px 1fr 32px;gap:12px;align-items:center;margin:7px 0}.risktrack{height:12px;background:#edf1f6;border-radius:7px}.risktrack i{height:12px;display:block;border-radius:7px}</style></head>')
+    doc=_splice(doc,'</style></head>', '.riskbars{max-width:700px}.riskrow{display:grid;grid-template-columns:70px 1fr 32px;gap:12px;align-items:center;margin:7px 0}.risktrack{height:12px;background:#edf1f6;border-radius:7px}.risktrack i{height:12px;display:block;border-radius:7px}'
+        '.catgroup{margin-top:26px;display:flex;align-items:center;gap:10px}.pill{background:var(--navy);color:#fff;border-radius:999px;padding:1px 11px;font-size:12px}'
+        '.devcard{border:1px solid #dce5eb;border-left:4px solid var(--teal);border-radius:8px;padding:12px 16px;margin:10px 0;background:#fbfdff}'
+        '.devhead{display:flex;align-items:center;gap:14px;flex-wrap:wrap}.dip code{background:#0d1b33;color:#7fe0e4;padding:2px 8px;border-radius:5px;font-size:13px}'
+        '.dname{font-weight:700;color:var(--navy);font-size:15px}.dconf{margin-left:auto;font-size:12px;color:#4a5a72}'
+        '.cmeter{display:inline-block;width:90px;height:9px;background:#e3ebf2;border-radius:6px;vertical-align:middle;overflow:hidden}'
+        '.cmeter i{display:block;height:9px;background:linear-gradient(90deg,#00b9bd,#22d3a0)}'
+        '.devmeta{display:flex;flex-wrap:wrap;gap:16px;color:#4a5a72;font-size:12.5px;margin:8px 0}.devmeta code{background:#eef4f8;padding:1px 6px;border-radius:4px}'
+        'table.ports{margin:6px 0;font-size:12.5px}table.ports th{background:#f2f8f9}.devsig,.devrole,.devnote{margin:6px 0;font-size:12.5px;color:#4a5a72}'
+        '.devnote{color:#9a6b1a}.dim{color:#8494ab;font-size:12.5px}</style></head>')
     if not (root/'MANUEL_TEST_PLANI.md').is_file():
         doc=doc.replace('<a href="MANUEL_TEST_PLANI.md">manuel test planını</a>','manuel test planını')
     (root/'REPORT.html').write_text(doc,encoding='utf-8')
