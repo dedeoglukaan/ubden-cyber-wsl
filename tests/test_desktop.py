@@ -11,6 +11,7 @@ sys.path.insert(0,str(Path(__file__).resolve().parents[1]))
 import wizard
 
 
+@unittest.skipUnless(os.name == "posix", "Unix pwd/getuid ve masaüstü yolu gerektirir (Kali)")
 class DesktopTests(unittest.TestCase):
     def test_desktop_user_gets_private_report_directory(self):
         with tempfile.TemporaryDirectory() as temp:

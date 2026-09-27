@@ -1,5 +1,6 @@
 """Windows delivery copies complete run evidence without changing the Kali source."""
 import json
+import os
 from pathlib import Path
 import tempfile
 import unittest
@@ -26,6 +27,7 @@ class ReportCopyTests(unittest.TestCase):
                 deliver(source,destination)
             self.assertEqual((source/'REPORT.html').read_text(),'<h1>Report</h1>')
 
+    @unittest.skipUnless(os.name == "posix", "latest_since POSIX mutlak yol (/) gerektirir (Kali)")
     def test_latest_only_selects_a_new_completed_report(self):
         with tempfile.TemporaryDirectory() as folder:
             base=Path(folder)

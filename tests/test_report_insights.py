@@ -1,5 +1,6 @@
 """Offline enrichment must preserve evidence status and keep supplied hashes private."""
 import json
+import os
 from pathlib import Path
 import sys
 import tempfile
@@ -12,6 +13,7 @@ from report_insights import cvss31, write
 
 
 class ReportInsightsTests(unittest.TestCase):
+    @unittest.skipUnless(os.name == "posix", "Kali IPv4 rota kontrolü yalnız POSIX'te çalışır")
     def test_preflight_blocks_missing_selected_interface_without_target_traffic(self):
         with tempfile.TemporaryDirectory() as folder:
             meta = {'targets': ['192.0.2.5'], 'authorization_reference': 'AUTH-1',

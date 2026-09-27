@@ -33,11 +33,11 @@ class ReportDeliveryTests(unittest.TestCase):
             revised,audit=report_v2.audit_recorded_steps(root,original)
             self.assertEqual(revised[0]['status'],'error')
             self.assertEqual(audit[0]['original_status'],'ok')
-            self.assertEqual(json.loads((root/'steps.json').read_text()),original)
+            self.assertEqual(json.loads((root/'steps.json').read_text(encoding='utf-8')),original)
             with patch.object(sys,'argv',['report_v2.py',str(root)]):
                 report_v2.main()
             self.assertTrue((root/'STEP_AUDIT.json').is_file())
-            self.assertIn('Yeniden değerlendirme kaydı',(root/'REPORT.html').read_text())
+            self.assertIn('Yeniden değerlendirme kaydı',(root/'REPORT.html').read_text(encoding='utf-8'))
 
     def fixture(self,root):
         (root/'engagement.json').write_text(json.dumps({
@@ -47,7 +47,7 @@ class ReportDeliveryTests(unittest.TestCase):
         raw.mkdir(parents=True)
         evidence=raw/'headers_192.0.2.5_https_443.txt'
         evidence.write_text('HTTP/1.1 200 OK\nContent-Type: text/html\n',encoding='utf-8')
-        relative=str(evidence.relative_to(root))
+        relative=evidence.relative_to(root).as_posix()
         (root/'steps.json').write_text(json.dumps([{
             'step':'headers_192.0.2.5_https_443','status':'ok','output':relative,'seconds':0.2}]))
         return relative
@@ -60,7 +60,7 @@ class ReportDeliveryTests(unittest.TestCase):
                 report_v2.main()
             self.assertGreater((root/'TEKNIK_RAPOR.pdf').stat().st_size,1000)
             self.assertGreater((root/'YONETICI_OZETI.pdf').stat().st_size,1000)
-            document=(root/'REPORT.html').read_text()
+            document=(root/'REPORT.html').read_text(encoding='utf-8')
             self.assertIn('href="'+relative+'"',document)
             self.assertIn('id="bulgu-1"',document)
             self.assertIn('href="#bulgu-1"',document)
@@ -89,7 +89,7 @@ class ReportDeliveryTests(unittest.TestCase):
                     patch.object(sys,'argv',['report_v2.py',str(root)]):
                 with self.assertRaises(SystemExit):
                     report_v2.main()
-            document=(root/'REPORT.html').read_text()
+            document=(root/'REPORT.html').read_text(encoding='utf-8')
             self.assertIn('PDF üretim hatası',document)
             self.assertNotIn('href="TEKNIK_RAPOR.pdf"',document)
             self.assertIn('href="YONETICI_OZETI.pdf"',document)

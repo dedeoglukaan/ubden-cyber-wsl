@@ -29,7 +29,7 @@ class SnmpTests(unittest.TestCase):
                     patch.object(wizard.subprocess,'run',side_effect=run):
                 wizard.probe_snmp('192.0.2.0/24',['192.0.2.5','192.0.2.37'],raw,events,20)
             self.assertEqual([row[1:5] for row in calls],[['-v1','-c','public','-t']]*2)
-            summary=json.loads((raw/'snmp_v1_public_summary.json').read_text())
+            summary=json.loads((raw/'snmp_v1_public_summary.json').read_text(encoding='utf-8'))
             self.assertEqual(summary['responding_count'],1)
             self.assertEqual(summary['tested_count'],2)
             self.assertFalse((raw/'snmp_v1_public_192.0.2.37.json').exists())
@@ -42,7 +42,7 @@ class SnmpTests(unittest.TestCase):
             self.assertIn('public',findings[0]['title'])
             with patch.object(sys,'argv',['report_v2.py',str(root)]):
                 report_v2.main()
-            self.assertIn('SNMPv1 / public kontrolü',(root/'REPORT.html').read_text())
+            self.assertIn('SNMPv1 / public kontrolü',(root/'REPORT.html').read_text(encoding='utf-8'))
             self.assertTrue((root/'TEKNIK_RAPOR.pdf').stat().st_size>1000)
 
     def test_missing_tool_records_skipped_without_stopping(self):

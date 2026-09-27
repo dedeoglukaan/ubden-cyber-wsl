@@ -91,6 +91,8 @@ class WslPlatformTests(unittest.TestCase):
         self.assertEqual(next(row for row in events if row["step"] == "cidr_web_budget")["status"],
                          "skipped")
 
+    @unittest.skipUnless(importlib.util.find_spec("yaml") is not None,
+                         "PyYAML gerektirir (WSL kurulumunda mevcut)")
     def test_custom_nuclei_template_cannot_leave_scope_or_write(self):
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / "outside.yaml"

@@ -32,7 +32,7 @@ class DeviceInventoryTests(unittest.TestCase):
             (root/'steps.json').write_text('[]')
             with patch.object(sys,'argv',['report_v2.py',str(root)]):
                 report_v2.main()
-            html=(root/'REPORT.html').read_text()
+            html=(root/'REPORT.html').read_text(encoding='utf-8')
             self.assertIn('192.0.2.37',html)
             self.assertIn('Windows adaptör kaydı servis testi kanıtı değildir',html)
 
@@ -59,7 +59,7 @@ class DeviceInventoryTests(unittest.TestCase):
             self.assertEqual(one['category'],'Yazıcı adayı')
             self.assertEqual(one['confidence'],'belirsiz')
             self.assertTrue(any('vekil ARP' in note for note in one['notices']))
-            self.assertEqual(json.loads((root/'DEVICE_INVENTORY.json').read_text())['host_count'],2)
+            self.assertEqual(json.loads((root/'DEVICE_INVENTORY.json').read_text(encoding='utf-8'))['host_count'],2)
 
     def test_local_random_mac_not_trusted_as_ieee_vendor(self):
         vendor,source=vendor_for('02:11:22:33:44:55',{'021122':'Imaginary Co'})
@@ -91,7 +91,7 @@ class DeviceInventoryTests(unittest.TestCase):
                 '<service name="ssh" product="OpenSSH"/></port></ports></host></nmaprun>')
             with patch.object(sys,'argv',['report_v2.py',str(root)]):
                 report_v2.main()
-            document=(root/'REPORT.html').read_text()
+            document=(root/'REPORT.html').read_text(encoding='utf-8')
             self.assertIn('Cihaz ve MAC envanteri',document)
             self.assertIn('VMware',document)
             self.assertIn('href="DEVICE_INVENTORY.json"',document)

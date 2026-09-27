@@ -6,7 +6,14 @@ import unittest
 sys.path.insert(0,str(Path(__file__).resolve().parents[1]))
 import wizard
 
+try:
+    import yaml as _yaml  # noqa: F401
+    _HAS_YAML = True
+except ImportError:
+    _HAS_YAML = False
 
+
+@unittest.skipUnless(_HAS_YAML, "PyYAML gerektirir (WSL kurulumunda mevcut)")
 class NucleiBaselineTests(unittest.TestCase):
     def test_default_templates_are_read_only_and_scope_bound(self):
         files=wizard.template_inventory(wizard.BASELINE)
