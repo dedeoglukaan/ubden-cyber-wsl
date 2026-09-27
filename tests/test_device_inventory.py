@@ -56,8 +56,8 @@ class DeviceInventoryTests(unittest.TestCase):
             self.assertEqual(result['mac_count'],2)
             one=result['devices'][0]
             self.assertEqual(one['vendor'],'Example Printer Corp')
-            self.assertEqual(one['category'],'Yazıcı adayı')
-            self.assertEqual(one['confidence'],'belirsiz')
+            self.assertEqual(one['category'],'Yazıcı / MFP')
+            self.assertEqual(one['confidence'],'belirsiz')  # duplicate-MAC proxy downgrade
             self.assertTrue(any('vekil ARP' in note for note in one['notices']))
             self.assertEqual(json.loads((root/'DEVICE_INVENTORY.json').read_text(encoding='utf-8'))['host_count'],2)
 
@@ -68,8 +68,8 @@ class DeviceInventoryTests(unittest.TestCase):
 
     def test_snmp_sysdescr_adds_explicit_device_identity_signal(self):
         category,confidence,signals=classify('Bilinmiyor',[], 'Fortinet FortiOS 7.0')
-        self.assertEqual(category,'Güvenlik cihazı adayı')
-        self.assertEqual(confidence,'orta')
+        self.assertEqual(category,'Güvenlik duvarı / UTM')
+        self.assertEqual(confidence,'yüksek')
         self.assertTrue(any('SNMP sysDescr' in signal for signal in signals))
 
     def test_progress_uses_nmap_percentage_and_unknown_otherwise(self):

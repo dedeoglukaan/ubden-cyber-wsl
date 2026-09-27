@@ -106,8 +106,27 @@ def windows_inventory() -> dict:
             "default_routes": []}
 
 
+def _is_real_neighbor(ip: str, mac: str) -> bool:
+    """Drop multicast/broadcast ARP ghosts (224/4, 255.*, 01:00:5E/33:33/FF, I-G bit)."""
+    try:
+        addr = ipaddress.ip_address(ip)
+    except ValueError:
+        return False
+    if addr.is_multicast or addr.is_unspecified or str(addr) == "255.255.255.255":
+        return False
+    m = str(mac).replace("-", ":").upper()
+    if m.startswith(("01:00:5E", "33:33", "FF:FF:FF")):
+        return False
+    try:
+        if int(m.split(":")[0], 16) & 1:  # group/multicast bit
+            return False
+    except ValueError:
+        return False
+    return True
+
+
 def arp_neighbours() -> dict:
-    """Map ``{ip: {'mac','device'}}`` from the local ARP cache.
+    """Map ``{ip: {'mac','device'}}`` from the local ARP cache, ghosts filtered.
 
     Prefers the bridge ``neighbours`` action (Get-NetNeighbor, richer state); falls
     back to parsing ``arp -a`` which needs no admin and no PowerShell.
@@ -119,7 +138,7 @@ def arp_neighbours() -> dict:
                 out = {}
                 for row in result.get("neighbours", []):
                     ip, mac = row.get("ip"), row.get("mac")
-                    if ip and mac:
+                    if ip and mac and _is_real_neighbor(ip, mac):
                         out[ip] = {"mac": mac, "device": row.get("device", "")}
                 if out:
                     return out
@@ -145,9 +164,29 @@ def _arp_table() -> dict:
             except ValueError:
                 continue
             mac = parts[1]
-            if mac.count("-") == 5 or mac.count(":") == 5:
+            if (mac.count("-") == 5 or mac.count(":") == 5) and _is_real_neighbor(ip, mac):
                 out[ip] = {"mac": mac, "device": ""}
     return out
+
+
+def _default_routes_fallback() -> list:
+    """Best-effort default gateway(s) via `route print` when the bridge is absent,
+    so the gateway is classified as a router even in standalone runs."""
+    try:
+        out = subprocess.run(["route", "print", "-4"], capture_output=True, text=True,
+                             timeout=10, errors="replace", check=False).stdout
+    except (OSError, subprocess.TimeoutExpired):
+        return []
+    routes = []
+    for line in out.splitlines():
+        parts = line.split()
+        if len(parts) >= 3 and parts[0] == "0.0.0.0" and parts[1] == "0.0.0.0":
+            try:
+                ipaddress.ip_address(parts[2])
+                routes.append({"destination": "0.0.0.0/0", "gateway": parts[2]})
+            except ValueError:
+                pass
+    return routes
 
 
 def ensure_oui_paths(state_dir: Path) -> list:
@@ -363,6 +402,12 @@ def run_scan(form: dict, progress=None) -> dict:
     if win_tools is not None:
         win_tools.ensure_path()  # make pip/winget-installed CLIs discoverable via which()
     host_snapshot = windows_inventory()
+    # Ensure the default gateway is known even without the bridge, so it classifies
+    # as a router in the device inventory (standalone runs otherwise miss it).
+    if isinstance(host_snapshot, dict) and not host_snapshot.get("default_routes"):
+        fallback = _default_routes_fallback()
+        if fallback:
+            host_snapshot["default_routes"] = fallback
     meta = build_meta(form, host_snapshot)
     emit("Kapsam donduruluyor (DNS/adres butcesi)", "info")
     try:

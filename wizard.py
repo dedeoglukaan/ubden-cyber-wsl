@@ -40,6 +40,7 @@ from credential_assessment import run_ssh as run_ssh_passwords
 from sql_discovery import discover as discover_sql_browser
 from rootdse_probe import discover as discover_rootdse
 import credential_probes
+import netbios_probe
 from environment_doctor import inspect as inspect_environment
 
 ROOT = Path(__file__).resolve().parent
@@ -1099,6 +1100,7 @@ def run_probe_suite(target, meta, root, raw, events, assets, discovered_ports,
                 if extra:
                     discovered_ports[ip]=sorted(set(discovered_ports.get(ip,[]))|set(extra))
         discover_sql_browser(assets,raw,events,meta['max_rate'])
+        netbios_probe.run(assets,discovered_ports,raw,events)
         probe_snmp(target,assets,raw,events,meta['max_rate'])
         discover_rootdse(assets,discovered_ports,raw,events)
         network_extras(assets,discovered_ports,raw,events,command)

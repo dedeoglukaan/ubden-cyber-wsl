@@ -19,25 +19,77 @@ VIRTUAL = {
     '00155D':'Microsoft Hyper-V','080027':'Oracle VirtualBox',
     '00163E':'Xen','525400':'QEMU/KVM','001C42':'Parallels',
 }
+# Fixed device taxonomy: stable key -> Turkish label, plus report display order.
+CATEGORIES = {
+    'firewall': 'Güvenlik duvarı / UTM', 'router': 'Yönlendirici / Modem',
+    'switch': 'Anahtar (Switch)', 'ap': 'Kablosuz erişim noktası',
+    'hypervisor': 'Sanallaştırma (Hypervisor)', 'server': 'Sunucu', 'pc': 'İstemci PC',
+    'nas': 'Depolama (NAS)', 'printer': 'Yazıcı / MFP', 'camera': 'Kamera / DVR / NVR',
+    'voip': 'IP telefon / Santral', 'db': 'Veritabanı sunucusu', 'mobile': 'Mobil cihaz',
+    'iot': 'IoT / gömülü cihaz', 'ups': 'UPS / güç', 'unknown': 'Bilinmiyor',
+}
+CATEGORY_ORDER = ['firewall', 'router', 'switch', 'ap', 'hypervisor', 'server', 'db',
+                  'nas', 'printer', 'camera', 'voip', 'pc', 'mobile', 'iot', 'ups', 'unknown']
+CATEGORY_ICONS = {'firewall': '🛡️', 'router': '📶', 'switch': '🔀', 'ap': '📡',
+                  'hypervisor': '🧫', 'server': '🖥️', 'pc': '💻', 'nas': '🗄️',
+                  'printer': '🖨️', 'camera': '📷', 'voip': '☎️', 'db': '🗃️',
+                  'mobile': '📱', 'iot': '🔌', 'ups': '🔋', 'unknown': '❔'}
+# Weighted rules: (patterns, category_key, weight). Higher weight = stronger signal.
 VENDOR_RULES = (
-    (('fortinet','palo alto','sonicwall','watchguard','sophos'), 'Güvenlik cihazı adayı'),
-    (('hikvision','dahua','axis communications','vivotek'), 'Kamera adayı'),
-    (('epson','brother','lexmark','ricoh','xerox','kyocera'), 'Yazıcı adayı'),
-    (('synology','qnap','asustor'), 'Depolama cihazı adayı'),
-    (('yealink','grandstream','polycom','snom'), 'IP telefon adayı'),
-    (('ubiquiti','ruckus','aruba','cisco','juniper','mikrotik','tp-link'), 'Ağ cihazı adayı'),
+    (('fortinet', 'fortigate', 'palo alto', 'sonicwall', 'watchguard', 'sophos', 'check point', 'zscaler'), 'firewall', 60),
+    (('hikvision', 'dahua', 'axis communications', 'vivotek', 'uniview', 'reolink', 'hanwha', 'avigilon', 'bosch security'), 'camera', 60),
+    (('epson', 'brother', 'lexmark', 'ricoh', 'xerox', 'kyocera', 'konica', 'zebra', 'oki data', 'sato', 'seiko epson'), 'printer', 55),
+    (('hewlett packard', 'hp inc'), 'printer', 32),
+    (('synology', 'qnap', 'asustor', 'buffalo', 'drobo', 'western digital'), 'nas', 60),
+    (('yealink', 'grandstream', 'polycom', 'snom', 'avaya', 'mitel', 'fanvil', 'gigaset'), 'voip', 55),
+    (('vmware', 'nutanix'), 'hypervisor', 50),
+    (('espressif', 'tuya', 'sonoff', 'shelly', 'xiaomi', 'sonos', 'nest', 'ring', 'ecobee', 'amazon technologies'), 'iot', 52),
+    (('ubiquiti', 'ruckus', 'aruba', 'mikrotik', 'tp-link', 'tp link', 'd-link', 'zyxel', 'keenetic', 'netgear', 'tenda', 'totolink'), 'ap', 38),
+    (('vantiva', 'technicolor', 'arris', 'sagemcom', 'sercomm', 'huawei technolog', 'zte', 'airties', 'avm', 'fritz'), 'router', 45),
+    (('cisco', 'juniper', 'extreme networks', 'h3c', 'ruijie'), 'switch', 32),
+    (('apc ', 'american power', 'eaton', 'tripp lite', 'cyberpower', 'riello', 'socomec'), 'ups', 60),
+    (('raspberry pi', 'arduino'), 'iot', 28),
+    (('intel corporate',), 'pc', 22),
+    (('microsoft',), 'pc', 18),
+    (('apple',), 'mobile', 24),
+    (('samsung elect', 'huawei device', 'oneplus', 'oppo mobile', 'vivo mobile', 'honor device'), 'mobile', 35),
 )
-PORT_RULES = ((9100,'Yazıcı adayı','Yazıcı servis portu 9100'),
-              (515,'Yazıcı adayı','LPD portu 515'),
-              (631,'Yazıcı adayı','IPP portu 631'),
-              (554,'Kamera / medya cihazı adayı','RTSP portu 554'),
-              (5060,'IP telefon adayı','SIP portu 5060'),
-              (2049,'Dosya sunucusu adayı','NFS portu 2049'),
-              (1433,'SQL Server adayı','TDS/SQL Server varsayılan portu 1433'),
-              (3306,'Veritabanı sunucusu adayı','MySQL varsayılan portu 3306'),
-              (5432,'Veritabanı sunucusu adayı','PostgreSQL varsayılan portu 5432'),
-              (1521,'Veritabanı sunucusu adayı','Oracle varsayılan portu 1521'))
-REVIEW_PORTS = {21:'FTP',23:'Telnet',161:'SNMP',445:'SMB',3389:'RDP',5900:'VNC',6379:'Redis',9200:'Elasticsearch'}
+TEXT_RULES = (
+    (('fortigate', 'fortios', 'pan-os', 'sonicos', 'sophos xg', 'sophos utm'), 'firewall', 75),
+    (('esxi', 'vmware esx', 'vsphere'), 'hypervisor', 78),
+    (('proxmox',), 'hypervisor', 78),
+    (('hyper-v', 'xenserver', 'citrix hypervisor'), 'hypervisor', 55),
+    (('diskstation', 'synology', 'qnap', 'qts', 'truenas', 'freenas', 'openmediavault'), 'nas', 72),
+    (('jetdirect', 'laserjet', 'officejet', 'deskjet', 'pixma', 'imageclass', 'workcentre', 'ecosys', 'bizhub', 'ipp', 'internet printing', 'cups'), 'printer', 70),
+    (('routeros', 'mikrotik', 'edgeos', 'edgerouter', 'openwrt', 'dd-wrt', 'pfsense', 'opnsense'), 'router', 68),
+    (('windows server',), 'server', 65),
+    (('domain controller', 'active directory'), 'server', 55),
+    (('ubuntu', 'debian', 'centos', 'red hat', 'rhel'), 'server', 22),
+    (('windows 10', 'windows 11', 'windows 8', 'windows 7'), 'pc', 45),
+    (('macos', 'mac os x', 'darwin'), 'pc', 40),
+    (('dahua', 'hikvision', 'ipcam', 'ip camera', 'nvr', 'dvr', 'netsurveillance', 'onvif'), 'camera', 65),
+    (('asterisk', 'freepbx', '3cx', 'sip', 'voip', 'pbx', 'issabel', 'elastix'), 'voip', 58),
+    (('android',), 'mobile', 60),
+    (('iphone', 'ipad'), 'mobile', 65),
+    (('printer', 'print server'), 'printer', 48),
+    (('camera', 'rtsp'), 'camera', 46),
+    (('router', 'gateway', 'modem', 'residential gateway'), 'router', 34),
+    (('access point', 'wireless ap'), 'ap', 34),
+    (('smart-ups', 'battery'), 'ups', 42),
+)
+PORT_RULES = (
+    ((9100,), 'printer', 45), ((515,), 'printer', 40), ((631,), 'printer', 45),
+    ((554,), 'camera', 40), ((37777, 37778), 'camera', 60), ((34567,), 'camera', 45),
+    ((5060, 5061), 'voip', 55),
+    ((902, 903), 'hypervisor', 55), ((8006,), 'hypervisor', 60), ((5480,), 'hypervisor', 30),
+    ((1433,), 'db', 48), ((3306,), 'db', 45), ((5432,), 'db', 45), ((1521,), 'db', 45),
+    ((27017,), 'db', 40), ((6379,), 'db', 32),
+    ((88, 389, 636), 'server', 35), ((623,), 'server', 40), ((3268,), 'server', 35),
+    ((5000, 5001), 'nas', 22), ((873,), 'nas', 20),
+    ((1723,), 'router', 20), ((53,), 'router', 12), ((67, 68), 'router', 18), ((161,), 'switch', 10),
+)
+WINDOWS_PORTS = {135, 139, 445, 3389, 5357}
+REVIEW_PORTS = {21: 'FTP', 23: 'Telnet', 161: 'SNMP', 445: 'SMB', 3389: 'RDP', 5900: 'VNC', 6379: 'Redis', 9200: 'Elasticsearch'}
 HEX=re.compile(r'^[0-9A-F]{12}$')
 
 
@@ -145,40 +197,91 @@ def allowed_ips(root,meta):
     return valid
 
 
-def classify(vendor,ports,snmp_description=''):
-    scores=defaultdict(int)
-    evidence=[]
-    lower=vendor.lower()
-    product_text=' '.join(p.get('product','') for p in ports).lower()
-    for patterns,category in VENDOR_RULES:
-        if any(pattern in lower for pattern in patterns):
-            scores[category]+=1
-            evidence.append(f'OUI üreticisi: {vendor} ({category})')
+def _confidence_word(pct):
+    if pct >= 80:
+        return 'yüksek'
+    if pct >= 55:
+        return 'orta'
+    if pct >= 30:
+        return 'düşük'
+    return 'belirsiz'
+
+
+def classify_device(facts):
+    """Weighted, multi-signal device classification with a 0-99 confidence score.
+
+    facts keys (all optional): vendor, ports (list of dicts), snmp (sysDescr),
+    text (precomputed blob), os (list of {name,accuracy}), gateway (bool),
+    random_mac (bool). Returns {key, category, confidence, confidence_pct, evidence}.
+    """
+    vendor = facts.get('vendor') or ''
+    ports = facts.get('ports') or []
+    numbers = {int(p['port']) for p in ports if str(p.get('port', '')).isdigit()}
+    vlower = vendor.lower()
+    blob = (facts.get('text') or '').lower()
+    scores = defaultdict(int)
+    evidence = []
+
+    def award(key, weight, why):
+        scores[key] += weight
+        evidence.append({'signal': why, 'weight': weight, 'category': key})
+
+    for patterns, key, weight in VENDOR_RULES:
+        if any(p in vlower for p in patterns):
+            award(key, weight, f'Üretici (OUI): {vendor}')
             break
-    for patterns,category in VENDOR_RULES:
-        match=next((pattern for pattern in patterns if pattern in product_text),None)
+    for patterns, key, weight in TEXT_RULES:
+        match = next((p for p in patterns if p in blob), None)
         if match:
-            scores[category]+=1
-            evidence.append(f'Nmap servis ürünü: {match} ({category})')
-            break
-    for patterns,category in VENDOR_RULES:
-        match=next((pattern for pattern in patterns if pattern in snmp_description.lower()),None)
+            award(key, weight, f'Metin izi: "{match}"')
+    for pset, key, weight in PORT_RULES:
+        hit = [str(p) for p in pset if p in numbers]
+        if hit:
+            award(key, weight, f'Port {"/".join(hit)}')
+    winhits = WINDOWS_PORTS & numbers
+    if len(winhits) >= 2:
+        award('pc', 35, f'Windows portları {sorted(winhits)}')
+    if 3389 in numbers:
+        award('pc', 12, 'RDP (3389)')
+    snmp = facts.get('snmp') or ''
+    if snmp:
+        match = next((p for patterns, key, weight in TEXT_RULES for p in patterns if p in snmp.lower()), None)
         if match:
-            scores[category]+=2
-            evidence.append(f'SNMP sysDescr cihaz beyanı: {match} ({category})')
-            break
+            key = next(key for patterns, key, weight in TEXT_RULES if match in patterns)
+            award(key, 60, f'SNMP sysDescr: "{match}"')
+    for os_item in facts.get('os') or []:
+        name = str(os_item.get('name', '')).lower()
+        if 'windows' in name:
+            award('server' if 'server' in name else 'pc', 22, f'OS: {os_item.get("name", "")[:40]}')
+        elif any(x in name for x in ('linux', 'ubuntu', 'debian', 'unix')):
+            award('server', 12, f'OS: {os_item.get("name", "")[:40]}')
+    if facts.get('gateway'):
+        award('router', 55, 'Varsayılan ağ geçidi')
     if vendor in VIRTUAL.values() or vendor.startswith('Docker'):
-        scores['Sanal sistem adayı']+=1
-        evidence.append('Sanallaştırma MAC öneki')
-    numbers={int(p['port']) for p in ports if str(p.get('port','')).isdigit()}
-    for port,category,reason in PORT_RULES:
-        if port in numbers:
-            scores[category]+=1
-            evidence.append(reason)
+        award('hypervisor', 15, 'Sanallaştırma MAC öneki')
+    if facts.get('random_mac') and not numbers:
+        award('mobile', 30, 'Rastgele/yerel MAC ve açık port yok (gizlilik telefonu olası)')
+
+    ordered_ev = [f'{e["signal"]} ({CATEGORIES.get(e["category"], e["category"])})'
+                  for e in sorted(evidence, key=lambda e: -e['weight'])]
     if not scores:
-        return 'Bilinmiyor','belirsiz',evidence
-    category=sorted(scores, key=lambda key:(-scores[key],key))[0]
-    return category,('orta' if scores[category]>=2 else 'düşük'),evidence
+        return {'key': 'unknown', 'category': CATEGORIES['unknown'], 'confidence': 'belirsiz',
+                'confidence_pct': 10, 'evidence': []}
+    ranked = sorted(scores.items(), key=lambda kv: (-kv[1], kv[0]))
+    top_key, top = ranked[0]
+    runner = ranked[1][1] if len(ranked) > 1 else 0
+    margin = top - runner
+    pct = max(5, min(99, int(top * 0.7 + margin * 0.5)))
+    return {'key': top_key, 'category': CATEGORIES[top_key], 'confidence': _confidence_word(pct),
+            'confidence_pct': pct, 'evidence': ordered_ev}
+
+
+def classify(vendor, ports, snmp_description=''):
+    """Backward-compatible 3-tuple wrapper over classify_device()."""
+    product_text = ' '.join(str(p.get('product', '')) for p in ports)
+    text = ' '.join([vendor, product_text, snmp_description])
+    result = classify_device({'vendor': vendor, 'ports': ports, 'snmp': snmp_description, 'text': text})
+    return result['category'], result['confidence'], result['evidence']
 
 
 def role_candidates(ports, vendor, gateway=False):
@@ -288,24 +391,57 @@ def build_inventory(root,meta,neighbours=None,oui_paths=None):
                         break
                 except (ValueError,OSError,AttributeError):
                     pass
-        category,confidence,signals=classify(vendor,ports,snmp_description)
+        # NetBIOS name/role/MAC from the stdlib NBSTAT probe, if present.
+        netbios={}
+        for rawdir in entry['raws']:
+            nb_path=rawdir/f'netbios_{re.sub(r"[^A-Za-z0-9._-]","_",ip)[:90]}.json'
+            if nb_path.is_file():
+                try:
+                    nb=json.loads(nb_path.read_text(encoding='utf-8'))
+                    if nb.get('target')==ip and nb.get('name'):
+                        netbios=nb; break
+                except (ValueError,OSError,AttributeError):
+                    pass
+        if not mac and netbios.get('mac'):
+            nb_mac=normalize_mac(netbios.get('mac'))
+            if nb_mac:
+                mac=nb_mac; vendor,source=vendor_for(mac,vendors)
+        random_mac=bool(mac and int(mac.replace(':','')[:2],16)&2)
+        blob=' '.join([vendor]
+                      +[f"{p.get('service','')} {p.get('product','')} {p.get('version','')} {p.get('extra_info','')}" for p in ports]
+                      +[snmp_description]+entry['hostnames']
+                      +[o.get('name','') for o in entry['os_matches']]
+                      +[netbios.get('name',''),netbios.get('domain','')])
+        cls=classify_device({'vendor':vendor,'ports':ports,'snmp':snmp_description,'text':blob,
+                             'os':entry['os_matches'],'gateway':ip in gateways,'random_mac':random_mac})
+        category,confidence,signals=cls['category'],cls['confidence'],cls['evidence']
         roles=role_candidates(ports,vendor,ip in gateways)
+        nb_role=str(netbios.get('role','')).lower()
+        if 'domain controller' in nb_role:
+            roles.append({'role':'Etki alanı denetleyicisi adayı','confidence':'orta','reason':'NetBIOS ad tablosu (0x1B/0x1C)'})
+        elif 'file server' in nb_role:
+            roles.append({'role':'Dosya/paylaşım sunucusu adayı','confidence':'düşük','reason':'NetBIOS ad tablosu (0x20)'})
+        # Display name: NetBIOS computer name > DNS hostname > (blank).
+        display_name=netbios.get('name') or (entry['hostnames'][0] if entry['hostnames'] else '')
         notices=[]
         if xml_mac and neighbour_mac and xml_mac!=neighbour_mac:
             notices.append('Nmap MAC ve yerel komşu önbelleği uyuşmuyor; MAC doğrulanmalı')
-        if mac and int(mac[:2],16)&2:
+        if random_mac:
             notices.append('Yerel/rastgele MAC: OUI fiziksel cihazı doğrulamaz')
         if not mac:
             notices.append('Uzak rota veya L2 komşuluk yok; MAC tespit edilmedi')
         review=[f'{REVIEW_PORTS[int(p["port"])]} ({p["port"]}) için erişim ve yapılandırmayı inceleyin'
                 for p in ports if str(p['port']).isdigit() and int(p['port']) in REVIEW_PORTS]
         if snmp_description:
-            review.append('SNMPv1/public ile kimlik bilgisi okunuyor; SNMPv3 ve erişim kısıtlarını değerlendirin')
-        devices[ip]={'ip':ip,'mac':mac,'mac_source':'nmap' if xml_mac else 'yerel komşu önbelleği' if mac else 'yok',
+            review.append('SNMP/public ile kimlik bilgisi okunuyor; SNMPv3 ve erişim kısıtlarını değerlendirin')
+        devices[ip]={'ip':ip,'mac':mac,
+                     'mac_source':'nmap' if xml_mac else ('netbios' if netbios.get('mac') and mac else 'yerel komşu önbelleği' if mac else 'yok'),
                      'interface':neighbour.get('device','') if not xml_mac else '',
-                     'vendor':vendor,'vendor_source':source,'category':category,
-                     'confidence':confidence,'signals':signals,'ports':ports,
-                     'role_candidates':roles,
+                     'vendor':vendor,'vendor_source':source,
+                     'category':category,'category_key':cls['key'],
+                     'confidence':confidence,'confidence_pct':cls['confidence_pct'],
+                     'display_name':display_name,'netbios':netbios,
+                     'signals':signals,'ports':ports,'role_candidates':roles,
                      'hostnames':entry['hostnames'],'os_matches':entry['os_matches'],
                      'review_notes':review,'notices':notices,'snmp_sysdescr':snmp_description,
                      'evidence':'; '.join(entry['evidence'])}
@@ -320,7 +456,8 @@ def build_inventory(root,meta,neighbours=None,oui_paths=None):
         record=devices.get(ip)
         if record is None:
             record={'ip':ip,'mac':'','mac_source':'yok','interface':'','vendor':'Bilinmiyor',
-                    'vendor_source':'unavailable','category':'SQL Server adayı','confidence':'düşük',
+                    'vendor_source':'unavailable','category':CATEGORIES['db'],'category_key':'db',
+                    'confidence':'düşük','confidence_pct':30,'display_name':'','netbios':{},
                     'signals':[],'ports':[],'role_candidates':[],'hostnames':[],
                     'os_matches':[],'review_notes':[],'notices':['Uzak rota veya L2 komşuluk yok; MAC tespit edilmedi'],
                     'snmp_sysdescr':'','evidence':str(path.relative_to(root))}
