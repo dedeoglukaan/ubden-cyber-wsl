@@ -289,11 +289,17 @@ def build_plan(root: Path, meta: dict, steps: list, review: dict,
     if tech_matches:
         tech_targets = sorted({m["ip"] for m in tech_matches}, key=ipaddress.ip_address)
         families = ", ".join(f"{k} ({v})" for k, v in tech.get("families", {}).items())
+        cve_data = _read_json(root / "UBDEN_CVE.json", {})
+        cve_note = ""
+        if cve_data.get("items"):
+            cve_note = (f" NVD ön sorgusu: {cve_data.get('queried', 0)} platform, "
+                        f"{cve_data.get('critical_high_count', 0)} kritik/yüksek CVE adayı (UBDEN_CVE.json).")
         add("T-22", "PLATFORM", "P1", "Platform sürüm/CVE ve yönetim düzlemi kontrolü",
             tech_targets,
             "Kapsam içinde tanınan platformlar (inceleme adayı): " + (families or "—") +
-            ". Eşleşme kanıt tabanlıdır; listelenen CVE/danışmalar gözlenen sürüme karşı doğrulanmalıdır, mevcudiyet iddiası değildir.",
-            ["Her platform için gözlenen sürümü/firmware'i üretici danışmalarıyla (VMware VMSA, Fortinet/Sophos/Cisco PSIRT, Dell DSA, HPE, Synology-SA, kamera OEM) karşılaştırın.",
+            ". Eşleşme kanıt tabanlıdır; listelenen CVE/danışmalar gözlenen sürüme karşı doğrulanmalıdır, mevcudiyet iddiası değildir." + cve_note,
+            ["`UBDEN_CVE.json`'daki NVD CVE adaylarını gözlenen sürüme karşı teyit edin; yalnız sürüm aralığına giren ve iş etkisi doğrulananları bulgu sayın (aday listesi tek başına bulgu değildir).",
+             "Her platform için gözlenen sürümü/firmware'i üretici danışmalarıyla (VMware VMSA, Fortinet/Sophos/Cisco PSIRT, Dell DSA, HPE, Synology-SA, kamera OEM) karşılaştırın.",
              "Yönetim arayüzlerinin (hipervizör, güvenlik duvarı yönetimi, iLO/iDRAC/IPMI, NAS, kamera) yalnız ayrı yönetim ağından erişilebildiğini doğrulayın; internete/kullanıcı VLAN'ına açıklığı işaretleyin.",
              "Varsayılan/zayıf hesap ve MFA durumunu yalnız müşterinin yazılı yetkilendirdiği test hesabıyla, kilitleme eşiği altında doğrulayın; istismar denemeyin.",
              "Kamera/NVR için varsayılan kimlik bilgisi, RTSP ve bulut kaydını; SSL-VPN portalları için sürüm ve maruziyeti ayrıca doğrulayın.",
@@ -301,7 +307,7 @@ def build_plan(root: Path, meta: dict, steps: list, review: dict,
             ["Platform–sürüm–danışma eşleştirme tablosu", "Yönetim düzlemi ağ izolasyonu teyidi",
              "Varsayılan hesap/MFA durumu (parola içermez)", "Doğrulanan bulgular için kanıt"],
             request="Platform envanteri: ürün, sürüm/firmware, yönetim IP/VLAN'ı ve bakım/yama penceresi.",
-            references=["UBDEN_TECH_PROFILE.json"])
+            references=["UBDEN_TECH_PROFILE.json", "UBDEN_CVE.json"])
 
     if web:
         add("T-10", "AUTH", "P1", "Web oturum ve test hesabı akışını incele", web,
