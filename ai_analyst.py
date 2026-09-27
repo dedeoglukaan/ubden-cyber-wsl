@@ -11,7 +11,7 @@ import urllib.error
 import urllib.request
 
 API_URL='https://api.anthropic.com/v1/messages'
-DEFAULT_MODEL='claude-sonnet-4-6'
+DEFAULT_MODEL='claude-sonnet-5'
 MAX_EVIDENCE=16000
 
 

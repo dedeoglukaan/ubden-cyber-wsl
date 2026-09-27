@@ -39,6 +39,10 @@ try:
     import win_tools
 except Exception:
     win_tools = None
+try:
+    import ai_analyst
+except Exception:
+    ai_analyst = None
 # report_v2 is invoked as a subprocess (its main() reads sys.argv), never imported
 # here, so win_scan stays importable for tests even without reportlab installed.
 
@@ -348,7 +352,8 @@ def build_meta(form: dict, host_snapshot: dict) -> dict:
         "host_snapshot": host_snapshot if isinstance(host_snapshot, dict) else {},
         "limits": {"max_online_failures_per_test_account_service": 2,
                    "max_exploit_attempts_per_finding_host": 1},
-        "ai_enabled": False, "ai_raw_evidence": False,
+        "ai_enabled": bool((form.get("claude_api_key") or "").strip()),
+        "ai_raw_evidence": bool(form.get("claude_raw")),
         "nuclei_templates": None, "nuclei_profile": "none", "nuclei_template_count": 0,
         "max_rate": max_rate, "top_ports": top_ports,
         "started_at": now(), "status": "planned", "tool_version": VERSION,
@@ -644,6 +649,20 @@ def run_scan(form: dict, progress=None) -> dict:
         except Exception as exc:
             events.append({"step": "ad_assessment", "status": "error", "detail": str(exc)})
             emit(f"AD değerlendirme hatası: {exc}", "warn")
+
+    # Claude AI analyst auto-triage (opt-in via API key) — reduces analyst load by
+    # producing an automatic assessment merged into the report. Key stays in memory.
+    ai_key = (form.get("claude_api_key") or "").strip()
+    if ai_key and ai_analyst is not None:
+        emit("Claude AI analist triyajı çalışıyor", "info")
+        try:
+            model = (form.get("claude_model") or os.environ.get("UBDEN_AI_MODEL")
+                     or ai_analyst.DEFAULT_MODEL)
+            ai_analyst.analyze_run(root, meta, events,
+                                   {"key": ai_key, "model": model, "raw": bool(form.get("claude_raw"))})
+            emit("Claude AI analist taslağı üretildi", "info")
+        except Exception as exc:
+            emit(f"AI analist hatası (rapor devam ediyor): {exc}", "warn")
 
     meta["status"] = "completed"
     meta["finished_at"] = now()

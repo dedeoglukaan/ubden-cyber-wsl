@@ -193,7 +193,12 @@ border-left:3px solid var(--teal);border-radius:8px;padding:11px 16px;color:var(
 <div><label>SSH parola</label><input id="ssh_pass" type="password" placeholder="••••••"></div>
 </div>
 <button class="sec" type="button" onclick="testConn('ssh')">SSH bağlantı testi</button> <span id="t_ssh" class="dim"></span>
-<div class="hint">Parolalar yalnız bu yerel oturumda bellekte kullanılır; rapora veya görev dosyasına yazılmaz. AD host domain'e üyeyse kimlik bilgisiz de yerel AD envanteri çekilir.</div>
+<div class="eyebrow" style="margin-top:16px">Claude AI analist (opsiyonel)</div>
+<div class="row">
+<div><label>Claude API anahtarı</label><input id="claude_key" type="password" placeholder="sk-ant-… (bulgu triyajı için)"></div>
+<div style="display:flex;align-items:end"><label style="display:flex;align-items:center;gap:8px;color:var(--ink)"><input type="checkbox" id="claude_raw" style="width:auto"> Ham kanıt gönder (aksi halde anonim özet)</label></div>
+</div>
+<div class="hint">Anahtar verilirse tarama sonunda Claude otomatik triyaj/analiz üretir (raporda "AI analist taslağı"); anahtar yalnız bellekte kullanılır. Parolalar yalnız bu yerel oturumda bellekte kullanılır; rapora veya görev dosyasına yazılmaz. AD host domain'e üyeyse kimlik bilgisiz de yerel AD envanteri çekilir.</div>
 </div></details>
 <div style="margin-top:16px"><button id="go">YETKILIYIM &mdash; Taramayi baslat</button></div>
 </div>
@@ -244,6 +249,7 @@ async function start(){
  ad_domain:c("ad_domain"),ad_dc:c("ad_dc"),ad_user:c("ad_user"),ad_pass:v("ad_pass"),
  web_url:c("web_url"),swagger_url:c("swagger_url"),
  ssh_host:c("ssh_host"),ssh_user:c("ssh_user"),ssh_pass:v("ssh_pass"),
+ claude_api_key:v("claude_key"),claude_raw:document.getElementById("claude_raw").checked,
  selected_interfaces:[...document.querySelectorAll(".adpk:checked")].map(x=>x.value)};
  if(!body.targets.length){alert("En az bir hedef girin.");return;}
  document.getElementById("go").disabled=true;
