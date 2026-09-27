@@ -142,6 +142,7 @@ def prompt(label, default=""):
 
 FINDING_FIELDS = (
     ("title", "Bulgu adı"), ("asset", "Birincil kapsamdaki varlık"),
+    ("type", "Bulgu tipi (isteğe bağlı: kerberoast / asrep_roast / adcs_esc / cracked_credential)"),
     ("severity", "Seviye [critical/high/medium/low/info]"),
     ("category", "Bulgu kategorisi"), ("access_point", "Erişim noktası / servis"),
     ("user_profile", "Etkilenen kullanıcı profili / rol"),

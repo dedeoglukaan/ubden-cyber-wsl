@@ -88,16 +88,16 @@ UBDEN Cyber Security Systems test ekibi
 PowerShell:
 
 ```powershell
-irm 'https://raw.githubusercontent.com/ubden/ubden-cyber-wsl/v4.8.3-wsl.4/bootstrap.ps1' | iex
+irm 'https://raw.githubusercontent.com/ubden/ubden-cyber-wsl/v4.8.3-wsl.5/bootstrap.ps1' | iex
 ```
 
 CMD:
 
 ```cmd
-powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "irm 'https://raw.githubusercontent.com/ubden/ubden-cyber-wsl/v4.8.3-wsl.4/bootstrap.ps1' | iex"
+powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "irm 'https://raw.githubusercontent.com/ubden/ubden-cyber-wsl/v4.8.3-wsl.5/bootstrap.ps1' | iex"
 ```
 
-Komut [sürüm etiketli başlangıç betiğini](https://github.com/ubden/ubden-cyber-wsl/blob/v4.8.3-wsl.4/bootstrap.ps1) çalıştırır. Betik kaynak paketini indirir, mevcut Kali WSL kurulumunu kullanır veya eksikse kurar, bağımlılıkları hazırlar ve görev sihirbazını açar. Windows yeniden başlatması gerekirse işlem sonraki oturumda devam eder. Kurulum yönetici izni isteyebilir.
+Komut [sürüm etiketli başlangıç betiğini](https://github.com/ubden/ubden-cyber-wsl/blob/v4.8.3-wsl.5/bootstrap.ps1) çalıştırır. Betik kaynak paketini indirir, mevcut Kali WSL kurulumunu kullanır veya eksikse kurar, bağımlılıkları hazırlar ve görev sihirbazını açar. Windows yeniden başlatması gerekirse işlem sonraki oturumda devam eder. Kurulum yönetici izni isteyebilir.
 
 Kurulum önce mirrored ağı ve DNS tünellemeyi dener. Mirrored yapılandırması bilgisayardaki **tüm WSL 2 dağıtımlarını** etkiler. Mirrored başlatılamazsa Kali IPv4 adresi ve varsayılan rota doğrulanarak NAT ağında devam edilir. IP tabanlı LAN testlerinde Windows adaptör rotası ve Kali rotası her hedef için ayrıca denetlenir; hedefe erişim doğrulanmadan test başarılı sayılmaz. NAT modunda Kali fiziksel Windows ağ kartlarını doğrudan görmez. Ham katman-2, yayın trafiği, pasif fiziksel ağ yakalama ve bazı VPN yolları için ayrı uygunluk denetimi gerekir. Kullanılan ağ modu görev raporuna yazılır.
 
@@ -107,10 +107,12 @@ Mirrored WSL `0x8007054f` hatası verirse ve Windows'un IPv4/IPv6 TCP dinamik po
 
 ## Bir görev nasıl yürür?
 
-1. **Kapsam belirleme:** Sihirbazda müşteri, yetki referansı, test ekibi, IP/FQDN/CIDR hedefleri, hariçler ve kullanılacak Windows adaptörleri girilir. Adaptör alt ağları yalnızca öneri olarak gösterilir.
-2. **Ön kontrol:** Ağ yolu, DNS çözümlemesi, erişim ve araç yeterlilikleri denetlenir. Kapsam ve FQDN adresleri görev için sabitlenir.
+1. **Kapsam belirleme:** Sihirbazda müşteri, yetki referansı ve test ekibi girilir. IP/CIDR hedefleri ile domain/FQDN hedefleri ayrı alanlarda, hariçler de aynı ayrımla yazılır. Adaptör alt ağları yalnızca öneri olarak gösterilir.
+2. **Ön kontrol:** Seçilen adaptör, DNS çözümlemesi, rapor diski, Nmap ve Kali varsayılan rotası kontrol edilir. Sonuç `PREFLIGHT.json` dosyasına kaydedilir; engelleyici sorun varsa hedef taraması başlamaz. Hedef erişimi sonraki rota ve servis adımlarında doğrulanır. Kapsam ve FQDN adresleri görev için sabitlenir.
 3. **Kontroller:** Seçilen profile ve bulunan servislere uygun modüller çalışır. Kapsam dışı yönlendirmeler izlenmez; eksik araçlar ve erişilemeyen hedefler adım günlüğüne işlenir.
 4. **İnceleme ve teslim:** Otomatik gözlemler, cihaz envanteri ve kanıtlar raporlanır. Analist doğruladığı bulguları ve manuel test sonuçlarını görev kaydına ekler.
+
+Etkileşimli terminalde adaptör listesinde **↑/↓** ile gezilir, **Boşluk veya Enter** ile seçim açılıp kapatılır, en alttaki **Devam et** üzerinde Enter ile ilerlenir. Wi‑Fi gibi varsayılan rotadaki adaptör önceden işaretlenir; seçim hedef kapsamına adres eklemez. Diğer seçim menülerinde ↑/↓ ve Enter kullanılır. Etkileşimsiz terminalde ekranda görünen **sıra numaraları** girilir; Windows `ifIndex` değeri yazılmaz.
 
 ### Çalışma profilleri
 
@@ -144,8 +146,11 @@ Her görev için ayrı bir çıktı klasörü oluşturulur. Kali masaüstü otur
 | `ANALIST_GOREV_RAPORU.pdf`, `.md`, `.json` | Gözlemlere göre önceliklendirilmiş analist adımları, hedefler, müşteri girdileri, örnek komutlar ve kanıt listesi. |
 | `REPORT.html` | Çevrimdışı incelenebilen; bulgu, kapsam ve cihaz tablolarıyla yerel kanıtlara bağlantı veren rapor. |
 | `engagement.json`, `steps.json` | Sabitlenen görev kapsamı ve gerçek yürütme günlüğü. |
+| `PREFLIGHT.json` | Hedef trafiği başlamadan yapılan görev ve ortam ön kontrollerinin durumları. |
 | `DEVICE_INVENTORY.json`, `TOOL_ENVIRONMENT.json` | Cihaz sınıflandırması, host adı ve OS tahmini ile araçların kurulum/çalışma durumu. |
 | `ASSESSMENT_COVERAGE.json` | Otomatik ve manuel kontrollerin yürütme durumu, atlama gerekçesi ve kanıt bağlantıları. |
+| `UBDEN_INSIGHTS.json`, `ATTACK_LAYER.json` | Kaydedilmiş test yöntemleri ve tipli bulgular için ATT&CK eşlemesi; analist incelemesi bekleyen CVSS önerileri; sağlanan çevrimdışı hash örneklerinin tür sayımı. ATT&CK eşlemesi saldırı başarısı anlamına gelmez. |
+| `REMEDIATION_ROADMAP.md` | Yalnız kanıtı doğrulanmış analist bulgularından üretilen düzeltme sırası. |
 | `SHA256SUMS.txt` | Görev dosyalarının SHA-256 özetleri. |
 
 [Yönetici raporu örneği](examples/ORNEK_UBDEN_YONETICI_OZETI.pdf) · [Teknik rapor örneği](examples/ORNEK_UBDEN_TEKNIK_RAPOR.pdf) · [Analist raporu örneği](examples/ORNEK_UBDEN_ANALIST_GOREV_RAPORU.pdf)
@@ -163,14 +168,16 @@ ubden-cyber --report-only /gorev/klasoru
 
 `--report-only` mevcut kanıtlardan raporu yeniden üretir. Analist incelemesi yeni bulgu ekleme, mevcut bulguyu düzenleme, yeniden test durumunu yazma ve ek kanıt bağlama akışlarını içerir.
 
+Analist bulgu tipi olarak `kerberoast`, `asrep_roast`, `adcs_esc` veya `cracked_credential` seçtiğinde uygun ATT&CK eşlemesi; desteklenen tiplerde CVSS v3.1 başlangıç vektörü önerilir. Bu öneri gerçek etki ve erişim koşullarına göre analist tarafından gözden geçirilir. Müşterinin ayrıca sağladığı çevrimdışı örnekler görev klasöründeki `offline_samples/` dizinine `.hash` veya `.txt` dosyası olarak konursa `--report-only` sırasında türleri sayılır; ham hash ve hesap değerleri rapora yazılmaz. Dosyalar parola denemesi için otomatik kullanılmaz.
+
 Resmî Kali `wordlists` paketi WSL kurulumuna dahildir. Sözlükler yalnız müşterinin sağladığı çevrimdışı hash veya yetkili örneklerde kullanılabilir; canlı IP ya da giriş ekranında toplu parola denemesi akışına bağlanmaz.
 
 ## Kurulum ve ortam yönetimi
 
-Tek satırlık kurulumdan sonra Windows giriş betiği `%LOCALAPPDATA%\Programs\UBDEN-Cyber\v4.8.3-wsl.4\ubden-wsl.ps1` konumundadır:
+Tek satırlık kurulumdan sonra Windows giriş betiği `%LOCALAPPDATA%\Programs\UBDEN-Cyber\v4.8.3-wsl.5\ubden-wsl.ps1` konumundadır:
 
 ```powershell
-$ubden = Join-Path $env:LOCALAPPDATA 'Programs\UBDEN-Cyber\v4.8.3-wsl.4\ubden-wsl.ps1'
+$ubden = Join-Path $env:LOCALAPPDATA 'Programs\UBDEN-Cyber\v4.8.3-wsl.5\ubden-wsl.ps1'
 & $ubden -Action status
 & $ubden -Action run
 ```
@@ -180,6 +187,6 @@ $ubden = Join-Path $env:LOCALAPPDATA 'Programs\UBDEN-Cyber\v4.8.3-wsl.4\ubden-ws
 **Tam WSL imhası:** `destroy`, raporları WSL dışındaki seçilen klasöre SHA-256 ile doğrulayarak aktarır ve açık son onaydan sonra **bilgisayardaki tüm WSL dağıtımlarını**, Ubuntu dahil, kalıcı olarak kaldırır. Bu işlem yalnız tüm WSL ortamının kaldırılması istendiğinde kullanılmalıdır.
 
 ```powershell
-$ubden = Join-Path $env:LOCALAPPDATA 'Programs\UBDEN-Cyber\v4.8.3-wsl.4\ubden-wsl.ps1'
+$ubden = Join-Path $env:LOCALAPPDATA 'Programs\UBDEN-Cyber\v4.8.3-wsl.5\ubden-wsl.ps1'
 & $ubden -Action destroy -ExportTo 'D:\UBDEN-Rapor-Devir'
 ```

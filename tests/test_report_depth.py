@@ -81,7 +81,7 @@ class ReportDepthTests(unittest.TestCase):
             relative = str(proof.relative_to(root))
             review = initial()
             review['analyst_summary'] = 'Synthetic executive summary.'
-            review['findings'] = [{'id': 'QA-001', 'title': 'Synthetic verified profile',
+            review['findings'] = [{'id': 'QA-001', 'type': 'kerberoast', 'title': 'Synthetic verified profile',
                 'severity': 'medium', 'status': 'doğrulandı', 'asset': '192.0.2.5',
                 'category': 'Configuration', 'access_point': 'Local network / TCP 23',
                 'user_profile': 'Operator', 'root_cause': 'Demo configuration',
@@ -93,17 +93,27 @@ class ReportDepthTests(unittest.TestCase):
             (root / 'review.json').write_text(json.dumps(review), encoding='utf-8')
             (root / 'steps.json').write_text(json.dumps([{
                 'step': 'port_discovery', 'status': 'ok', 'output': str(xml.relative_to(root))}]), encoding='utf-8')
+            (root / 'PREFLIGHT.json').write_text(json.dumps({'status': 'ok', 'note': 'Synthetic preflight',
+                'checks': [{'name': 'Nmap', 'status': 'ok', 'detail': 'Installed'}]}), encoding='utf-8')
             with patch.object(sys, 'argv', ['report_v2.py', str(root)]):
                 report_v2.main()
             html = (root / 'REPORT.html').read_text(encoding='utf-8')
             inventory = json.loads((root / 'DEVICE_INVENTORY.json').read_text(encoding='utf-8'))
             coverage = json.loads((root / 'ASSESSMENT_COVERAGE.json').read_text(encoding='utf-8'))
+            insights = json.loads((root / 'UBDEN_INSIGHTS.json').read_text(encoding='utf-8'))
             self.assertIn('Kök neden', html)
             self.assertIn('Synthetic verified profile', html)
             self.assertIn('Test kapsamı ve yürütme matrisi', html)
             self.assertIn('qa.example.test', html)
             self.assertEqual(inventory['devices'][0]['os_matches'][0]['name'], 'Linux')
             self.assertEqual(next(row for row in coverage['controls'] if row['id'] == 'NET-PORT')['status'], 'çalıştı')
+            self.assertEqual(insights['remediation'][0]['recommendation'], 'Disable test service')
+            self.assertEqual(insights['cvss_suggestions'][0]['finding_id'], 'QA-001')
+            self.assertIn('REMEDIATION_ROADMAP.md', html)
+            self.assertIn('Synthetic preflight', html)
+            self.assertIn('T1558.003', html)
+            self.assertIn('CVSS:3.1/', html)
+            self.assertTrue((root / 'ATTACK_LAYER.json').is_file())
             analyst = json.loads((root / 'ANALIST_GOREV_RAPORU.json').read_text(encoding='utf-8'))
             self.assertIn('ANALIST_GOREV_RAPORU.md', html)
             self.assertTrue(any(task['case'] == 'PROTOCOL' for task in analyst['tasks']))

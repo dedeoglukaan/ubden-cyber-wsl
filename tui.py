@@ -76,6 +76,10 @@ class Console:
         return input(self.paint(f"  > {label}{suffix}: ", "cyan")).strip() or default
 
     def menu(self, title, items, default="1"):
+        if self.tty and sys.stdin.isatty():
+            initial = next((i for i, (key, _) in enumerate(items) if key == default), 0)
+            selected = self._navigate(title, [label for _, label in items], initial)
+            return items[selected][0]
         self.say("  " + title, "bold")
         for key, label in items:
             self.say(f"    {key}) {label}")
@@ -84,6 +88,80 @@ class Console:
             if chosen in {key for key, _ in items}:
                 return chosen
             self.say("  Geçerli bir seçenek girin.", "yellow")
+
+    @staticmethod
+    def _read_key():
+        import termios
+        import tty
+        fd = sys.stdin.fileno()
+        previous = termios.tcgetattr(fd)
+        try:
+            tty.setraw(fd)
+            key = sys.stdin.read(1)
+            if key == "\x1b":
+                next_key = sys.stdin.read(1)
+                if next_key in ("[", "O"):
+                    key += next_key + sys.stdin.read(1)
+                else:
+                    key += next_key
+            return key
+        finally:
+            termios.tcsetattr(fd, termios.TCSADRAIN, previous)
+
+    def _navigate(self, title, labels, initial=0, multiple=False, defaults=()):
+        cursor = initial
+        selected = set(defaults)
+        def draw(first=False):
+            if not first:
+                self.stream.write(f"\033[{len(labels)+2}A\033[J")
+            self.say("  " + title, "bold")
+            for index, label in enumerate(labels):
+                marker = "[x] " if multiple and index in selected else "[ ] " if multiple else ""
+                self.say(f"  {'❯' if index == cursor else ' '} {marker}{label}",
+                         'cyan' if index == cursor else None)
+            self.say("  ↑/↓: gezin · Boşluk/Enter: seçin" if multiple else "  ↑/↓: gezin · Enter: seçin", "dim")
+        draw(True)
+        while True:
+            key = self._read_key()
+            if key in ("\x1b[A", "\x1bOA", "k"):
+                cursor = (cursor - 1) % len(labels)
+            elif key in ("\x1b[B", "\x1bOB", "j"):
+                cursor = (cursor + 1) % len(labels)
+            elif key == "\x03":
+                raise KeyboardInterrupt
+            elif multiple and key in (" ", "\r", "\n"):
+                if cursor == len(labels)-1:
+                    if key in ("\r", "\n") and selected:
+                        self.say("  Seçilen adaptörler: " + ", ".join(labels[i] for i in sorted(selected)), "green")
+                        return sorted(selected)
+                elif cursor in selected:
+                    selected.remove(cursor)
+                else:
+                    selected.add(cursor)
+            elif not multiple and key in ("\r", "\n"):
+                return cursor
+            draw()
+
+    def choose_many(self, title, items, defaults=()):
+        """Return selected item keys; interactive mode uses a checkbox list."""
+        if self.tty and sys.stdin.isatty():
+            indices = self._navigate(title,
+                [label for _, label in items] + ["Devam et"],
+                initial=len(items) if defaults else 0, multiple=True,
+                defaults=[i for i, (key, _) in enumerate(items) if key in defaults])
+            return [items[i][0] for i in indices]
+        self.say("  " + title, "bold")
+        for index, (_, label) in enumerate(items, 1):
+            self.say(f"    {index}) {label}")
+        while True:
+            raw = self.prompt("Seçilecek sıra numaraları (örn. 1,3)")
+            try:
+                chosen = sorted({int(part.strip())-1 for part in raw.split(',')})
+            except ValueError:
+                chosen = []
+            if chosen and all(0 <= index < len(items) for index in chosen):
+                return [items[index][0] for index in chosen]
+            self.say("  Listede görünen sıra numaralarını kullanın.", "yellow")
 
     def preview(self, rows):
         for key, value in rows:

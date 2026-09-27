@@ -33,6 +33,7 @@ from wireless_assessment import run as run_wireless, validate as validate_wirele
 from supplemental_scans import run as run_supplemental
 from credential_assessment import run_ssh as run_ssh_passwords
 from sql_discovery import discover as discover_sql_browser
+from environment_doctor import inspect as inspect_environment
 
 ROOT = Path(__file__).resolve().parent
 VERSION = "4.8.3"
@@ -1089,13 +1090,57 @@ def show_windows_network(snapshot):
         addresses=[]
         for address in item.get('addresses',[]):
             try:
+                ip=ipaddress.ip_address(address['address'])
                 net=ipaddress.ip_network(f"{address['address']}/{address['prefix']}",strict=False)
-                if not address['address'].startswith(('127.','169.254.')):
+                if not (ip.is_link_local or ip.is_loopback or ip.is_unspecified):
                     addresses.append(str(net))
             except (ValueError,KeyError,TypeError):
                 continue
-        UI.say(f"    {item.get('name','?')} [{item.get('status','?')}] "
+        UI.say(f"    {item.get('name','?')} [ifIndex {item.get('index','?')}, {item.get('status','?')}] "
                f"{'VPN' if item.get('is_vpn') else ''} {', '.join(addresses) or 'uygun IP yok'}",'dim')
+
+
+def selectable_adapters(snapshot):
+    """Only active adapters with a usable routed IP can carry test traffic."""
+    result=[]
+    for item in snapshot.get('adapters',[]) if isinstance(snapshot,dict) else []:
+        if item.get('status')!='Up' or not isinstance(item.get('index'),int):
+            continue
+        usable=[]
+        for address in item.get('addresses',[]):
+            try:
+                ip=ipaddress.ip_address(address['address'])
+                if not (ip.is_link_local or ip.is_loopback or ip.is_unspecified):
+                    usable.append(str(ip))
+            except (KeyError,TypeError,ValueError):
+                continue
+        if usable:
+            result.append((item,usable))
+    defaults={route.get('interface_index') for route in snapshot.get('default_routes',[])
+              if isinstance(route,dict) and route.get('destination') in ('0.0.0.0/0','::/0')}
+    result.sort(key=lambda row:(row[0]['index'] not in defaults,
+                                row[0].get('name','').lower().startswith('vethernet'),
+                                row[0].get('is_vpn',False),row[0].get('name','').lower()))
+    return result
+
+
+def collect_scope_entries(label, kind, required=False):
+    """Keep numeric IP/CIDR and named targets in separate, validated prompts."""
+    while True:
+        raw=UI.prompt(label)
+        if not raw.strip() and not required:
+            return []
+        try:
+            entries=list(dict.fromkeys(parse_target(part) for part in re.split(r'[,;\s]+',raw)
+                                       if part.strip()))
+            if required and not entries:
+                raise ValueError('En az bir hedef girin')
+            if any((is_ip(item) or is_network(item)) != (kind=='numeric') for item in entries):
+                raise ValueError('Bu alana yalnız IP/CIDR girin' if kind=='numeric'
+                                 else 'Bu alana yalnız alan adı/FQDN girin')
+            return entries
+        except ValueError as exc:
+            UI.say('  '+str(exc),'yellow')
 
 
 def collect_ad(snapshot):
@@ -1280,38 +1325,43 @@ def collect_meta(args):
     show_windows_network(host_snapshot)
     if os.environ.get('UBDEN_WINDOWS_BRIDGE') and host_snapshot.get('status')!='ok':
         raise SystemExit('Windows adaptör köprüsü doğrulanamadı; WSL operasyonu başlatılmadı')
-    selectable={int(item['index']) for item in host_snapshot.get('adapters',[])
-                if item.get('status')=='Up' and item.get('addresses') and
-                isinstance(item.get('index'),int)} if host_snapshot.get('status')=='ok' else set()
+    choices=selectable_adapters(host_snapshot) if host_snapshot.get('status')=='ok' else []
     selected_interfaces=[]
-    if os.environ.get('UBDEN_WINDOWS_BRIDGE') and not selectable:
+    if os.environ.get('UBDEN_WINDOWS_BRIDGE') and not choices:
         raise SystemExit('Kullanılabilir Windows ağ adaptörü yok; WSL operasyonu başlatılmadı')
-    if selectable:
-        selected_text=ask('Test trafigi icin Windows adaptör indeksleri (virgülle)',required=True)
+    if choices:
+        defaults={route.get('interface_index') for route in host_snapshot.get('default_routes',[])
+                  if isinstance(route,dict) and route.get('destination')=='0.0.0.0/0'}
+        items=[(item['index'],f"{item['name']} — {', '.join(ips[:3])}"
+                + (' · VPN' if item.get('is_vpn') else '')) for item,ips in choices]
+        selected_interfaces=UI.choose_many('Test trafiğinin kullanacağı Windows adaptörleri',
+                                            items,defaults=defaults)
+        UI.say('  Seçilen adaptör alt ağları hedef kapsamına otomatik eklenmez.','dim')
+    while True:
+        numeric_targets=collect_scope_entries('Yetkili IP/CIDR hedefleri (örn. 192.168.0.10, 192.168.0.0/28)',
+                                              'numeric')
+        named_targets=collect_scope_entries('Yetkili domain/FQDN hedefleri (örn. app.example.com)',
+                                            'named')
+        targets=list(dict.fromkeys(numeric_targets+named_targets))
+        if not targets:
+            UI.say('  En az bir IP/CIDR veya domain/FQDN hedefi girin.','yellow')
+            continue
         try:
-            selected_interfaces=sorted({int(x.strip()) for x in selected_text.split(',')})
+            if len(targets)>30:
+                raise ValueError('Tek görevde en fazla 30 açık hedef olabilir')
+            for target in targets:
+                if is_network(target):
+                    network=ipaddress.ip_network(target)
+                    if (network.version==4 and network.prefixlen<24) or (network.version==6 and network.prefixlen<120):
+                        raise ValueError('Tek görevde en geniş /24 IPv4 veya /120 IPv6 ağı seçilebilir')
+            validate_task_address_budget(targets)
         except ValueError as exc:
-            raise SystemExit('Adaptör indeksleri sayı olmalı') from exc
-        if not selected_interfaces or set(selected_interfaces)-selectable:
-            raise SystemExit('Yalnız etkin ve adresli Windows adaptörleri seçilebilir')
-    raw_targets=ask("Açıkça yetkilendirilmiş FQDN/IP/CIDR (virgülle)",required=True)
-    raw_exclusions=ask("Hariç tutulan FQDN/IP/CIDR (virgülle)")
-    try:
-        targets=list(dict.fromkeys(parse_target(x) for x in raw_targets.split(",") if x.strip()))
-        exclusions=list(dict.fromkeys(parse_target(x) for x in raw_exclusions.split(",") if x.strip()))
-    except ValueError as exc:
-        raise SystemExit(str(exc))
-    if not targets or len(targets)>30:
-        raise SystemExit("1-30 açık hedef giriniz.")
-    for t in targets:
-        if is_network(t):
-            net=ipaddress.ip_network(t)
-            if (net.version == 4 and net.prefixlen<24) or (net.version==6 and net.prefixlen<120):
-                raise SystemExit("Tek görevde en fazla /24 IPv4 veya /120 IPv6 izinlidir.")
-    try:
-        validate_task_address_budget(targets)
-    except ValueError as exc:
-        raise SystemExit(str(exc)) from exc
+            UI.say('  '+str(exc),'yellow')
+            continue
+        break
+    numeric_exclusions=collect_scope_entries('Hariç IP/CIDR adresleri (varsa)','numeric')
+    named_exclusions=collect_scope_entries('Hariç domain/FQDN adresleri (varsa)','named')
+    exclusions=list(dict.fromkeys(numeric_exclusions+named_exclusions))
     UI.section(3,5,"Test profili","Üretim ortamı için kontrollü hız ve süre limitleri")
     profile_choice=UI.menu("Tarama kapsamı",[("1","External: dış yüzey, DNS/WHOIS, servis, HTTP/TLS"),("2","Web: web portları, başlıklar, yöntemler ve TLS"),("3","Network: servisler + seçilmiş NSE güvenlik kontrolleri"),("4","Full: tüm otomatik modüller + isteğe bağlı kimlikli erişim kontrolü")],"4")
     profile={"1":"external","2":"web","3":"network","4":"full"}[profile_choice]
@@ -1380,6 +1430,18 @@ def run(args):
     (root/"MANUEL_TEST_PLANI.md").write_text(MANUAL_PLAN,encoding="utf-8")
     events=[]
     try:
+        preflight=inspect_environment(meta,root)
+        atomic_json(root/'PREFLIGHT.json',preflight)
+        events.append({'step':'environment_preflight',
+                       'status':'blocked' if preflight['status']=='blocked' else 'ok',
+                       'preflight_status':preflight['status'],
+                       'detail':preflight['note'],'output':'PREFLIGHT.json',
+                       'sha256':hashlib.sha256((root/'PREFLIGHT.json').read_bytes()).hexdigest()})
+        for check in preflight['checks']:
+            UI.say(f"  Ön kontrol [{check['status']}]: {check['name']} — {check['detail']}",
+                   'red' if check['status']=='blocked' else 'yellow' if check['status']=='warning' else 'dim')
+        if preflight['status']=='blocked':
+            raise RuntimeError('Ön kontrol başarısız; hedef taraması başlatılmadı')
         for index,target in enumerate(meta["targets"],1):
             if excluded(target,meta["exclusions"]):
                 events.append({"step":"scope","target":target,"status":"excluded"})

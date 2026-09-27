@@ -22,6 +22,7 @@ from reportlab.platypus import BaseDocTemplate, PageTemplate, Frame, Paragraph, 
 from reportlab.platypus.tableofcontents import TableOfContents
 from analyst_review import assess, verified_finding
 from assessment_coverage import build_coverage, write_coverage
+from report_insights import write as write_insights
 from analyst_workplan import write_plan
 from device_inventory import build_inventory
 
@@ -530,7 +531,7 @@ def read_data(root):
         findings.append({'id':f'OBS-{i:03d}','status':'taslak','source':'Otomatik gözlem','reference':'','cvss':'',**item})
     for i,item in enumerate(review.get('findings',[]),1):
         if not isinstance(item,dict): continue
-        finding={'id':str(item.get('id') or f'PX-{i:03d}'),'title':str(item.get('title') or 'Başlıksız bulgu'), 'severity':str(item.get('severity') or 'info').lower(), 'status':str(item.get('status') or 'taslak').lower(), 'asset':str(item.get('asset') or ''), 'affected_assets':[str(x) for x in item.get('affected_assets',[]) if isinstance(x,str)] if isinstance(item.get('affected_assets',[]),list) else [], 'description':str(item.get('description') or ''), 'impact':str(item.get('impact') or ''), 'recommendation':str(item.get('recommendation') or ''), 'evidence':str(item.get('evidence') or ''), 'evidence_sha256':str(item.get('evidence_sha256') or ''), 'evidence_items':item.get('evidence_items',[]) if isinstance(item.get('evidence_items',[]),list) else [], 'reference':str(item.get('reference') or ''), 'cvss':str(item.get('cvss') or ''), 'reproduction':str(item.get('reproduction') or ''), 'reviewed_by':str(item.get('reviewed_by') or ''), 'category':str(item.get('category') or ''), 'access_point':str(item.get('access_point') or ''), 'user_profile':str(item.get('user_profile') or ''), 'root_cause':str(item.get('root_cause') or ''), 'remediation_priority':str(item.get('remediation_priority') or ''), 'retest_status':str(item.get('retest_status') or ''), 'disposition_reason':str(item.get('disposition_reason') or ''), 'source':'Analist'}
+        finding={'id':str(item.get('id') or f'PX-{i:03d}'),'type':str(item.get('type') or '').lower(), 'title':str(item.get('title') or 'Başlıksız bulgu'), 'severity':str(item.get('severity') or 'info').lower(), 'status':str(item.get('status') or 'taslak').lower(), 'asset':str(item.get('asset') or ''), 'affected_assets':[str(x) for x in item.get('affected_assets',[]) if isinstance(x,str)] if isinstance(item.get('affected_assets',[]),list) else [], 'description':str(item.get('description') or ''), 'impact':str(item.get('impact') or ''), 'recommendation':str(item.get('recommendation') or ''), 'evidence':str(item.get('evidence') or ''), 'evidence_sha256':str(item.get('evidence_sha256') or ''), 'evidence_items':item.get('evidence_items',[]) if isinstance(item.get('evidence_items',[]),list) else [], 'reference':str(item.get('reference') or ''), 'cvss':str(item.get('cvss') or ''), 'reproduction':str(item.get('reproduction') or ''), 'reviewed_by':str(item.get('reviewed_by') or ''), 'category':str(item.get('category') or ''), 'access_point':str(item.get('access_point') or ''), 'user_profile':str(item.get('user_profile') or ''), 'root_cause':str(item.get('root_cause') or ''), 'remediation_priority':str(item.get('remediation_priority') or ''), 'retest_status':str(item.get('retest_status') or ''), 'disposition_reason':str(item.get('disposition_reason') or ''), 'source':'Analist'}
         if finding['severity'] not in SEVERITIES: finding['severity']='info'
         if finding['status'] not in ('doğrulandı','taslak','yanlış pozitif','risk kabul edildi'): finding['status']='taslak'
         if finding['status']=='doğrulandı' and not verified_finding(root,item):
@@ -660,6 +661,25 @@ def pdf(root, filename, meta, steps, hosts, findings, review, executive=False):
     story.extend(network_story(meta,st,doc.width))
     story.extend(ad_story(root,st,doc.width))
     story.extend(coverage_story(root,meta,steps,review,st,doc.width,executive))
+    insights=json.loads((root/'UBDEN_INSIGHTS.json').read_text(encoding='utf-8')) if (root/'UBDEN_INSIGHTS.json').is_file() else {}
+    preflight=json.loads((root/'PREFLIGHT.json').read_text(encoding='utf-8')) if (root/'PREFLIGHT.json').is_file() else {}
+    if preflight:
+        story.append(P('Görev ön kontrolü',st['SectionX']))
+        story.append(P(f"Durum: {preflight.get('status', '?')}. {preflight.get('note', '')}",st['BodyX']))
+        for item in preflight.get('checks',[])[:12]:
+            story.append(P(f"{item.get('name','?')}: {item.get('status','?')} · {item.get('detail','')}",st['SmallX'],limit=300))
+    if insights:
+        story.append(P('Teknik eşleme ve düzeltme yol haritası',st['SectionX']))
+        story.append(P(insights.get('meaning',''),st['BodyX']))
+        story.append(P(f"ATT&CK eşlemesi: {len(insights.get('attck',[]))} kayıt. CVSS taslağı: {len(insights.get('cvss_suggestions',[]))}. Öncelikli düzeltme: {len(insights.get('remediation',[]))}. Çevrimdışı örnek: {len(insights.get('hash_samples',{}).get('files',[]))} dosya.",st['BodyX']))
+        if not executive:
+            for item in insights.get('attck',[])[:12]:
+                story.append(P(f"{item['techniqueID']} · {item['techniqueName']} — {item['source']} ({item['status']})",st['SmallX']))
+            for item in insights.get('cvss_suggestions',[])[:12]:
+                story.append(P(f"CVSS önerisi {item['finding_id']}: {item['vector']} / {item['base_score']} · analist incelemesi gerekli",st['SmallX']))
+        for item in insights.get('remediation',[])[:8]:
+            story.append(P(f"{', '.join(item['findings'])} · {', '.join(item['assets'][:3])}: {item['recommendation']}",st['SmallX'],limit=420))
+        story.append(P('Ayrıntılar: UBDEN_INSIGHTS.json, ATTACK_LAYER.json ve REMEDIATION_ROADMAP.md.',st['SmallX']))
     discovery=discovery_summaries(root)
     if discovery:
         story.append(P('CIDR host keşfi',st['SectionX']))
@@ -912,7 +932,24 @@ def html_report(root,meta,steps,hosts,findings,review,report_errors=None):
     role_html=(f'<p class="notice">{safe(role_note)}</p>' if meta.get('role_scenarios') or
                any(str(s.get('step','')).startswith('role_') for s in steps) else '')
     doc=doc.replace('</p><h2>Yönetici özeti</h2>',f'</p>{auth_html}{role_html}{platform_html}{discover_html}{snmp_html}{ai_html}{review_table}{inventory_html}<h2>Yönetici özeti</h2>')
-    doc=doc.replace('<h2>Analist bulguları</h2>',risk_html+priority_html+network_html+ad_html+coverage_html+analyst_html+'<h2>Analist bulguları</h2>')
+    insights=json.loads((root/'UBDEN_INSIGHTS.json').read_text(encoding='utf-8')) if (root/'UBDEN_INSIGHTS.json').is_file() else {}
+    preflight=json.loads((root/'PREFLIGHT.json').read_text(encoding='utf-8')) if (root/'PREFLIGHT.json').is_file() else {}
+    preflight_html=''
+    if preflight:
+        preflight_html=('<h2>Görev ön kontrolü</h2><p>'+safe(preflight.get('note',''))+
+            ' · <a href="PREFLIGHT.json">Ön kontrol kaydı</a></p><table><thead><tr><th>Kontrol</th><th>Durum</th><th>Ayrıntı</th></tr></thead><tbody>'+
+            ''.join('<tr><td>'+safe(item.get('name',''))+'</td><td>'+safe(item.get('status',''))+'</td><td>'+safe(item.get('detail',''))+'</td></tr>' for item in preflight.get('checks',[]))+'</tbody></table>')
+    insight_html=''
+    if insights:
+        insight_html=('<h2>ATT&CK, CVSS ve düzeltme yol haritası</h2><p>'+safe(insights.get('meaning'))+'</p>'+
+            '<p><a href="UBDEN_INSIGHTS.json">Analiz kayıtları</a> · <a href="ATTACK_LAYER.json">ATT&CK Navigator katmanı</a> · <a href="REMEDIATION_ROADMAP.md">Düzeltme yol haritası</a></p>'+
+            '<p>Teknik eşleme: '+safe(len(insights.get('attck',[])))+' · CVSS taslağı: '+safe(len(insights.get('cvss_suggestions',[])))+' · Çevrimdışı örnek dosyası: '+safe(len(insights.get('hash_samples',{}).get('files',[])))+'</p>'+
+            '<h3>ATT&CK eşlemeleri</h3><table><thead><tr><th>Teknik</th><th>Kaynak</th><th>Durum</th></tr></thead><tbody>'+
+            ''.join('<tr><td>'+safe(item.get('techniqueID',''))+' · '+safe(item.get('techniqueName',''))+'</td><td>'+safe(item.get('source',''))+'</td><td>'+safe(item.get('status',''))+'</td></tr>' for item in insights.get('attck',[]))+'</tbody></table>'+
+            '<h3>CVSS önerileri</h3><table><thead><tr><th>Bulgu</th><th>Vektör</th><th>Taban puan</th></tr></thead><tbody>'+
+            ''.join('<tr><td>'+safe(item.get('finding_id',''))+'</td><td>'+safe(item.get('vector',''))+'</td><td>'+safe(item.get('base_score',''))+'</td></tr>' for item in insights.get('cvss_suggestions',[]))+'</tbody></table>'+
+            '<table><thead><tr><th>Bulgu</th><th>Varlık</th><th>Önerilen düzeltme</th></tr></thead><tbody>'+''.join('<tr><td>'+safe(', '.join(item['findings']))+'</td><td>'+safe(', '.join(item['assets'][:6]))+'</td><td>'+safe(item['recommendation'])+'</td></tr>' for item in insights.get('remediation',[]))+'</tbody></table>')
+    doc=doc.replace('<h2>Analist bulguları</h2>',risk_html+priority_html+network_html+ad_html+coverage_html+preflight_html+insight_html+analyst_html+'<h2>Analist bulguları</h2>')
     doc=doc.replace('<h2>Çalışma günlüğü</h2>',device_html+'<h2>Çalışma günlüğü</h2>')
     doc=doc.replace('</style></head>', '.riskbars{max-width:700px}.riskrow{display:grid;grid-template-columns:70px 1fr 32px;gap:12px;align-items:center;margin:7px 0}.risktrack{height:12px;background:#edf1f6;border-radius:7px}.risktrack i{height:12px;display:block;border-radius:7px}</style></head>')
     doc=doc.replace('Kimlik doğrulamalı iş akışları ve manuel istismar doğrulaması bu çıktıda yer almaz.', 'Otomatik kimlikli erişim kontrolü yalnızca durum kodlarını karşılaştırır. İnsan tarafından yapılan testler yalnızca yukarıdaki manuel test kayıtlarıyla belgelenmişse bu rapora dahildir.')
@@ -935,6 +972,7 @@ def main():
             print(f'Cihaz envanteri eski kanıttan çıkarılamadı: {exc}',file=sys.stderr)
     write_coverage(root,meta,steps,review)
     plan=write_plan(root,meta,steps,review,device_inventory(root),findings)
+    write_insights(root,meta,steps,findings,review)
     errors={}
     for filename,executive in (('YONETICI_OZETI.pdf',True),('TEKNIK_RAPOR.pdf',False)):
         temp=root/('.'+filename+'.pending.pdf')

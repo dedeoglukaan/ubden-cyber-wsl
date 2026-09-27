@@ -10,6 +10,7 @@ from pathlib import Path
 
 
 CONTROLS = (
+    ("ENV-READY", "Ortam", "Kurulum ve görev ön kontrolü", ("environment_preflight",)),
     ("NET-DISC", "Ağ", "Host keşfi", ("discovery_hosts", "discovery_summary", "icmp_probe")),
     ("NET-PORT", "Ağ", "TCP servis ve sürüm tespiti", ("port_discovery", "nmap_")),
     ("NET-PROTO", "Ağ", "Servis protokol kontrolleri", ("audit_",)),
