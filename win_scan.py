@@ -43,6 +43,10 @@ try:
     import ai_analyst
 except Exception:
     ai_analyst = None
+try:
+    import ai_operator
+except Exception:
+    ai_operator = None
 # report_v2 is invoked as a subprocess (its main() reads sys.argv), never imported
 # here, so win_scan stays importable for tests even without reportlab installed.
 
@@ -650,19 +654,22 @@ def run_scan(form: dict, progress=None) -> dict:
             events.append({"step": "ad_assessment", "status": "error", "detail": str(exc)})
             emit(f"AD değerlendirme hatası: {exc}", "warn")
 
-    # Claude AI analyst auto-triage (opt-in via API key) — reduces analyst load by
-    # producing an automatic assessment merged into the report. Key stays in memory.
+    # Agentic Claude AI operator (opt-in via API key): allowlisted follow-up checks +
+    # deep per-domain analysis → AI-assessed draft findings in the report. Minimizes
+    # analyst work. Key stays in memory; findings remain drafts (human sign-off distinct).
     ai_key = (form.get("claude_api_key") or "").strip()
-    if ai_key and ai_analyst is not None:
-        emit("Claude AI analist triyajı çalışıyor", "info")
+    if ai_key and ai_operator is not None:
+        emit("Claude AI operatör çalışıyor (takip kontrolleri + derin analiz)", "info")
         try:
-            model = (form.get("claude_model") or os.environ.get("UBDEN_AI_MODEL")
-                     or ai_analyst.DEFAULT_MODEL)
-            ai_analyst.analyze_run(root, meta, events,
-                                   {"key": ai_key, "model": model, "raw": bool(form.get("claude_raw"))})
-            emit("Claude AI analist taslağı üretildi", "info")
+            ai_operator.run(root, meta, events, {
+                "key": ai_key,
+                "model": form.get("claude_model") or os.environ.get("UBDEN_AI_MODEL") or ai_operator.DEFAULT_MODEL,
+                "deep_model": form.get("claude_deep_model") or os.environ.get("UBDEN_AI_DEEP_MODEL") or ai_operator.DEFAULT_DEEP_MODEL,
+                "raw": bool(form.get("claude_raw")),
+                "enable_actions": form.get("ai_actions", True) is not False,
+            }, progress=emit)
         except Exception as exc:
-            emit(f"AI analist hatası (rapor devam ediyor): {exc}", "warn")
+            emit(f"AI operatör hatası (rapor devam ediyor): {exc}", "warn")
 
     meta["status"] = "completed"
     meta["finished_at"] = now()

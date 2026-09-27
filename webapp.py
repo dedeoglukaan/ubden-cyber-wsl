@@ -198,6 +198,7 @@ border-left:3px solid var(--teal);border-radius:8px;padding:11px 16px;color:var(
 <div><label>Claude API anahtarı</label><input id="claude_key" type="password" placeholder="sk-ant-… (bulgu triyajı için)"></div>
 <div style="display:flex;align-items:end"><label style="display:flex;align-items:center;gap:8px;color:var(--ink)"><input type="checkbox" id="claude_raw" style="width:auto"> Ham kanıt gönder (aksi halde anonim özet)</label></div>
 </div>
+<label style="display:flex;align-items:center;gap:8px;color:var(--ink);margin-top:8px"><input type="checkbox" id="ai_actions" checked style="width:auto"> AI operatör takip kontrolleri çalıştırsın (allowlist: NSE/HTTP; kapsam içi, salt-okunur)</label>
 <div class="hint">Anahtar verilirse tarama sonunda Claude otomatik triyaj/analiz üretir (raporda "AI analist taslağı"); anahtar yalnız bellekte kullanılır. Parolalar yalnız bu yerel oturumda bellekte kullanılır; rapora veya görev dosyasına yazılmaz. AD host domain'e üyeyse kimlik bilgisiz de yerel AD envanteri çekilir.</div>
 </div></details>
 <div style="margin-top:16px"><button id="go">YETKILIYIM &mdash; Taramayi baslat</button></div>
@@ -250,6 +251,7 @@ async function start(){
  web_url:c("web_url"),swagger_url:c("swagger_url"),
  ssh_host:c("ssh_host"),ssh_user:c("ssh_user"),ssh_pass:v("ssh_pass"),
  claude_api_key:v("claude_key"),claude_raw:document.getElementById("claude_raw").checked,
+ ai_actions:document.getElementById("ai_actions").checked,
  selected_interfaces:[...document.querySelectorAll(".adpk:checked")].map(x=>x.value)};
  if(!body.targets.length){alert("En az bir hedef girin.");return;}
  document.getElementById("go").disabled=true;

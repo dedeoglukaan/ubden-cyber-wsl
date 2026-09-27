@@ -648,6 +648,26 @@ def read_data(root):
         if not finding['cwe']:
             finding['cwe']=infer_cwe(finding)
         findings.append(finding)
+    # Merge Claude AI-operator findings (drafts; human 'doğrulandı' stays a higher bar).
+    ai_path=root/'AI_FINDINGS.json'
+    if ai_path.is_file():
+        try:
+            ai_data=json.loads(ai_path.read_text(encoding='utf-8'))
+        except (ValueError,OSError):
+            ai_data={}
+        for item in ai_data.get('findings',[]) if isinstance(ai_data,dict) else []:
+            if not isinstance(item,dict) or not item.get('title'): continue
+            sev=str(item.get('severity','info')).lower()
+            findings.append({'id':str(item.get('id') or 'AI-000'),'type':'','title':str(item.get('title'))[:160],
+                'severity':sev if sev in SEVERITIES else 'info','status':'taslak',
+                'asset':str(item.get('asset') or ''),'affected_assets':[],
+                'description':str(item.get('description') or '')+(f"\n[AI güven: %{item.get('ai_confidence')}]" if item.get('ai_confidence') is not None else ''),
+                'impact':str(item.get('impact') or ''),'recommendation':str(item.get('recommendation') or ''),
+                'evidence':str(item.get('evidence') or ''),'evidence_sha256':'','evidence_items':[],
+                'reference':'','cvss':str(item.get('cvss') or ''),'cwe':str(item.get('cwe') or '')or infer_cwe(item),
+                'reproduction':'','reviewed_by':'','category':str(item.get('category') or ''),
+                'access_point':'','user_profile':'','root_cause':'','remediation_priority':'',
+                'retest_status':'','disposition_reason':'','source':'AI (otomatik analiz)'})
     findings.sort(key=lambda f:(list(SEVERITIES).index(f['severity']),f['id']))
     return meta,steps,hosts,findings,review
 
