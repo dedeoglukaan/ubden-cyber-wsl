@@ -38,66 +38,144 @@ function Write-UbdenPhase([string] $Text) {
 }
 
 function Install-TestMachineMarker {
-    # Bu bilgisayari "YETKILI PENTEST TEST MAKINESI" olarak isaretler: resmi
-    # Sysinternals BGInfo aracini indirir ve markali bir duvar kagidi uygular.
-    # Tamami best-effort'tur; caller try/catch ile sarar, hata kurulumu durdurmaz.
-    $toolsDir = Join-Path $StateRoot 'tools'
-    New-Item -ItemType Directory -Path $toolsDir -Force | Out-Null
-    $bginfo = Join-Path $toolsDir 'Bginfo64.exe'
-    if (-not (Test-Path -LiteralPath $bginfo)) {
-        try {
-            $zip = Join-Path $toolsDir 'BGInfo.zip'
-            [Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12
-            Invoke-WebRequest -Uri 'https://download.sysinternals.com/files/BGInfo.zip' -OutFile $zip -UseBasicParsing
-            Expand-Archive -LiteralPath $zip -DestinationPath $toolsDir -Force
-            Remove-Item -LiteralPath $zip -Force -ErrorAction SilentlyContinue
-            Write-Host '  BGInfo (Sysinternals) indirildi.' -ForegroundColor Green
-        }
-        catch {
-            Write-Host "  BGInfo indirilemedi (bilgilendirme): $($_.Exception.Message)" -ForegroundColor DarkYellow
-        }
-    }
+    # Bu bilgisayari "YETKILI PENTEST - TEST MAKINESI" olarak isaretler: kaynak
+    # duvar kagidinin sag tarafina BGInfo tarzinda bir sistem bilgisi paneli isler
+    # ve sonucu masaustu duvar kagidi yapar. Harici araca (BGInfo) bagimli degildir;
+    # tamami best-effort'tur (caller try/catch ile sarar, hata kurulumu durdurmaz).
     Add-Type -AssemblyName System.Drawing
+    New-Item -ItemType Directory -Path $StateRoot -Force | Out-Null
     $wall = Join-Path $StateRoot 'ubden-testmachine.bmp'
+
+    # 1) Taban gorsel: kaynak assets/wallpaper.png; yoksa koyu arka plan.
     $assetPng = Join-Path $SourceRoot 'assets\wallpaper.png'
     if (Test-Path -LiteralPath $assetPng) {
-        # Kaynaktaki hazir duvar kagidini kullan. SystemParametersInfo tum Windows
-        # surumlerinde guvenilir sekilde BMP ister; PNG'yi BMP'ye cevirip kaydet.
-        $img = [System.Drawing.Image]::FromFile($assetPng)
-        try {
-            $bmp = New-Object System.Drawing.Bitmap($img)
-            $bmp.Save($wall, [System.Drawing.Imaging.ImageFormat]::Bmp)
-            $bmp.Dispose()
-        }
-        finally { $img.Dispose() }
+        $src = [System.Drawing.Image]::FromFile($assetPng)
+        try { $bmp = New-Object System.Drawing.Bitmap $src }
+        finally { $src.Dispose() }
     }
     else {
-        # Kaynak bulunamazsa markali duvar kagidini uret (yedek).
-        $width = 1920; $height = 1080
-        $bmp = New-Object System.Drawing.Bitmap($width, $height)
-        $g = [System.Drawing.Graphics]::FromImage($bmp)
-        $g.SmoothingMode = [System.Drawing.Drawing2D.SmoothingMode]::AntiAlias
-        $g.Clear([System.Drawing.Color]::FromArgb(8, 13, 27))
-        $green = New-Object System.Drawing.SolidBrush([System.Drawing.Color]::FromArgb(34, 211, 160))
-        $teal = New-Object System.Drawing.SolidBrush([System.Drawing.Color]::FromArgb(0, 185, 189))
-        $dim = New-Object System.Drawing.SolidBrush([System.Drawing.Color]::FromArgb(144, 160, 196))
-        $pen = New-Object System.Drawing.Pen([System.Drawing.Color]::FromArgb(0, 133, 138), 3)
-        $g.DrawRectangle($pen, 40, 40, ($width - 80), ($height - 80))
-        $fTitle = New-Object System.Drawing.Font('Consolas', 46, [System.Drawing.FontStyle]::Bold)
-        $fSub = New-Object System.Drawing.Font('Consolas', 26, [System.Drawing.FontStyle]::Bold)
-        $fInfo = New-Object System.Drawing.Font('Consolas', 22)
-        $fFoot = New-Object System.Drawing.Font('Consolas', 20)
-        $g.DrawString('UBDEN CYBER SECURITY', $fTitle, $green, 90, 110)
-        $g.DrawString('YETKILI PENTEST — TEST MAKINESI', $fSub, $teal, 92, 200)
-        $os = (Get-CimInstance Win32_OperatingSystem -ErrorAction SilentlyContinue).Caption
-        $info = "Host      : $env:COMPUTERNAME`nKullanici : $env:USERNAME`nISletim S.: $os`nISaret    : " + (Get-Date -Format 'yyyy-MM-dd HH:mm')
-        $g.DrawString($info, $fInfo, $dim, 92, 290)
-        $g.DrawString('https://www.ubden.com  |  security@ubden.com', $fFoot, $teal, 92, ($height - 110))
-        $g.Dispose()
-        $bmp.Save($wall, [System.Drawing.Imaging.ImageFormat]::Bmp)
-        $bmp.Dispose()
+        $bmp = New-Object System.Drawing.Bitmap 1920, 1080
+        $bg = [System.Drawing.Graphics]::FromImage($bmp)
+        $bg.Clear([System.Drawing.Color]::FromArgb(8, 13, 27))
+        $bg.Dispose()
     }
-    # Duvar kagidini "Doldur" bicimine ayarla (best-effort).
+    $W = $bmp.Width; $H = $bmp.Height
+
+    # 2) Sistem bilgilerini topla (her cagri best-effort).
+    $cs  = Get-CimInstance Win32_ComputerSystem  -ErrorAction SilentlyContinue
+    $os  = Get-CimInstance Win32_OperatingSystem -ErrorAction SilentlyContinue
+    $cpu = Get-CimInstance Win32_Processor -ErrorAction SilentlyContinue | Select-Object -First 1
+    $domain = if ($cs -and $cs.Domain) { $cs.Domain }
+              elseif ($env:USERDNSDOMAIN) { $env:USERDNSDOMAIN } else { 'WORKGROUP' }
+    $fqdn = if ($domain -and $domain -ne 'WORKGROUP') { "$env:COMPUTERNAME.$domain" } else { $env:COMPUTERNAME }
+    $roleMap = @{ 0 = 'Standalone Workstation'; 1 = 'Member Workstation'; 2 = 'Standalone Server';
+                  3 = 'Member Server'; 4 = 'Backup Domain Controller'; 5 = 'Primary Domain Controller' }
+    $roleText = if ($cs) { $roleMap[[int]$cs.DomainRole] } else { '' }
+    $ips = @()
+    try {
+        $ips = @(Get-NetIPAddress -AddressFamily IPv4 -ErrorAction Stop |
+            Where-Object { $_.IPAddress -notmatch '^(169\.254|127\.)' } |
+            Select-Object -ExpandProperty IPAddress)
+    }
+    catch {
+        try {
+            $ips = @([System.Net.Dns]::GetHostAddresses($env:COMPUTERNAME) |
+                Where-Object { $_.AddressFamily -eq 'InterNetwork' } |
+                ForEach-Object { $_.IPAddressToString })
+        } catch {}
+    }
+    $gw = ''
+    try {
+        $gw = (Get-NetRoute -DestinationPrefix '0.0.0.0/0' -ErrorAction Stop |
+            Sort-Object RouteMetric | Select-Object -First 1 -ExpandProperty NextHop)
+    } catch {}
+    $dns = @()
+    try {
+        $dns = @(Get-DnsClientServerAddress -AddressFamily IPv4 -ErrorAction Stop |
+            Select-Object -ExpandProperty ServerAddresses -Unique |
+            Where-Object { $_ -and $_ -ne '0.0.0.0' })
+    } catch {}
+    $boot = if ($os) { $os.LastBootUpTime } else { $null }
+    $upStr = ''
+    if ($boot) { $u = (Get-Date) - $boot; $upStr = "$($u.Days) gun $($u.Hours) saat $($u.Minutes) dk" }
+    $memTotalMB = if ($cs) { [math]::Round($cs.TotalPhysicalMemory / 1MB) } else { 0 }
+    $memFreePct = if ($os -and $os.TotalVisibleMemorySize) {
+        [math]::Round(100 * $os.FreePhysicalMemory / $os.TotalVisibleMemorySize) } else { 0 }
+
+    # 3) Panel alanlari (bos degerler atlanir).
+    $fields = [ordered]@{
+        'Host Name'  = $fqdn
+        'Domain'     = $domain
+        'Uretici'    = if ($cs) { ("$($cs.Manufacturer) $($cs.Model)").Trim() } else { '' }
+        'OS'         = if ($os) { $os.Caption } else { '' }
+        'Rol'        = $roleText
+        'IP Adresi'  = ($ips -join '   ')
+        'Ag Gecidi'  = $gw
+        'DNS'        = ($dns -join '   ')
+        'Kullanici'  = "$env:USERNAME@$domain"
+        'CPU'        = if ($cpu) { "$($cpu.NumberOfCores) Core   $($cpu.Name)" } else { '' }
+        'Bellek'     = if ($memTotalMB) { "$memTotalMB MB  (%$memFreePct bos)" } else { '' }
+        'Acilis'     = if ($boot) { $boot.ToString('dd.MM.yyyy HH:mm') } else { '' }
+        'Uptime'     = $upStr
+        'Snapshot'   = (Get-Date).ToString('dd.MM.yyyy HH:mm')
+    }
+    $rows = @(foreach ($k in $fields.Keys) {
+        if ($fields[$k]) { [pscustomobject]@{ L = $k; V = [string]$fields[$k] } } })
+
+    # 4) Paneli duvar kagidinin sag tarafina ciz.
+    $g = [System.Drawing.Graphics]::FromImage($bmp)
+    $g.SmoothingMode = [System.Drawing.Drawing2D.SmoothingMode]::AntiAlias
+    $g.TextRenderingHint = [System.Drawing.Text.TextRenderingHint]::ClearTypeGridFit
+    $green = New-Object System.Drawing.SolidBrush([System.Drawing.Color]::FromArgb(120, 230, 170))
+    $teal  = New-Object System.Drawing.SolidBrush([System.Drawing.Color]::FromArgb(90, 205, 210))
+    $white = New-Object System.Drawing.SolidBrush([System.Drawing.Color]::FromArgb(232, 240, 252))
+    $dim   = New-Object System.Drawing.SolidBrush([System.Drawing.Color]::FromArgb(150, 168, 200))
+    $panelBrush = New-Object System.Drawing.SolidBrush([System.Drawing.Color]::FromArgb(165, 6, 11, 22))
+    $accentPen  = New-Object System.Drawing.Pen([System.Drawing.Color]::FromArgb(0, 185, 189), 2)
+    $fTitle = New-Object System.Drawing.Font('Consolas', 26, [System.Drawing.FontStyle]::Bold)
+    $fSub   = New-Object System.Drawing.Font('Consolas', 15, [System.Drawing.FontStyle]::Bold)
+    $fLabel = New-Object System.Drawing.Font('Consolas', 13, [System.Drawing.FontStyle]::Bold)
+    $fValue = New-Object System.Drawing.Font('Consolas', 13)
+    $fFoot  = New-Object System.Drawing.Font('Consolas', 12)
+
+    $panelW = [int][math]::Min(760, $W * 0.44)
+    $margin = [int]($W * 0.03)
+    $panelX = $W - $panelW - $margin
+    $pad = 26
+    $labelW = 168
+    $valW = $panelW - $labelW - ($pad * 2)
+    $lineH = 30
+
+    # Olcum: sarilan degerlere gore satir yuksekligi.
+    $rowHeights = @($rows | ForEach-Object {
+        $sz = $g.MeasureString($_.V, $fValue, [int]$valW)
+        [int][math]::Max($lineH, [math]::Ceiling($sz.Height) + 6) })
+    $contentH = ($rowHeights | Measure-Object -Sum).Sum
+    if (-not $contentH) { $contentH = 0 }
+    $headerH = 84
+    $footerH = 46
+    $panelH = $headerH + $contentH + $footerH + ($pad * 2)
+    $panelY = [int][math]::Max(40, ($H - $panelH) / 2)
+
+    $g.FillRectangle($panelBrush, $panelX, $panelY, $panelW, $panelH)
+    $x = $panelX + $pad
+    $y = $panelY + $pad
+    $g.DrawString('UBDEN CYBER SECURITY', $fTitle, $green, $x, $y); $y += 40
+    $g.DrawString('YETKILI PENTEST - TEST MAKINESI', $fSub, $teal, $x, $y); $y += 26
+    $g.DrawLine($accentPen, $x, $y, ($panelX + $panelW - $pad), $y); $y += 14
+    for ($i = 0; $i -lt $rows.Count; $i++) {
+        $g.DrawString($rows[$i].L, $fLabel, $dim, $x, $y)
+        $valRect = New-Object System.Drawing.RectangleF(($x + $labelW), $y, $valW, $rowHeights[$i])
+        $g.DrawString($rows[$i].V, $fValue, $white, $valRect)
+        $y += $rowHeights[$i]
+    }
+    $y += 14
+    $g.DrawString('https://www.ubden.com   |   security@ubden.com', $fFoot, $teal, $x, $y)
+    $g.Dispose()
+    $bmp.Save($wall, [System.Drawing.Imaging.ImageFormat]::Bmp)
+    $bmp.Dispose()
+
+    # 5) Masaustu duvar kagidi olarak uygula ("Doldur" bicimi).
     try {
         Set-ItemProperty -Path 'HKCU:\Control Panel\Desktop' -Name WallpaperStyle -Value '10' -ErrorAction Stop
         Set-ItemProperty -Path 'HKCU:\Control Panel\Desktop' -Name TileWallpaper -Value '0' -ErrorAction Stop
@@ -113,7 +191,7 @@ public class UbdenWallpaper {
 '@
     }
     [UbdenWallpaper]::SystemParametersInfo(20, 0, $wall, 3) | Out-Null
-    Write-Host '  Test makinesi isareti uygulandi (masaustu duvar kagidi).' -ForegroundColor Green
+    Write-Host '  Test makinesi isareti uygulandi (duvar kagidi + sistem bilgi paneli).' -ForegroundColor Green
 }
 
 function Invoke-Elevated {
@@ -421,6 +499,38 @@ function Ensure-BrowserHelper {
     if ($LASTEXITCODE -ne 0) { throw 'Windows Playwright kurulumu basarisiz' }
 }
 
+function Assert-WslAvailable {
+    param([int] $Build, [datetime] $BootTime)
+    # wsl.exe hazir ise devam. Yoksa: (a) surum cok eskiyse net bir uyari ver,
+    # (b) desteklenen surumde WSL ozelliklerini etkinlestirip yeniden baslatma iste.
+    if (Get-Command wsl.exe -ErrorAction SilentlyContinue) { return }
+    # `wsl --install` ve WSL 2 dagitim kurulumu Windows 10 2004 (build 19041) ve
+    # sonrasinda desteklenir. Windows Server 2019 (build 17763) dahil daha eski
+    # surumlerde otomatik Kali WSL 2 kurulumu yapilamaz.
+    if ($Build -lt 19041) {
+        throw ("Bu Windows surumunde (build $Build) WSL 2 / otomatik Kali kurulumu desteklenmiyor. " +
+            "UBDEN icin Windows 10 2004+ (build 19041) veya Windows 11 gerekir; " +
+            "sunucularda Windows Server 2022 kullanin. Windows Server 2019 uzerinde WSL 2 desteklenmez.")
+    }
+    Write-Host 'WSL bulunamadi; Windows ozellikleri etkinlestiriliyor (WSL + VirtualMachinePlatform).' -ForegroundColor DarkYellow
+    foreach ($feature in 'Microsoft-Windows-Subsystem-Linux', 'VirtualMachinePlatform') {
+        $state = Get-CimInstance Win32_OptionalFeature -Filter "Name='$feature'" -ErrorAction SilentlyContinue
+        if ($state -and $state.InstallState -eq 2) {
+            Enable-WindowsOptionalFeature -Online -FeatureName $feature -All -NoRestart -ErrorAction Stop | Out-Null
+        }
+    }
+    $pending = Read-State
+    $pending | Add-Member -NotePropertyName setup_pending_reboot `
+        -NotePropertyValue 'WSL ozellikleri etkinlestirildi' -Force
+    if ($BootTime) {
+        $pending | Add-Member -NotePropertyName setup_reboot_baseline `
+            -NotePropertyValue $BootTime.ToUniversalTime().ToString('o') -Force
+    }
+    Save-State $pending
+    Register-SetupResume
+    throw 'WSL ozellikleri etkinlestirildi; Windows yeniden baslatilinca UBDEN kurulumu surdurulecek.'
+}
+
 function Invoke-Setup {
     Invoke-Elevated
     $build = [Environment]::OSVersion.Version.Build
@@ -432,6 +542,8 @@ function Invoke-Setup {
     if ($drive.Free -lt 10GB) { throw 'WSL kurulumu icin Windows sistem diskinde en az 10 GiB bos alan gerekli' }
     $hostFreeKB = [math]::Floor($drive.Free / 1KB)
     New-Item -ItemType Directory -Path $StateRoot -Force | Out-Null
+    Assert-WslAvailable -Build $build `
+        -BootTime (Get-CimInstance Win32_OperatingSystem -ErrorAction SilentlyContinue).LastBootUpTime
     Write-Host 'Mirrored ag ve DNS ayari Ubuntu dahil tum WSL 2 dagitimlarini etkiler.'
     Ensure-Kali
     $beforeNetwork = Read-State
