@@ -17,6 +17,84 @@ function Test-Administrator {
     return $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
 }
 
+function Write-UbdenBanner {
+    $art = @'
+   _   _ ____  ____  _____ _   _
+  | | | | __ )|  _ \| ____| \ | |
+  | | | |  _ \| | | |  _| |  \| |
+  | |_| | |_) | |_| | |___| |\  |
+   \___/|____/|____/|_____|_| \_|
+'@
+    Write-Host $art -ForegroundColor Green
+    Write-Host '  UBDEN Cyber Security Systems' -ForegroundColor Cyan -NoNewline
+    Write-Host ' · yetkili pentest platformu' -ForegroundColor DarkGray
+    Write-Host '  https://www.ubden.com | security@ubden.com' -ForegroundColor DarkGray
+    Write-Host ''
+}
+
+function Write-UbdenPhase([string] $Text) {
+    Write-Host "`n▸ " -ForegroundColor Green -NoNewline
+    Write-Host $Text -ForegroundColor Cyan
+}
+
+function Install-TestMachineMarker {
+    # Bu bilgisayari "YETKILI PENTEST TEST MAKINESI" olarak isaretler: resmi
+    # Sysinternals BGInfo aracini indirir ve markali bir duvar kagidi uygular.
+    # Tamami best-effort'tur; caller try/catch ile sarar, hata kurulumu durdurmaz.
+    $toolsDir = Join-Path $StateRoot 'tools'
+    New-Item -ItemType Directory -Path $toolsDir -Force | Out-Null
+    $bginfo = Join-Path $toolsDir 'Bginfo64.exe'
+    if (-not (Test-Path -LiteralPath $bginfo)) {
+        try {
+            $zip = Join-Path $toolsDir 'BGInfo.zip'
+            [Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12
+            Invoke-WebRequest -Uri 'https://download.sysinternals.com/files/BGInfo.zip' -OutFile $zip -UseBasicParsing
+            Expand-Archive -LiteralPath $zip -DestinationPath $toolsDir -Force
+            Remove-Item -LiteralPath $zip -Force -ErrorAction SilentlyContinue
+            Write-Host '  BGInfo (Sysinternals) indirildi.' -ForegroundColor Green
+        }
+        catch {
+            Write-Host "  BGInfo indirilemedi (bilgilendirme): $($_.Exception.Message)" -ForegroundColor DarkYellow
+        }
+    }
+    Add-Type -AssemblyName System.Drawing
+    $width = 1920; $height = 1080
+    $bmp = New-Object System.Drawing.Bitmap($width, $height)
+    $g = [System.Drawing.Graphics]::FromImage($bmp)
+    $g.SmoothingMode = [System.Drawing.Drawing2D.SmoothingMode]::AntiAlias
+    $g.Clear([System.Drawing.Color]::FromArgb(8, 13, 27))
+    $green = New-Object System.Drawing.SolidBrush([System.Drawing.Color]::FromArgb(34, 211, 160))
+    $teal = New-Object System.Drawing.SolidBrush([System.Drawing.Color]::FromArgb(0, 185, 189))
+    $dim = New-Object System.Drawing.SolidBrush([System.Drawing.Color]::FromArgb(144, 160, 196))
+    $pen = New-Object System.Drawing.Pen([System.Drawing.Color]::FromArgb(0, 133, 138), 3)
+    $g.DrawRectangle($pen, 40, 40, ($width - 80), ($height - 80))
+    $fTitle = New-Object System.Drawing.Font('Consolas', 46, [System.Drawing.FontStyle]::Bold)
+    $fSub = New-Object System.Drawing.Font('Consolas', 26, [System.Drawing.FontStyle]::Bold)
+    $fInfo = New-Object System.Drawing.Font('Consolas', 22)
+    $fFoot = New-Object System.Drawing.Font('Consolas', 20)
+    $g.DrawString('UBDEN CYBER SECURITY', $fTitle, $green, 90, 110)
+    $g.DrawString('YETKILI PENTEST — TEST MAKINESI', $fSub, $teal, 92, 200)
+    $os = (Get-CimInstance Win32_OperatingSystem -ErrorAction SilentlyContinue).Caption
+    $info = "Host      : $env:COMPUTERNAME`nKullanici : $env:USERNAME`nISletim S.: $os`nISaret    : " + (Get-Date -Format 'yyyy-MM-dd HH:mm')
+    $g.DrawString($info, $fInfo, $dim, 92, 290)
+    $g.DrawString('https://www.ubden.com  |  security@ubden.com', $fFoot, $teal, 92, ($height - 110))
+    $g.Dispose()
+    $wall = Join-Path $StateRoot 'ubden-testmachine.bmp'
+    $bmp.Save($wall, [System.Drawing.Imaging.ImageFormat]::Bmp)
+    $bmp.Dispose()
+    if (-not ([System.Management.Automation.PSTypeName]'UbdenWallpaper').Type) {
+        Add-Type @'
+using System; using System.Runtime.InteropServices;
+public class UbdenWallpaper {
+    [DllImport("user32.dll", SetLastError = true, CharSet = CharSet.Auto)]
+    public static extern bool SystemParametersInfo(int uAction, int uParam, string lpvParam, int fuWinIni);
+}
+'@
+    }
+    [UbdenWallpaper]::SystemParametersInfo(20, 0, $wall, 3) | Out-Null
+    Write-Host '  Test makinesi isareti uygulandi (masaustu duvar kagidi).' -ForegroundColor Green
+}
+
 function Invoke-Elevated {
     if (Test-Administrator) { return }
     $shell = if (Get-Command pwsh.exe -ErrorAction SilentlyContinue) { 'pwsh.exe' } else { 'powershell.exe' }
@@ -498,6 +576,7 @@ function Invoke-Status {
 
 function Invoke-Run {
     Invoke-Setup
+    try { Install-TestMachineMarker } catch { Write-Host "  Test makinesi isareti atlandi: $($_.Exception.Message)" -ForegroundColor DarkYellow }
     $bridge = Join-Path $SourceRoot 'windows-bridge.ps1'
     $networkMode = (Read-State).network_mode
     $startedAt = (Get-Date).ToUniversalTime().ToString('o')
@@ -780,14 +859,18 @@ print(json.dumps(matches))
 }
 
 try {
+    Write-UbdenBanner
     switch ($Action) {
         'status' { Invoke-Status }
-        'setup' { Invoke-Setup }
+        'setup' {
+            Invoke-Setup
+            try { Install-TestMachineMarker } catch { Write-Host "  Test makinesi isareti atlandi: $($_.Exception.Message)" -ForegroundColor DarkYellow }
+        }
         'run' { Invoke-Run }
         'destroy' { Invoke-Destroy }
     }
 }
 catch {
     Write-Host ("UBDEN: " + $_.Exception.Message) -ForegroundColor Red
-    exit 1
+    throw
 }

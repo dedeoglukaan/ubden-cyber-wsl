@@ -15,7 +15,30 @@ case "${1:-}" in
   *) echo "Kullanım: bash install.sh [--extended-tools|--everything|--wsl]" >&2; exit 2 ;;
 esac
 
-echo "[1/5] APT paket listesi ve zorunlu araçlar"
+# --- Ethical-hacker temali cikti (NO_COLOR ile kapatilabilir) ---
+if [[ -z "${NO_COLOR:-}" ]]; then
+  C_R=$'\e[0m'; C_G=$'\e[1;32m'; C_C=$'\e[1;36m'; C_Y=$'\e[1;33m'; C_M=$'\e[1;35m'; C_D=$'\e[2;37m'
+else
+  C_R=; C_G=; C_C=; C_Y=; C_M=; C_D=
+fi
+ubden_banner() {
+  printf '%s' "$C_G"
+  cat <<'ART'
+   _   _ ____  ____  _____ _   _
+  | | | | __ )|  _ \| ____| \ | |
+  | | | |  _ \| | | |  _| |  \| |
+  | |_| | |_) | |_| | |___| |\  |
+   \___/|____/|____/|_____|_| \_|
+ART
+  printf '%s\n' "$C_R"
+  printf '%s\n' "  ${C_C}UBDEN Cyber Security Systems${C_R} ${C_D}· Kali WSL kurulumu${C_R}"
+  printf '%s\n' "  ${C_D}https://www.ubden.com | security@ubden.com${C_R}"
+  printf '%s\n\n' "  ${C_M}>> kurulum baslatiliyor...${C_R}"
+}
+ubden_phase() { printf '\n%s\n' "${C_G}▸${C_R} ${C_C}$1${C_R}"; }
+ubden_banner
+
+ubden_phase "[1/5] APT paket listesi ve zorunlu araçlar"
 apt-get update
 if [[ "${1:-}" == --wsl ]] && { ! apt-cache policy | grep -F 'release o=Kali,' >/dev/null ||
     ! apt-cache policy nmap | grep -E '/kali[[:space:]]+kali-' >/dev/null; }; then
@@ -23,7 +46,7 @@ if [[ "${1:-}" == --wsl ]] && { ! apt-cache policy | grep -F 'release o=Kali,' >
   exit 1
 fi
 apt-get install -y --no-install-recommends python3 python3-venv python3-pip nmap snmp iproute2 iputils-ping curl dnsutils whois sslscan ca-certificates fonts-dejavu-core
-echo "[2/5] Ek araçlar (kurulum sonucu ayrıca gösterilir)"
+ubden_phase "[2/5] Ek araçlar (kurulum sonucu ayrıca gösterilir)"
 FAILED=()
 for package in whatweb nikto sqlmap gobuster wafw00f nuclei fping arping dnsenum nbtscan ike-scan tcpdump traceroute; do
   if [[ "${1:-}" == --wsl ]] && ! apt-cache policy "$package" | grep -E '/kali[[:space:]]+kali-' >/dev/null; then
@@ -40,7 +63,7 @@ for package in whatweb nikto sqlmap gobuster wafw00f nuclei fping arping dnsenum
 done
 
 if [[ "${1:-}" == --wsl ]]; then
-  echo "[3/5] WSL araç kataloğundaki uygun Kali paketleri"
+  ubden_phase "[3/5] WSL araç kataloğundaki uygun Kali paketleri"
   while IFS= read -r package; do
     [[ -n "$package" ]] || continue
     if ! apt-cache policy "$package" | grep -E '/kali[[:space:]]+kali-' >/dev/null; then
@@ -99,7 +122,7 @@ if [[ "${1:-}" == --extended-tools || "${1:-}" == --everything ]]; then
   fi
 fi
 
-echo "[4/5] UBDEN uygulaması ve Python ortamı"
+ubden_phase "[4/5] UBDEN uygulaması ve Python ortamı"
 mkdir -p "$DEST" "$DEST/runs" "$DEST/assets"
 mkdir -p "$DEST/templates/baseline/https" "$DEST/templates/baseline/web"
 mkdir -p "$DEST/data/ieee"
@@ -123,7 +146,7 @@ if [[ -d /usr/share/applications ]]; then
   install -m 0644 "$BASE/ubden-cyber.desktop" /usr/share/applications/ubden-cyber.desktop
 fi
 chmod 0700 "$DEST/runs"
-echo "[5/5] Kurulum doğrulaması"
+ubden_phase "[5/5] Kurulum doğrulaması"
 "$DEST/start.sh" --version
 if command -v nuclei >/dev/null 2>&1; then
   if ! nuclei -validate -t "$DEST/templates/baseline" -duc -ni; then
@@ -136,7 +159,10 @@ if [[ ${#FAILED[@]} -gt 0 ]]; then
 else
   echo "[OK] İstenen ek araçlar kuruldu."
 fi
-echo "[OK] UBDEN Cyber Security Systems kuruldu."
+printf '\n%s\n' "${C_G}════════════════════════════════════════════════════════════${C_R}"
+printf '%s\n' "  ${C_G}[OK]${C_R} ${C_C}UBDEN Cyber Security Systems kuruldu.${C_R}"
+printf '%s\n' "  ${C_D}https://www.ubden.com | security@ubden.com${C_R}"
+printf '%s\n' "${C_G}════════════════════════════════════════════════════════════${C_R}"
 echo "Başlat: ubden-cyber (gereken yetki için sudo kendiliğinden istenir)"
 echo "Ön izleme: ubden-cyber --preview-ui (ağ isteği yapılmaz)"
 echo "Kali masaüstünde varsayılan raporlar: ~/Desktop/UBDEN-Cyber-Reports/"

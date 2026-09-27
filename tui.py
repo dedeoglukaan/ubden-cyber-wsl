@@ -61,6 +61,7 @@ class Console:
         self.say("  CYBER SECURITY SYSTEMS" + " " * 3 + "v" + version, "bold")
         self.say("  " + "=" * min(self.width - 4, 62), "navy")
         self.say("  Ürün: UBDEN®  |  Tester: görev açılırken girilir", "dim")
+        self.say("  https://www.ubden.com  |  security@ubden.com", "cyan")
         self.say("  Yetkili, kayıtlı ve sınırlı güvenlik değerlendirmesi", "dim")
         self.say()
 
