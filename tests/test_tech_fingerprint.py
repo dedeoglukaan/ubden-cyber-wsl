@@ -43,6 +43,18 @@ class IdentifyTests(unittest.TestCase):
         esxi = next(x for x in T.identify({443, 902}, "vmware esxi 7.0.3") if x["family"] == "VMware ESXi")
         self.assertEqual(esxi["cpe_parts"], ["o", "vmware", "esxi"])
 
+    def test_mikrotik_routeros_with_cpe(self):
+        mt = next(x for x in T.identify({8291, 443}, "mikrotik routeros 6.49.7")
+                  if x["family"] == "MikroTik RouterOS")
+        self.assertEqual(mt["version"], "6.49.7")
+        self.assertEqual(mt["cpe_parts"], ["o", "mikrotik", "routeros"])
+
+    def test_veeam_and_axis_detected(self):
+        self.assertTrue(any(x["family"].startswith("Veeam")
+                            for x in T.identify({9392}, "", vendor="Veeam")))
+        self.assertTrue(any(x["family"] == "Axis kamera"
+                            for x in T.identify({554, 80}, "axis network camera")))
+
     def test_no_match_is_empty(self):
         self.assertEqual(T.identify({80}, "apache httpd 2.4"), [])
 
