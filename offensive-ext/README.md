@@ -21,7 +21,7 @@ Nothing here modifies UBDEN. It reads a finished run folder, writes its own evid
 | `coverage.py` | Coverage matrix (tested/attempted/skipped) from executed steps. |
 | `crack.py` | Offline kerberoast/AS-REP cracking helper — writes ready `.hash` files + exact hashcat/john commands; ingests results back as CRACKED-credential findings. No network, no lockout. |
 | `remediation.py` | Prioritized remediation roadmap (Turkish) grouped by root cause + quick-wins. |
-| `emit.py` | Writes findings into UBDEN `review.json` (verified when evidence hash-matches) + re-runs report_v2. The analyst signature written to `reviewed_by` comes from `--reviewer` / `$UBDEN_REVIEWER`, defaulting to `Analist`. |
+| `emit.py` | Writes findings into UBDEN `review.json` **as drafts, always** + re-runs report_v2. Only a human working through `analyst_review.py` can mark a finding verified. `reviewed_by` is empty unless `--reviewer` / `$UBDEN_REVIEWER` is set, and signing it still does not promote anything. Adding findings retracts any prior sign-off on the file. |
 | `pipeline.py` | A-to-Z: attack → parse (+cracked.json) → score → attck → chain → narrate → coverage → remediation → emit. |
 | `setup-offensive.sh` | Installs the offensive toolchain on Kali (run once, on the box). |
 | `ARCHITECTURE.md` | The full design + what each idea was borrowed from. |

@@ -56,7 +56,8 @@ def dedupe_findings(findings):
 
 
 def order_chain(findings):
-    return sorted(findings, key=lambda f: STAGE_ORDER.get(f.get("type", ""), 9))
+    # narrate.family(): an adcs_esc_direct finding must sort where adcs_esc sorts, not at 9.
+    return sorted(findings, key=lambda f: STAGE_ORDER.get(narrate.family(f.get("type", "")), 9))
 
 
 def infer_reached_da(run_dir: str) -> bool:
@@ -174,8 +175,8 @@ def run(run_dir, creds, *, nets=None, hosts_allow=None, skip_attack=False, dry_r
 def _write_summary_md(run_dir, summary, cs):
     lines = ["# offensive-ext — Özet", "",
              f"- Bulgu sayısı: **{summary['findings']}** "
-             f"(rapora eklenen: {summary['emit']['added']}, "
-             f"doğrulanmış: {summary['emit']['verified']}, taslak: {summary['emit']['draft']})",
+             f"(rapora TASLAK olarak eklenen: {summary['emit']['added']}, "
+             f"kanıt dosyası olan: {summary['emit']['with_evidence']})",
              f"- Zincir sonucu: **{cs['chain_severity']} (CVSS {cs['chain_score']})** — "
              f"{'Domain Admin FİİLEN elde edildi' if cs['reached_da'] else 'DA fiilen çalıştırılmadı (yol tespit edildiyse raporda belirtildi)'}, "
              f"{cs['links']} aşama",
@@ -245,7 +246,11 @@ def _self_test() -> int:
 
         s = run(d, {"user": "svc", "password": "P"}, skip_attack=True, no_report=True)
         check("parsed 3 findings", s["findings"] == 3)
-        check("emitted 3 verified", s["emit"]["added"] == 3 and s["emit"]["verified"] == 3)
+        check("emitted 3 as drafts", s["emit"]["added"] == 3 and s["emit"]["draft"] == 3)
+        check("nothing is self-promoted to verified", "verified" not in s["emit"])
+        rv = json.load(open(os.path.join(d, "review.json")))
+        check("every emitted finding is taslak in review.json",
+              all(f["status"] == "taslak" for f in rv["findings"]))
         # M1: no DCSync executed -> must NOT claim DA reached
         check("does NOT claim DA from inventory only", s["chain"]["reached_da"] is False)
         # but a Critical vuln (ESC1) still makes the chain Critical
@@ -289,7 +294,8 @@ def _self_test() -> int:
         mode = oct(os.stat(os.path.join(pdir, "SUMMARY.json")).st_mode)[-3:]
         check("SUMMARY.json is 0600", mode == "600")
 
-    total = 18   # 12 original + 6 for dedupe_findings. Hardcoded on purpose: it catches a
+    total = 20   # 12 original + 6 dedupe_findings + 2 for the draft-only emit contract.
+                 # Hardcoded on purpose: it catches a
                  # check block that silently never ran, which an auto-count would hide.
     print(f"\n{ok}/{total} checks passed")
     return 0 if ok == total else 1

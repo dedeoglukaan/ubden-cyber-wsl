@@ -99,10 +99,18 @@ def load_scope(path: str):
             if not s or s.startswith("-"):
                 continue
             try:
-                nets.append(ipaddress.ip_network(s, strict=False))
+                # strict=True on purpose. `10.0.0.5/24` is a typo for either the host or the
+                # network, and ip_network(strict=False) resolves it to 10.0.0.0/24 -- silently
+                # authorising 253 hosts nobody wrote down. Scope only ever widens deliberately.
+                nets.append(ipaddress.ip_network(s, strict=True))
                 continue
-            except ValueError:
-                pass
+            except ValueError as exc:
+                if "/" in s and "has host bits set" in str(exc):
+                    net = ipaddress.ip_network(s, strict=False)
+                    raise SafetyAbort(
+                        f"scope line {s!r} has host bits set. Write the single host as "
+                        f"{s.split('/')[0]!r}, or the whole network as {str(net)!r} if you really "
+                        f"mean all {net.num_addresses} addresses.") from None
             try:
                 ip = ipaddress.ip_address(s)
                 nets.append(ipaddress.ip_network(f"{s}/{'128' if ip.version == 6 else '32'}", strict=False))
@@ -299,14 +307,28 @@ def build_plan(ctx, hosts, user, password, hashes, enable_writes, allow_dcsync) 
 
 # ---- confirmation choke point (both entrypoints hit this) --------------------
 
-def confirm_writes(enable_writes, dry_run, assume_yes) -> None:
+def confirm_writes(enable_writes, dry_run, assume_yes, allow_dcsync=False) -> None:
+    """Gate the write/dump phase behind a typed confirmation.
+
+    `--assume-yes` waives the prompt for ordinary writes, because unattended automation has to be
+    able to run them. It does NOT waive it for DCSync: that step dumps every NTLM hash in the
+    domain including krbtgt, and "nobody was watching" is not an acceptable answer to "who
+    authorised the domain dump". A flag combination should not be able to reach the single most
+    damaging action in the tool with no human in the loop.
+    """
     if not enable_writes or dry_run:
         return
-    if assume_yes:
+    if assume_yes and not allow_dcsync:
         return
+    what = "DCSYNC (dumps every domain hash, incl. krbtgt)" if allow_dcsync else "WRITE/DUMP"
     if not sys.stdin or not sys.stdin.isatty():
+        if allow_dcsync:
+            raise SafetyAbort("DCSync needs an interactive YETKILIYIM confirmation — --assume-yes "
+                              "does not cover it, and stdin is not a terminal")
         raise SafetyAbort("write phase needs interactive YETKILIYIM confirmation or --assume-yes")
-    ans = input("!! WRITE/DUMP phase enabled — this changes/dumps state. Type YETKILIYIM to proceed: ")
+    if assume_yes and allow_dcsync:
+        print("!! --assume-yes does NOT cover DCSync. Confirm by hand.", file=sys.stderr)
+    ans = input(f"!! {what} phase enabled — this changes/dumps state. Type YETKILIYIM to proceed: ")
     if ans.strip() != "YETKILIYIM":
         raise SafetyAbort("write confirmation declined")
 
@@ -390,7 +412,17 @@ def _scrub_secrets(path, secrets):
             pass
 
 
-def run_plan(plan, out_dir, dry_run, ctx, nets, hosts, secrets=None) -> list[dict]:
+def run_plan(plan, out_dir, dry_run, ctx, nets, hosts, secrets=None, auth_guard=None,
+             principal=None) -> list[dict]:
+    """Execute the plan. `auth_guard` enforces the lockout budget on every authenticated step.
+
+    Passing it is what makes the budget real. It used to be computed at pre-flight, printed, and
+    then never consulted, so "lockout-aware" described a number on the screen rather than a
+    control: nothing stopped the run from spending attempt N+1. The default chain carries one
+    known-good credential and does not guess, so the budget rarely binds -- but the case it exists
+    for is the credential being disabled or rotated mid-run, where every remaining host then
+    contributes a bad-password count against a real user.
+    """
     import json
     os.umask(0o077)
     os.makedirs(out_dir, exist_ok=True)
@@ -421,6 +453,16 @@ def run_plan(plan, out_dir, dry_run, ctx, nets, hosts, secrets=None) -> list[dic
             rec["status"] = "dry_run"
             print(f"[{i:02d}] {step.name:22s} {'WRITE ' if step.writes else ''}-> {' '.join(red)}")
             events.append(rec); continue
+        if step.auth and auth_guard is not None:
+            who = principal or "(credential)"
+            if not auth_guard.can_attempt(who):
+                rec["status"] = "LOCKOUT_ABORT"
+                rec["reason"] = (f"lockout budget exhausted for {who} "
+                                 f"(budget={auth_guard.budget()}) — refusing further auth")
+                events.append(rec); aborted = True
+                print(f"[{i:02d}] {step.name}: LOCKOUT BUDGET EXHAUSTED — aborting run", file=sys.stderr)
+                break
+            auth_guard.record_attempt(who)
         bin_ = tool_path(step.key)
         if not bin_:
             rec["status"] = "missing_tool"; rec["reason"] = str(TOOLS.get(step.key))
@@ -494,18 +536,19 @@ def run_offensive(ctx, *, user, password=None, hashes=None, nets=None, hosts_all
     if not dry_run and dc_target and not in_scope(dc_target, nets, hosts_allow):
         raise SafetyAbort(f"DC {dc_target} is not in the scope allowlist")
 
-    confirm_writes(enable_writes, dry_run, assume_yes)
+    confirm_writes(enable_writes, dry_run, assume_yes, allow_dcsync)
 
     if not dry_run and skip_preflight:
         print("!! WARNING: skip_preflight=True disables the load-bearing lockout pre-flight. "
               "A wrong/expired credential can now fan out and lock the account.", file=sys.stderr)
+    auth_guard = None
     if not dry_run and not skip_preflight:
         policy, ok = preflight_and_policy(ctx, user, password, hashes)
         if not ok:
             raise SafetyAbort("credential pre-flight bind FAILED (or unverifiable) — aborting before any fan-out")
-        g = AuthGuard(policy or LockoutPolicy(0, None, None, "unknown"))
+        auth_guard = AuthGuard(policy or LockoutPolicy(0, None, None, "unknown"))
         print(f"# pre-flight OK. lockout policy: threshold={getattr(policy,'threshold','?')} "
-              f"window={getattr(policy,'observation_window_min','?')} -> safe budget {g.budget()}")
+              f"window={getattr(policy,'observation_window_min','?')} -> safe budget {auth_guard.budget()}")
 
     plan = build_plan(ctx, in_hosts, user, password, hashes, enable_writes, allow_dcsync)
     out_dir = out_dir or os.path.join(ctx.run_dir, "offensive-ext")
@@ -523,7 +566,8 @@ def run_offensive(ctx, *, user, password=None, hashes=None, nets=None, hosts_all
                   "only networks were available. Run UBDEN's discovery step first, or list the "
                   "hosts explicitly -- the per-host steps (auth matrix, share triage) will NOT run "
                   "and a '0 findings' result here means NOTHING.", file=sys.stderr)
-    events = run_plan(plan, out_dir, dry_run, ctx, nets, hosts_allow, secrets=[password, hashes])
+    events = run_plan(plan, out_dir, dry_run, ctx, nets, hosts_allow, secrets=[password, hashes],
+                      auth_guard=auth_guard, principal=user)
     return {"events": events, "in_scope_hosts": in_hosts, "dropped_hosts": dropped}
 
 
@@ -676,6 +720,29 @@ def _self_test() -> int:
             blocked3 = True
         check("confirm_writes blocks unattended writes", blocked3)
         check("confirm_writes allows with assume_yes", confirm_writes(True, False, True) is None)
+        blocked_ds = False
+        try:
+            confirm_writes(True, False, True, allow_dcsync=True)
+        except SafetyAbort:
+            blocked_ds = True
+        check("assume_yes does NOT unlock DCSync unattended", blocked_ds)
+
+        # the lockout budget is CONNECTED, not just printed: a 2-attempt budget must stop the
+        # third authenticated step rather than let it spend a real bad-password count.
+        import tempfile as _tf
+        from guard import AuthGuard as _AG, LockoutPolicy as _LP
+        with _tf.TemporaryDirectory() as _d:
+            _ctx = Context(); _ctx.run_dir = _d
+            _steps = [Step(f"auth_{n}", "nxc", ["nxc", "smb", "10.0.0.9"], auth=True, target="10.0.0.9")
+                      for n in range(4)]
+            _g = _AG(_LP(4, 30, None, "test"))          # threshold 4 -> budget 2 after the margin
+            _ev = run_plan(_steps, os.path.join(_d, "out"), False, _ctx,
+                           [ipaddress.ip_network("10.0.0.0/24")], set(),
+                           auth_guard=_g, principal="svc")
+            _spent = [e for e in _ev if e["status"] != "LOCKOUT_ABORT"]
+            check("budget stops the chain instead of spending attempt N+1",
+                  any(e["status"] == "LOCKOUT_ABORT" for e in _ev))
+            check("it stops at the budget, not after it", len(_spent) == _g.budget())
 
         # dry-run: builds plan, filters scope, no live calls, all redacted
         res = run_offensive(ctx, user="u", password="S3cretPw!",
@@ -696,7 +763,8 @@ def _self_test() -> int:
                              nets=[ipaddress.ip_network("10.0.0.0/24")], skip_preflight=True)
         check("STOP file aborts the run", any(e["status"] == "aborted_stop_file" for e in res2["events"]))
 
-    total = 41   # 36 original + 5 for the frozen_dns dc_ip recovery. Hardcoded on
+    total = 44   # +1 DCSync/assume-yes split, +2 the budget is actually enforced.
+                 # 36 original + 5 for the frozen_dns dc_ip recovery. Hardcoded on
                  # purpose: it catches a check block that silently never ran.
     print(f"\n{ok}/{total} checks passed")
     return 0 if ok == total else 1

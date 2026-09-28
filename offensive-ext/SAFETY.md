@@ -30,10 +30,11 @@ Hard-excluded from the tool. Not a flag, not a mode — absent by design:
 
 ## What is GATED (off unless explicitly unlocked + `YETKILIYIM` typed)
 **Implemented today** — only one write action exists in `build_plan`:
-- **DCSync / secretsdump** — needs `--enable-writes` AND `--allow-dcsync` AND `YETKILIYIM` (or
-  `--assume-yes` for headless). Read-heavy, pulls secrets → proof only, never exfiltrate (Madde 8).
-  ⚠️ `--enable-writes --allow-dcsync --assume-yes` together = unattended full-domain dump — do not use
-  that combo on a live engagement; confirm by hand.
+- **DCSync / secretsdump** — needs `--enable-writes` AND `--allow-dcsync` AND a typed `YETKILIYIM`.
+  **`--assume-yes` does NOT cover it**: the flag waives the prompt for ordinary writes, but DCSync
+  always asks, and refuses outright when stdin is not a terminal. A flag combination must not be
+  able to reach the most damaging action in the tool with nobody watching. Read-heavy, pulls
+  secrets → proof only, never exfiltrate (Madde 8).
 
 **PLANNED — NOT implemented yet** (do not assume these run): bloodyAD directory writes with a revert
 log, and coercion *firing* (only the read-only `coercer scan` runs today). When added they will sit
@@ -46,8 +47,11 @@ behind the same choke point.
    password aborts the whole run before it can increment `badPwdCount`; (b) each authenticated step is
    **per-host, single-thread** (`-t 1`), sequential; (c) every auth step's output is scanned and the run
    **hard-stops on the first lockout / logon-failure signal**. `guard.py` reads the domain lockout policy
-   and prints the safe budget at pre-flight; its budget engine (`guarded_attempt`) is reserved for a
-   future password-spray path, which is NOT part of the default chain.
+   and **enforces** the resulting budget: `run_plan` checks it before every authenticated step and
+   aborts the run (`LOCKOUT_ABORT`) rather than spend attempt N+1. It rarely binds, because the
+   default chain carries one known-good credential and never guesses — the case it exists for is
+   that credential being disabled or rotated mid-run, where every remaining host would otherwise
+   contribute a bad-password count against a real user.
    ([hackndo](https://en.hackndo.com/password-spraying-lockout/))
 2. **The foothold machine itself (the AnyDesk box).** The biggest risk to it is NOT our offensive
    layer — it is **UBDEN's installer** (applies mirrored networking to all WSL distros + may reboot)
@@ -61,6 +65,22 @@ behind the same choke point.
 - [ ] First run is `--dry-run`; review the plan before going live.
 - [ ] `--enable-writes` stays OFF unless a finding genuinely needs proof AND it's confirmed.
 - [ ] Go step by step, paste output to Claude, stop on anything unexpected (contract Madde 18 right-to-suspend).
+
+## Findings are proposals, never verdicts
+
+Everything this layer writes into `review.json` is a **draft** (`taslak`), and `reviewed_by` is
+empty unless the operator signs it. UBDEN's model is that a finding becomes `doğrulandı` only when
+a human sets it in `analyst_review.edit_finding` after typing `ONAYLIYORUM`, and a machine cannot
+stand in for that.
+
+An earlier version promoted its own findings to verified whenever the evidence file's SHA-256
+matched. That check passes trivially: we write the evidence and compute the hash ourselves, so it
+confirmed our arithmetic rather than our work — and the result was machine output rendered in a
+client PDF under "Doğrulayan analist" with nobody having read it. Removed, and the self-tests now
+assert the opposite: UBDEN's own `verified_finding()` must REJECT what we write.
+
+Appending findings also clears `reviewer` and `approved_at`. A file signed off before our findings
+existed has not signed off on them.
 
 ## What has actually been exercised, and what has not
 
@@ -87,7 +107,8 @@ self-tested; a second adversarial pass is recorded in `final5-safety.md`. The bl
 - **C3/M4 empty credential** — password XOR hashes required; never `-p ""`; `stdin=DEVNULL`; auth-step
   timeout 120 s (no 30-min hangs).
 - **C4/M6 unattended writes** — single `confirm_writes` choke point BOTH entrypoints hit; DCSync needs
-  `--enable-writes` AND `--allow-dcsync`; non-interactive without `--assume-yes` refuses.
+  `--enable-writes` AND `--allow-dcsync`; non-interactive without `--assume-yes` refuses, and
+  DCSync refuses non-interactively even WITH it.
 - **C5/H2 dead kill-switch** — every auth step's output scanned for lockout / logon-failure; first hit
   HARD-STOPS the run; plus a `STOP` file external kill-switch checked before each step.
 - **C6/H1/M3 secrets at rest** — `umask 0o077`, evidence dir 0700, files 0600; bloodhound runs with

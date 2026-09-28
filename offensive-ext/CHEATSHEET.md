@@ -163,7 +163,10 @@ Bir hesap kilitlendiyse / müşteri şikâyet ettiyse: **durdur, Claude'a söyle
   --enable-writes --allow-dcsync
 ```
 
-Elle `YETKILIYIM` yaz. ⚠️ **`--assume-yes` KULLANMA** — insan onayı olmadan tüm domain hash'lerini döker.
+Elle `YETKILIYIM` yaz. `--assume-yes` bu adımı **açmaz**, DCSync her zaman elle onay ister.
+
+⚠️ Bu katmanın yazdığı bulgular `taslak`tır. `doğrulandı` yapmak için UBDEN'in `analyst_review.py`
+akışından geçilmeli — makine kendi işini doğrulanmış ilan etmez.
 
 ## 8B — Rapordan ÖNCE: elle girilecek iki bulgu
 

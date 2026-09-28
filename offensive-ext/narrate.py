@@ -44,6 +44,23 @@ _DESC_TR = {
 }
 
 
+# parse.py types a real ADCS finding as adcs_esc_direct / _chain / _acl so score.py can price the
+# three cases differently. Everything that reasons about the CHAIN -- the narrative sentence, the
+# stage order, the "is there a path to DA" test -- cares only that it is ADCS, and keyed on the
+# exact string it matched none of them: every real ADCS finding dropped out of the chain in
+# silence. It went unnoticed because the self-tests all used the legacy flat name `adcs_esc`.
+# adcs_hygiene is deliberately NOT in the family: it is a hardening note, not a path to DA.
+_FAMILY = {"adcs_esc_direct": "adcs_esc", "adcs_esc_chain": "adcs_esc", "adcs_esc_acl": "adcs_esc"}
+
+#: Types that demonstrate a route to Domain Admin, in FAMILY form.
+DA_PATH_TYPES = ("adcs_esc", "coercion", "dcsync")
+
+
+def family(t: str) -> str:
+    """Canonical finding type, for lookups that are about the family and not the variant."""
+    return _FAMILY.get(t, t)
+
+
 def narrate(chain: list[dict], reached_da: bool, lang: str = "tr") -> str:
     """Return a numbered kill-chain narrative for the ordered chain."""
     lines = []
@@ -52,7 +69,7 @@ def narrate(chain: list[dict], reached_da: bool, lang: str = "tr") -> str:
     lines.append("=" * len(header))
     lines.append("")
     for i, f in enumerate(chain, 1):
-        t = f.get("type", "")
+        t = family(f.get("type", ""))
         stage = _STAGE_TR.get(t, "Adım")
         desc = _DESC_TR.get(t, f.get("description", "")).format(asset=f.get("asset", "?"))
         sev = (f.get("severity") or "").capitalize()
@@ -72,7 +89,7 @@ def narrate(chain: list[dict], reached_da: bool, lang: str = "tr") -> str:
         lines.append("Sonuç: Zincir Domain Admin'e FİİLEN ulaşmadı (yıkıcı/son adım sözleşme gereği "
                      "çalıştırılmadı); ancak yukarıdaki bulgular birlikte önemli bir risk oluşturur ve "
                      "öncelikle kapatılmalıdır.")
-        if any(f.get("type") in ("adcs_esc", "coercion", "dcsync") for f in chain):
+        if any(family(f.get("type", "")) in DA_PATH_TYPES for f in chain):
             lines.append("Not: ADCS/coercion bulguları Domain Admin'e giden OLASI bir yolu gösterir; bu yol "
                          "istismar edilebilir görünüyor ancak son/yıkıcı adım güvenlik gereği ÇALIŞTIRILMADI, "
                          "yani domain ele geçirme fiilen kanıtlanmadı.")

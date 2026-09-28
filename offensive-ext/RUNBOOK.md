@@ -135,8 +135,12 @@ Kontrol: `echo "$RUN" && ls "$RUN" | head` → klasör doğru mu?
 (CIDR'ler zaten içindekileri kapsar). Eksiğini §7'deki `N in / M dropped` satırından anlarsın.
 Bilerek böyle: domain adını joker saymak, sözleşme dışı bir host'a sessizce yayılmak olurdu.
 
-⚠️ `UBDEN_REVIEWER` boş bırakılırsa imza `Analist` olur. Müşteri raporunda *"Doğrulayan analist"*
-diye görünen alan budur — kendi veya firmanın adını yaz. Aynısı `--reviewer` bayrağıyla da verilir.
+⚠️ `UBDEN_REVIEWER` boş bırakılırsa imza **boş kalır** — bilerek. Müşteri raporundaki
+*"Doğrulayan analist"* alanı budur; imzalamadıysan imzasız görünmeli.
+
+⚠️ **İmzalaman bulguyu "doğrulanmış" yapmaz.** Bu katmanın yazdığı her bulgu `taslak` olarak gider.
+`doğrulandı` durumunu yalnızca bir insan, UBDEN'in `analyst_review.py` akışından geçerek verebilir.
+Rapor müşteriye gitmeden önce o adım yapılmalı — yoksa bulgular raporda taslak olarak görünür.
 
 ---
 
@@ -263,8 +267,9 @@ Bastığı komutu çalıştır (mod etype'a göre değişir: RC4→13100, AES→
 
 Elle `YETKILIYIM` yazman istenir. DCSync = **sadece kanıt** (`-just-dc-ntlm`), veri sızdırma yok.
 
-⚠️ **`--assume-yes` KULLANMA.** `--enable-writes --allow-dcsync --assume-yes` birlikte = insan
-onayı olmadan tüm domain hash'lerini dökme. O bayrak yalnızca gerçekten insansız otomasyon için.
+⚠️ **`--assume-yes` DCSync'i açmaz** — bilerek. Sıradan yazma adımlarında onay istemeyi atlar ama
+DCSync her hâlükârda elle `YETKILIYIM` yazmanı ister, terminal yoksa da reddeder. Tüm domain
+hash'lerini döken adıma "kimse bakmıyordu" diye ulaşılamaz.
 
 ---
 

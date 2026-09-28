@@ -15,7 +15,9 @@ No plugin system exists. We attach at the `report_v2.py <run_dir>` boundary:
 2. Do our work; save every evidence file INTO the run folder (plain relative path,
    no symlink/`..`, <25 MB).
 3. Append findings to `review.json['findings']` (status `doğrulandı` + 7 required
-   text fields + evidence + matching SHA-256 → lands VERIFIED; else auto-downgraded).
+   text fields + evidence + matching SHA-256). We write DRAFTS and never promote: the SHA-256 is
+   one we computed ourselves, so self-promoting would be checking our own arithmetic and then
+   printing "Doğrulayan analist" on a client PDF nobody read. The analyst promotes.
 4. Append step events to `steps.json` with coverage-recognized name prefixes.
 5. Re-run `python3 report_v2.py <run_dir>` (or `wizard.py --report-only`).
 
@@ -24,7 +26,7 @@ No plugin system exists. We attach at the `report_v2.py <run_dir>` boundary:
 | Module | Job | Borrow from (license posture) |
 |---|---|---|
 | *(context load)* | UBDEN JSON → in-memory run context (hosts, DC, domain, services). Lives in `attack.py::load_context`; the separate NetExec-workspace store was designed and then dropped as unnecessary | **NetExec** workspace schema (BSD-2, design only) |
-| `guard` | Reads lockoutThreshold/observationWindow over LDAP and computes the safe budget (shown at pre-flight); provides the lockout-signal detector used by the kill-switch. Live lockout protection = pre-flight validation bind + per-host single-thread auth + output kill-switch (the `guarded_attempt` budget engine is reserved for a future spray path, not the default chain) | **OURS** — no tool does this; the #1 safety piece |
+| `guard` | Reads lockoutThreshold/observationWindow over LDAP, computes the safe budget, and **enforces it**: `run_plan` consults it before every authenticated step and aborts the run rather than spend attempt N+1. Plus the pre-flight validation bind, per-host single-thread auth, and the output lockout detector | **OURS** — no tool does this; the #1 safety piece |
 | `collect` | BloodHound.py (`-c DCOnly` quiet → `All`) with client test account → ingest to BloodHound CE | **BloodHound.py** (MIT) + **BloodHound CE** (Apache-2) |
 | `plan` | Query CE `shortestPath` to DA; map each edge → a primitive (edge→verb→tool table) | **BloodHound** edge taxonomy + **Adalanche** AQL edge names (AGPL → vocab only) |
 | `exec` | Bounded, read-only-first offensive steps, each logged + evidence saved: `certipy find -json` (ADCS), impacket kerberoast/AS-REP, nxc auth-matrix (`Pwn3d!`), `coercer scan`; writes (`bloodyAD`) only behind explicit flag+confirm, each logged WITH its inverse (revert log) | **Certipy** (MIT), **Impacket** (Apache), **NetExec** (BSD-2), **bloodyAD** (MIT), **Coercer** (MIT); phase-gating + per-module timestamped logs from **linWinPwn** (MIT) |
@@ -32,7 +34,7 @@ No plugin system exists. We attach at the `report_v2.py <run_dir>` boundary:
 | `map` | Auto-tag findings with ATT&CK techniques; emit Navigator layer JSON + SVG heatmap | **mitreattack-python** `navlayers` (Apache-2, vendor) |
 | `narrate` | Attack-path → sentence templates → "attacker reaches DA in N steps" section | **AD-Miner** report structure (GPL → design) + Adalanche edge verbs |
 | `coverage` | Declarative check registry (id/category/weight/status/remediation) → coverage matrix (tested/passed/skipped) | **PingCastle** rule catalogue (OSL → design) + **PlumHound** task model (GPL → pattern) |
-| `emit` | Write verified findings + coverage steps into the run folder; trigger report_v2 | UBDEN seam |
+| `emit` | Write draft findings + coverage steps into the run folder; trigger report_v2 | UBDEN seam |
 
 ## License posture (firm)
 - **Shell out** to heavy/GPL tools (nxc, certipy, bloodyAD, coercer, bloodhound.py) — license irrelevant when invoked as a subprocess.
