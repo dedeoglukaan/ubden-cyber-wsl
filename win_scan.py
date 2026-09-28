@@ -51,6 +51,10 @@ try:
     import wifi_scan
 except Exception:
     wifi_scan = None
+try:
+    import power_manager
+except Exception:
+    power_manager = None
 # report_v2 is invoked as a subprocess (its main() reads sys.argv), never imported
 # here, so win_scan stays importable for tests even without reportlab installed.
 
@@ -512,6 +516,15 @@ def run_scan(form: dict, progress=None) -> dict:
 
     if win_tools is not None:
         win_tools.ensure_path()  # make pip/winget-installed CLIs discoverable via which()
+    # Long, wide scans must not be interrupted by sleep/throttling: keep awake and
+    # switch to a high-performance plan for the duration (restored before return).
+    prev_power_scheme = ""
+    if power_manager is not None:
+        try:
+            power_manager.stay_awake()
+            prev_power_scheme = power_manager.high_performance()
+        except Exception:
+            prev_power_scheme = ""
     host_snapshot = windows_inventory()
     # Ensure the default gateway is known even without the bridge, so it classifies
     # as a router in the device inventory (standalone runs otherwise miss it).
@@ -542,7 +555,10 @@ def run_scan(form: dict, progress=None) -> dict:
         requested = int(form.get("lanes", 0))
     except (TypeError, ValueError):
         requested = 0
-    lanes = requested if requested > 0 else DEFAULT_LANES
+    # Default lanes adapt to CPU cores for wide multi-subnet scope; the form can
+    # override. The shared rate governor keeps total packets under the cap.
+    auto_default = max(DEFAULT_LANES, min(MAX_LANES, (os.cpu_count() or 4) // 2))
+    lanes = requested if requested > 0 else auto_default
     lanes = max(1, min(lanes, MAX_LANES, len(targets) or 1))
     per_lane_rate = max(1, meta["max_rate"] // lanes)
     meta["concurrency"] = {"lanes": lanes, "per_lane_max_rate": per_lane_rate,
@@ -570,12 +586,27 @@ def run_scan(form: dict, progress=None) -> dict:
                           "issues": sum(1 for e in evs if e.get("status") in
                                         ("error", "timeout", "blocked", "missing_tool"))})
 
+    def _checkpoint():
+        # Flush a partial steps.json so an interrupted long scan keeps its evidence.
+        try:
+            with ledger_lock:
+                partial = []
+                for index, target in enumerate(targets):
+                    partial.extend(lane_events.get(f"L{index + 1}", []))
+            _atomic_json(root / "steps.json", partial)
+        except Exception:
+            pass
+
     def monitor():
+        ticks = 0
         while not stop_monitor.wait(1.2):
+            ticks += 1
             with ledger_lock:
                 for tid, state in lane_states.items():
                     if not state.get("done"):
                         lane_snapshot(tid, state)
+            if ticks % 8 == 0:  # ~every 10s: checkpoint evidence to disk
+                _checkpoint()
 
     def run_lane(index, target):
         tid = f"L{index + 1}"
@@ -703,6 +734,11 @@ def run_scan(form: dict, progress=None) -> dict:
         status = "report_error"
         emit(f"Rapor hatasi: {exc}", "warn")
 
+    if power_manager is not None and prev_power_scheme:
+        try:
+            power_manager.restore_scheme(prev_power_scheme)
+        except Exception:
+            pass
     report_html = root / "REPORT.html"
     emit("Tamamlandi", "done")
     # Clear completion banner to the server console (the elevated window), since the

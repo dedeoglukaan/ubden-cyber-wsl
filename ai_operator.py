@@ -261,8 +261,14 @@ _ANALYZE_SYSTEM = (
     "[Kritik,Yüksek,Orta,Düşük], \"attack_chains\":[str], \"findings\":[{\"title\":str,"
     "\"domain\":str,\"severity\":one of [critical,high,medium,low,info],\"asset\":str,"
     "\"cwe\":str,\"cvss\":str,\"description\":str,\"impact\":str,\"recommendation\":str,"
-    "\"evidence_refs\":[str],\"ai_confidence\":int}]}. Findings are analyst DRAFTS; never "
-    "claim a vulnerability is confirmed. Keep each field concise.")
+    "\"evidence_refs\":[str],\"ai_confidence\":int}], "
+    "\"case_assessments\":[{\"case\":one of [AUTH,ROLES,IDOR,INPUT,API,LOGIC],"
+    "\"assessment\":str,\"severity\":one of [critical,high,medium,low,info],"
+    "\"ai_confidence\":int}]}. case_assessments are DRAFT triage notes for the manual "
+    "web-application checklist categories the automated scan cannot fully cover: for each "
+    "listed category, say what the evidence suggests to test first, the likely surface, "
+    "and what the analyst must still confirm — a starting point, not a verified result. "
+    "Findings are analyst DRAFTS; never claim a vulnerability is confirmed. Keep each field concise.")
 
 
 def analyze(config, bundle, request_fn=None):
@@ -275,8 +281,32 @@ def analyze(config, bundle, request_fn=None):
         "overall_risk": str(out.get("overall_risk", ""))[:20],
         "attack_chains": [str(x)[:400] for x in out.get("attack_chains", []) if x][:12],
         "findings": findings if isinstance(findings, list) else [],
+        "case_assessments": _normalize_cases(out.get("case_assessments", [])),
         "model": model,
     }
+
+
+_CASE_IDS = {"AUTH", "ROLES", "IDOR", "INPUT", "API", "LOGIC"}
+
+
+def _normalize_cases(items):
+    """Draft triage notes for the manual web-app checklist categories."""
+    out, seen = [], set()
+    for item in items if isinstance(items, list) else []:
+        if not isinstance(item, dict):
+            continue
+        case = str(item.get("case", "")).upper().strip()
+        if case not in _CASE_IDS or case in seen or not str(item.get("assessment", "")).strip():
+            continue
+        seen.add(case)
+        sev = str(item.get("severity", "info")).lower()
+        try:
+            conf = max(0, min(100, int(item.get("ai_confidence", 0))))
+        except (TypeError, ValueError):
+            conf = 0
+        out.append({"case": case, "assessment": str(item.get("assessment", ""))[:600],
+                    "severity": sev if sev in _SEV else "info", "ai_confidence": conf})
+    return out
 
 
 _SEV = {"critical", "high", "medium", "low", "info"}
@@ -356,7 +386,9 @@ def run(root, meta, events, config, progress=None):
         status.update(status="completed", findings=len(findings),
                       overall_risk=result["overall_risk"], model=result["model"])
         _atomic(root / "AI_FINDINGS.json", {"schema": 1, "generated_at": now(),
-                "model": result["model"], "findings": findings})
+                "model": result["model"], "findings": findings,
+                "case_assessments": result.get("case_assessments", [])})
+        status["case_assessments"] = len(result.get("case_assessments", []))
         commentary = result["executive_summary"] or "AI özeti üretilemedi."
         chains = "\n".join("- " + c for c in result["attack_chains"])
         (root / "AI_ANALIST_YORUMU.md").write_text(

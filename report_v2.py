@@ -28,6 +28,7 @@ from device_inventory import build_inventory, CATEGORY_ORDER, CATEGORY_ICONS
 import report_visuals as V
 import correlation as CORR
 import eol_data
+import case_coverage as CASE_COV
 
 BASE = Path(__file__).resolve().parent
 NAVY = colors.HexColor('#101b32')
@@ -763,6 +764,21 @@ def read_data(root):
                     'impact':'Herhangi bir domain admin hesabının ele geçirilmesi tüm etki alanının ele geçirilmesi anlamına gelir.',
                     'recommendation':'Domain Admins üyeliğini en aza indirin; ayrıcalıklı erişim için katmanlı model ve JIT/PAM yaklaşımını uygulayın.',
                     'evidence':'AD_ASSESSMENT.json'})
+    # --- Opt-in sqlmap (yetkili SQL enjeksiyon testi) sonuçları ---
+    for path in sorted((root/'targets').glob('*/raw/sqlmap_result_*.json')) if (root/'targets').exists() else []:
+        try:
+            item=json.loads(path.read_text(encoding='utf-8'))
+        except (OSError,ValueError,TypeError):
+            continue
+        if not isinstance(item,dict) or not item.get('injectable'):
+            continue
+        params=', '.join(item.get('parameters',[])) or 'parametre kaydı yok'
+        observations.append({'title':'SQL enjeksiyonu belirtisi (sqlmap)','severity':'high',
+            'asset':str(item.get('ip','')),
+            'description':f"sqlmap {item.get('url','')} üzerinde enjekte edilebilir nokta işaretledi. Parametre(ler): {params}. Arka uç DBMS: {item.get('dbms') or 'bilinmiyor'}. Otomatik sonuç; analist manuel doğrulamalıdır.",
+            'impact':'Doğrulanırsa veritabanına yetkisiz erişim, veri ifşası veya değişikliği mümkün olabilir.',
+            'recommendation':'Parametreli sorgu/ORM kullanın, girdi doğrulama ve en az yetkili DB hesabı uygulayın; WAF telafi edici olabilir ama kök çözüm değildir.',
+            'evidence':str(path.relative_to(root))})
     deduplicated={}
     for item in observations:
         key=(item['title'],item['asset'],item['severity'])
@@ -1163,12 +1179,23 @@ def pdf(root, filename, meta, steps, hosts, findings, review, executive=False):
         story.append(P('İlk otomatik kimlikli kontrol HTTPS HEAD durum kodlarını karşılaştırır. Seçilmiş rol/IDOR ve salt okunur iş kuralı testlerinde GET yanıt kodları karşılaştırılır; gerçek yetki veya iş etkisi ancak analist doğrularsa bulgu sayılır. SSH parola adımları yalnız açıkça verilen test hesabında iki adayla sınırlıdır. İşlem yapan iş akışları, iç ağ yanal hareketi, genel parola kırma, hizmet engelleme ve veri çıkarma otomatik yürütülmez.',st['BodyX']))
         story.append(P('Manuel test planı',st['SubX']))
         story.append(P('İnsan tarafından yürütülen testlerin durumları ve kanıtları review.json içinde kayıtlıdır; eksikler tamamlandı sayılmaz.',st['BodyX']))
+        cov=CASE_COV.derive(root,meta,steps,findings)
+        cs=cov['summary']
+        story.append(P(f"Otomasyon kapsamı: {cs['total']} kategoriden {cs['covered']} tanesi otomatik + AI ile "
+                       f"taslak kapsandı ({cs['automated']} otomatik, {cs['ai']} AI); {cs['analyst_only']} kategori "
+                       "analist yürütmesi gerektiriyor. Otomasyon taslak üretir; doğrulandı yalnız analist + SHA-256 ile verilir.",st['BodyX']))
         for case in meta.get('role_scenarios',[]):
             attempt=[s for s in steps if str(s.get('step','')).startswith('role_'+str(case.get('id'))+'_')]
             story.append(P(f"{case.get('id')} | {case.get('kind')} | {case.get('owner')} → {case.get('challenger')} | HTTPS GET {case.get('target')}:{case.get('port')}{case.get('path')} | Durum: {', '.join(x.get('status','?') for x in attempt) or 'atlanmış'}",st['SmallX']))
+        cov_cells=[[P(x,st['SmallWhiteX']) for x in ('Test','Analist','Otomatik / AI kapsamı')]]
         for row in review.get('cases',[]):
             if isinstance(row,dict):
-                story.append(P(f"{row.get('id','?')} | {row.get('title','')} | {row.get('state','bekliyor')} | {row.get('note','') or 'Sonuç yok'} | Kanıt: {row.get('evidence','yok') or 'yok'} | SHA-256: {row.get('sha256','yok') or 'yok'}",st['SmallX']))
+                cc=cov['cases'].get(str(row.get('id','')).upper(),{})
+                auto=cc.get('status_label','—')+(': '+cc.get('detail','') if cc.get('detail') else '')
+                cov_cells.append([P(f"{row.get('id','?')} · {row.get('title','')}",st['SmallX'],limit=90),
+                                  P(row.get('state','bekliyor'),st['SmallX'],limit=40),
+                                  P(auto+(' ['+', '.join(str(x) for x in cc.get('finding_ids',[])[:6])+']' if cc.get('finding_ids') else ''),st['SmallX'],limit=260)])
+        story.append(grid_table(cov_cells,[doc.width*.30,doc.width*.16,doc.width*.54]))
         for issue in state['errors'][:10]:
             story.append(P('Kayıt doğrulama uyarısı: '+issue,st['SmallX']))
         rows=tool_rows(root,steps)
@@ -1383,8 +1410,26 @@ def html_report(root,meta,steps,hosts,findings,review,report_errors=None):
         ''.join('<tr>'+''.join(f'<td>{safe(v)}</td>' for v in row[:4])+
                 (f'<td><a rel="noopener" href="{safe(row[4])}">{safe(row[4])}</a></td>' if row[4] else '<td>—</td>')+'</tr>'
                 for row in inventory)+'</tbody></table>') if inventory else ''
-    review_table='<h2>Manuel test kayıtları</h2><p>Durum: '+('analist kayıtları tamamlandı' if state['complete'] else 'eksik veya inceleme bekliyor')+f"; bekleyen başlık: {state['pending']}; inceleyen: {safe(state['reviewer'] or 'yok')}</p><table><thead><tr><th>Test</th><th>Durum</th><th>Sonuç</th><th>Kanıt / SHA-256</th></tr></thead><tbody>"
-    review_table+=''.join(f'<tr><td>{safe(c.get("id"))}</td><td>{safe(c.get("state"))}</td><td>{safe(c.get("note"))}</td><td>{evidence_link(root,c.get("evidence"))} / {safe(c.get("sha256"))}</td></tr>' for c in review.get('cases',[]) if isinstance(c,dict))+'</tbody></table>'
+    cov=CASE_COV.derive(root,meta,steps,findings)
+    cs=cov['summary']
+    review_table=('<h2>Manuel test kayıtları</h2>'
+        f"<p><b>Otomasyon kapsamı:</b> {cs['total']} kategoriden <b>{cs['covered']}</b> tanesi "
+        f"otomatik + AI ile taslak olarak kapsandı ({cs['automated']} otomatik, {cs['ai']} AI); "
+        f"{cs['analyst_only']} kategori analist yürütmesi gerektiriyor. "
+        "Otomasyon taslak üretir; <b>doğrulandı</b> yalnız analist + SHA-256 kanıtıyla verilir.</p>"
+        '<p>Durum: '+('analist kayıtları tamamlandı' if state['complete'] else 'eksik veya inceleme bekliyor')
+        +f"; bekleyen analist başlığı: {state['pending']}; inceleyen: {safe(state['reviewer'] or 'yok')}</p>"
+        "<table><thead><tr><th>Test</th><th>Analist durumu</th><th>Otomatik / AI kapsamı</th>"
+        "<th>Sonuç</th><th>Kanıt / SHA-256</th></tr></thead><tbody>")
+    for c in review.get('cases',[]):
+        if not isinstance(c,dict): continue
+        cc=cov['cases'].get(str(c.get('id','')).upper(),{})
+        auto=(safe(cc.get('status_label','—'))+(': '+safe(cc.get('detail','')) if cc.get('detail') else '')
+              +(' ['+safe(', '.join(str(x) for x in cc.get('finding_ids',[])[:6]))+']' if cc.get('finding_ids') else ''))
+        review_table+=(f'<tr><td>{safe(c.get("id"))}</td><td>{safe(c.get("state"))}</td>'
+            f'<td>{auto}</td><td>{safe(c.get("note"))}</td>'
+            f'<td>{evidence_link(root,c.get("evidence"))} / {safe(c.get("sha256"))}</td></tr>')
+    review_table+='</tbody></table>'
     ai_html=('<h2>AI analist taslağı</h2><p>'+safe(ai_note)+'</p><p>'+safe(ai_text or 'Yorum yok')+'</p>') if (root/'AI_DURUM.json').is_file() else ''
     discover_html=('<h2>CIDR host keşfi</h2><table><thead><tr><th>Ağ</th><th>Durum</th><th>Uygun IP</th><th>Yanıt veren</th><th>Yanıt vermeyen</th></tr></thead><tbody>'+
         ''.join('<tr>'+''.join(f'<td>{safe(value)}</td>' for value in (x.get('target'),{'partial':'kısmi','ok':'tamamlandı','no_hosts':'yanıt alınamadı','error':'hata'}.get(x.get('status'),x.get('status')),x.get('eligible_count'),x.get('responding_count'),x.get('unresponsive_count') if x.get('unresponsive_count') is not None else 'bilinmiyor'))+'</tr>' for x in discovery)+'</tbody></table>'+

@@ -444,6 +444,13 @@ class Handler(BaseHTTPRequestHandler):
 
 
 def serve(open_browser: bool = True):
+    # Keep the test machine awake for the whole server session (covers idle time
+    # between scans too); best-effort, no-op off Windows.
+    try:
+        import power_manager
+        power_manager.stay_awake()
+    except Exception:
+        power_manager = None
     httpd = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
     port = httpd.server_address[1]
     url = f"http://127.0.0.1:{port}/?t={TOKEN}"
@@ -459,6 +466,11 @@ def serve(open_browser: bool = True):
         pass
     finally:
         httpd.server_close()
+        try:
+            if power_manager:
+                power_manager.release()
+        except Exception:
+            pass
 
 
 if __name__ == "__main__":

@@ -45,24 +45,194 @@ function Write-UbdenBanner {
     Write-Host ""
 }
 
+function Install-TestMachineMarker {
+    # Bu bilgisayari "YETKILI PENTEST - TEST MAKINESI" olarak isaretler: kaynak
+    # duvar kagidinin sag tarafina BGInfo tarzinda bir sistem bilgisi paneli isler
+    # ve sonucu masaustu duvar kagidi yapar. Harici araca bagimli degildir; tamami
+    # best-effort'tur (caller try/catch ile sarar, hata kurulumu durdurmaz).
+    Add-Type -AssemblyName System.Drawing
+    New-Item -ItemType Directory -Path $StateRoot -Force | Out-Null
+    $wall = Join-Path $StateRoot 'ubden-testmachine.bmp'
+    $assetPng = Join-Path $SourceRoot 'assets\wallpaper.png'
+    if (Test-Path -LiteralPath $assetPng) {
+        $src = [System.Drawing.Image]::FromFile($assetPng)
+        try { $bmp = New-Object System.Drawing.Bitmap $src } finally { $src.Dispose() }
+    }
+    else {
+        $bmp = New-Object System.Drawing.Bitmap 1920, 1080
+        $bg = [System.Drawing.Graphics]::FromImage($bmp)
+        $bg.Clear([System.Drawing.Color]::FromArgb(8, 13, 27)); $bg.Dispose()
+    }
+    $W = $bmp.Width; $H = $bmp.Height
+    $cs  = Get-CimInstance Win32_ComputerSystem  -ErrorAction SilentlyContinue
+    $os  = Get-CimInstance Win32_OperatingSystem -ErrorAction SilentlyContinue
+    $cpu = Get-CimInstance Win32_Processor -ErrorAction SilentlyContinue | Select-Object -First 1
+    $domain = if ($cs -and $cs.Domain) { $cs.Domain } elseif ($env:USERDNSDOMAIN) { $env:USERDNSDOMAIN } else { 'WORKGROUP' }
+    $fqdn = if ($domain -and $domain -ne 'WORKGROUP') { "$env:COMPUTERNAME.$domain" } else { $env:COMPUTERNAME }
+    $roleMap = @{ 0 = 'Standalone Workstation'; 1 = 'Member Workstation'; 2 = 'Standalone Server';
+                  3 = 'Member Server'; 4 = 'Backup Domain Controller'; 5 = 'Primary Domain Controller' }
+    $roleText = if ($cs) { $roleMap[[int]$cs.DomainRole] } else { '' }
+    $ips = @()
+    try { $ips = @(Get-NetIPAddress -AddressFamily IPv4 -ErrorAction Stop |
+            Where-Object { $_.IPAddress -notmatch '^(169\.254|127\.)' } |
+            Select-Object -ExpandProperty IPAddress) }
+    catch { try { $ips = @([System.Net.Dns]::GetHostAddresses($env:COMPUTERNAME) |
+            Where-Object { $_.AddressFamily -eq 'InterNetwork' } |
+            ForEach-Object { $_.IPAddressToString }) } catch {} }
+    $gw = ''
+    try { $gw = (Get-NetRoute -DestinationPrefix '0.0.0.0/0' -ErrorAction Stop |
+            Sort-Object RouteMetric | Select-Object -First 1 -ExpandProperty NextHop) } catch {}
+    $dns = @()
+    try { $dns = @(Get-DnsClientServerAddress -AddressFamily IPv4 -ErrorAction Stop |
+            Select-Object -ExpandProperty ServerAddresses -Unique |
+            Where-Object { $_ -and $_ -ne '0.0.0.0' }) } catch {}
+    $boot = if ($os) { $os.LastBootUpTime } else { $null }
+    $upStr = ''
+    if ($boot) { $u = (Get-Date) - $boot; $upStr = "$($u.Days) gun $($u.Hours) saat $($u.Minutes) dk" }
+    $memTotalMB = if ($cs) { [math]::Round($cs.TotalPhysicalMemory / 1MB) } else { 0 }
+    $memFreePct = if ($os -and $os.TotalVisibleMemorySize) {
+        [math]::Round(100 * $os.FreePhysicalMemory / $os.TotalVisibleMemorySize) } else { 0 }
+    $fields = [ordered]@{
+        'Host Name' = $fqdn; 'Domain' = $domain
+        'Uretici'   = if ($cs) { ("$($cs.Manufacturer) $($cs.Model)").Trim() } else { '' }
+        'OS'        = if ($os) { $os.Caption } else { '' }; 'Rol' = $roleText
+        'IP Adresi' = ($ips -join '   '); 'Ag Gecidi' = $gw; 'DNS' = ($dns -join '   ')
+        'Kullanici' = "$env:USERNAME@$domain"
+        'CPU'       = if ($cpu) { "$($cpu.NumberOfCores) Core   $($cpu.Name)" } else { '' }
+        'Bellek'    = if ($memTotalMB) { "$memTotalMB MB  (%$memFreePct bos)" } else { '' }
+        'Acilis'    = if ($boot) { $boot.ToString('dd.MM.yyyy HH:mm') } else { '' }
+        'Uptime'    = $upStr; 'Snapshot' = (Get-Date).ToString('dd.MM.yyyy HH:mm')
+    }
+    $rows = @(foreach ($k in $fields.Keys) { if ($fields[$k]) { [pscustomobject]@{ L = $k; V = [string]$fields[$k] } } })
+    $g = [System.Drawing.Graphics]::FromImage($bmp)
+    $g.SmoothingMode = [System.Drawing.Drawing2D.SmoothingMode]::AntiAlias
+    $g.TextRenderingHint = [System.Drawing.Text.TextRenderingHint]::ClearTypeGridFit
+    $green = New-Object System.Drawing.SolidBrush([System.Drawing.Color]::FromArgb(120, 230, 170))
+    $teal  = New-Object System.Drawing.SolidBrush([System.Drawing.Color]::FromArgb(90, 205, 210))
+    $white = New-Object System.Drawing.SolidBrush([System.Drawing.Color]::FromArgb(232, 240, 252))
+    $dim   = New-Object System.Drawing.SolidBrush([System.Drawing.Color]::FromArgb(150, 168, 200))
+    $panelBrush = New-Object System.Drawing.SolidBrush([System.Drawing.Color]::FromArgb(165, 6, 11, 22))
+    $accentPen  = New-Object System.Drawing.Pen([System.Drawing.Color]::FromArgb(0, 185, 189), 2)
+    $fTitle = New-Object System.Drawing.Font('Consolas', 26, [System.Drawing.FontStyle]::Bold)
+    $fSub   = New-Object System.Drawing.Font('Consolas', 15, [System.Drawing.FontStyle]::Bold)
+    $fLabel = New-Object System.Drawing.Font('Consolas', 13, [System.Drawing.FontStyle]::Bold)
+    $fValue = New-Object System.Drawing.Font('Consolas', 13)
+    $fFoot  = New-Object System.Drawing.Font('Consolas', 12)
+    $panelW = [int][math]::Min(760, $W * 0.44); $margin = [int]($W * 0.03)
+    $panelX = $W - $panelW - $margin; $pad = 26; $labelW = 168
+    $valW = $panelW - $labelW - ($pad * 2); $lineH = 30
+    $rowHeights = @($rows | ForEach-Object {
+        $sz = $g.MeasureString($_.V, $fValue, [int]$valW)
+        [int][math]::Max($lineH, [math]::Ceiling($sz.Height) + 6) })
+    $contentH = ($rowHeights | Measure-Object -Sum).Sum; if (-not $contentH) { $contentH = 0 }
+    $panelH = 84 + $contentH + 46 + ($pad * 2)
+    $panelY = [int][math]::Max(40, ($H - $panelH) / 2)
+    $g.FillRectangle($panelBrush, $panelX, $panelY, $panelW, $panelH)
+    $x = $panelX + $pad; $y = $panelY + $pad
+    $g.DrawString('UBDEN CYBER SECURITY', $fTitle, $green, $x, $y); $y += 40
+    $g.DrawString('YETKILI PENTEST - TEST MAKINESI', $fSub, $teal, $x, $y); $y += 26
+    $g.DrawLine($accentPen, $x, $y, ($panelX + $panelW - $pad), $y); $y += 14
+    for ($i = 0; $i -lt $rows.Count; $i++) {
+        $g.DrawString($rows[$i].L, $fLabel, $dim, $x, $y)
+        $valRect = New-Object System.Drawing.RectangleF(($x + $labelW), $y, $valW, $rowHeights[$i])
+        $g.DrawString($rows[$i].V, $fValue, $white, $valRect); $y += $rowHeights[$i]
+    }
+    $y += 14
+    $g.DrawString('https://www.ubden.com   |   security@ubden.com', $fFoot, $teal, $x, $y)
+    $g.Dispose()
+    $bmp.Save($wall, [System.Drawing.Imaging.ImageFormat]::Bmp); $bmp.Dispose()
+    try {
+        Set-ItemProperty -Path 'HKCU:\Control Panel\Desktop' -Name WallpaperStyle -Value '10' -ErrorAction Stop
+        Set-ItemProperty -Path 'HKCU:\Control Panel\Desktop' -Name TileWallpaper -Value '0' -ErrorAction Stop
+    } catch {}
+    if (-not ([System.Management.Automation.PSTypeName]'UbdenWallpaper').Type) {
+        Add-Type @'
+using System; using System.Runtime.InteropServices;
+public class UbdenWallpaper {
+    [DllImport("user32.dll", SetLastError = true, CharSet = CharSet.Auto)]
+    public static extern bool SystemParametersInfo(int uAction, int uParam, string lpvParam, int fuWinIni);
+}
+'@
+    }
+    [UbdenWallpaper]::SystemParametersInfo(20, 0, $wall, 3) | Out-Null
+    Write-Host '  Test makinesi isareti uygulandi (duvar kagidi + sistem bilgi paneli).' -ForegroundColor Green
+}
+
+function Set-PowerForLongRun {
+    # Saatlerce surecek tarama boyunca PC uyumasin/hazirda beklemesin/ekran kapanmasin;
+    # yuksek performans guc plani etkin olsun. Onceki plan durum ciktisinda geri alinabilir.
+    try {
+        $active = (& powercfg.exe /getactivescheme) 2>$null
+        if ($active -match '([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})') {
+            Set-Content -LiteralPath (Join-Path $StateRoot 'prev-power-scheme.txt') -Value $Matches[1] -ErrorAction SilentlyContinue
+        }
+        # Ultimate varsa onu, yoksa High performance.
+        & powercfg.exe /setactive e9a42b02-d5df-448d-aa00-03f14749eb61 2>$null
+        if ($LASTEXITCODE -ne 0) { & powercfg.exe /setactive 8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c 2>$null }
+        foreach ($t in 'standby-timeout-ac', 'standby-timeout-dc', 'monitor-timeout-ac', 'monitor-timeout-dc',
+                        'hibernate-timeout-ac', 'hibernate-timeout-dc', 'disk-timeout-ac', 'disk-timeout-dc') {
+            & powercfg.exe /change $t 0 2>$null
+        }
+        # Ekran koruyucuyu (ve onun kilit tetigini) kapat.
+        try {
+            Set-ItemProperty -Path 'HKCU:\Control Panel\Desktop' -Name ScreenSaveActive -Value '0' -ErrorAction Stop
+            Set-ItemProperty -Path 'HKCU:\Control Panel\Desktop' -Name ScreenSaveTimeOut -Value '0' -ErrorAction SilentlyContinue
+        } catch {}
+        Write-Host '  Guc profili: yuksek performans; uyku / hazirda bekleme / ekran kapanmasi devre disi.' -ForegroundColor Green
+    }
+    catch { Write-Host "  Guc ayari atlandi: $($_.Exception.Message)" -ForegroundColor DarkYellow }
+}
+
+function Restore-Power {
+    try {
+        $f = Join-Path $StateRoot 'prev-power-scheme.txt'
+        if (Test-Path -LiteralPath $f) {
+            $guid = (Get-Content -LiteralPath $f -ErrorAction Stop | Select-Object -First 1).Trim()
+            if ($guid) { & powercfg.exe /setactive $guid 2>$null }
+        }
+    } catch {}
+}
+
+function Get-BasePython {
+    # Sifirdan PC: once mevcut python, sonra winget, olmazsa python.org'dan dogrudan indirip sessiz kur.
+    $found = Get-Command python.exe -ErrorAction SilentlyContinue
+    if ($found -and $found.Source -notmatch 'WindowsApps') { return $found.Source }
+    $known = @((Join-Path $env:ProgramFiles 'Python313\python.exe'),
+               (Join-Path $env:LOCALAPPDATA 'Programs\Python\Python313\python.exe')) |
+             Where-Object { Test-Path -LiteralPath $_ } | Select-Object -First 1
+    if ($known) { return $known }
+    if (Get-Command winget.exe -ErrorAction SilentlyContinue) {
+        Write-Host '  Windows Python 3.13 kuruluyor (winget)...' -ForegroundColor Cyan
+        & winget.exe install --exact --id Python.Python.3.13 --scope machine `
+            --accept-source-agreements --accept-package-agreements | Out-Null
+        $known = @((Join-Path $env:ProgramFiles 'Python313\python.exe'),
+                   (Join-Path $env:LOCALAPPDATA 'Programs\Python\Python313\python.exe')) |
+                 Where-Object { Test-Path -LiteralPath $_ } | Select-Object -First 1
+        if ($known) { return $known }
+    }
+    # Son care: python.org resmi kurulumunu dogrudan indir (winget yok / eski Windows).
+    Write-Host '  winget yok; Python 3.13 python.org uzerinden indiriliyor...' -ForegroundColor Cyan
+    $ver = '3.13.1'
+    $url = "https://www.python.org/ftp/python/$ver/python-$ver-amd64.exe"
+    $exe = Join-Path $env:TEMP "python-$ver-amd64.exe"
+    try {
+        [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+        Invoke-WebRequest -Uri $url -OutFile $exe -UseBasicParsing
+        Start-Process -FilePath $exe -ArgumentList '/quiet InstallAllUsers=1 PrependPath=1 Include_pip=1 Include_test=0' -Wait
+    } catch { throw "Python otomatik kurulamadi: $($_.Exception.Message) — https://python.org uzerinden elle kurun" }
+    $known = @((Join-Path $env:ProgramFiles 'Python313\python.exe'),
+               (Join-Path $env:LOCALAPPDATA 'Programs\Python\Python313\python.exe'),
+               (Get-Command python.exe -ErrorAction SilentlyContinue | Where-Object { $_.Source -notmatch 'WindowsApps' } |
+                Select-Object -First 1 -ExpandProperty Source)) |
+             Where-Object { $_ -and (Test-Path -LiteralPath $_) } | Select-Object -First 1
+    if (-not $known) { throw 'Kurulan Windows Python bulunamadi' }
+    return $known
+}
+
 function Ensure-WinPython {
     New-Item -ItemType Directory -Path $StateRoot -Force | Out-Null
     if (-not (Test-Path -LiteralPath $VenvPython)) {
-        $found = Get-Command python.exe -ErrorAction SilentlyContinue
-        $basePython = if ($found) { $found.Source } else { '' }
-        if (-not $basePython) {
-            if (-not (Get-Command winget.exe -ErrorAction SilentlyContinue)) {
-                throw 'Windows Python ve winget bulunamadi; https://python.org uzerinden Python 3.13 kurun'
-            }
-            Write-Host '  Windows Python 3.13 kuruluyor (winget)...' -ForegroundColor Cyan
-            & winget.exe install --exact --id Python.Python.3.13 --scope machine `
-                --accept-source-agreements --accept-package-agreements | Out-Null
-            $basePython = @(
-                (Join-Path $env:ProgramFiles 'Python313\python.exe'),
-                (Join-Path $env:LOCALAPPDATA 'Programs\Python\Python313\python.exe')) |
-                Where-Object { Test-Path -LiteralPath $_ } | Select-Object -First 1
-            if (-not $basePython) { throw 'Kurulan Windows Python bulunamadi' }
-        }
+        $basePython = Get-BasePython
         & $basePython -m venv $Venv
         if ($LASTEXITCODE -ne 0) { throw 'Python ortami (venv) olusturulamadi' }
     }
@@ -91,6 +261,20 @@ function Ensure-ScanTools {
     if (-not (Get-Command nmap.exe -ErrorAction SilentlyContinue) -and
         -not ($nmapPaths | Where-Object { Test-Path $_ })) {
         Install-Winget 'Insecure.Nmap' 'Nmap + Npcap'   # cekirdek: ARP/MAC/L2
+        # Sifirdan PC / winget yoksa: Nmap resmi kurulumunu dogrudan indir (Npcap paketli).
+        if (-not (Get-Command nmap.exe -ErrorAction SilentlyContinue) -and
+            -not ($nmapPaths | Where-Object { Test-Path $_ })) {
+            $nver = '7.95'
+            $nurl = "https://nmap.org/dist/nmap-$nver-setup.exe"
+            $nexe = Join-Path $env:TEMP "nmap-$nver-setup.exe"
+            Write-Host "  Nmap + Npcap dogrudan indiriliyor (nmap.org $nver)..." -ForegroundColor Cyan
+            try {
+                [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+                Invoke-WebRequest -Uri $nurl -OutFile $nexe -UseBasicParsing
+                Start-Process -FilePath $nexe -ArgumentList '/S' -Wait   # sessiz; Npcap paketli
+            }
+            catch { Write-Host "  Nmap otomatik kurulamadi: $($_.Exception.Message) — nmap.org uzerinden elle kurun." -ForegroundColor DarkYellow }
+        }
     }
     if (-not (Get-Command whois.exe -ErrorAction SilentlyContinue)) {
         Install-Winget 'Microsoft.Sysinternals.Whois' 'Sysinternals Whois'
@@ -187,13 +371,34 @@ function Invoke-Setup {
 function Invoke-Run {
     Invoke-Setup
     Add-ScanToolsToPath
+    # Windows-native calismadan once (WSL'deki gibi) test makinesi isareti: BGInfo tarzi
+    # panel + duvar kagidi. Sonra saatlerce surecek tarama icin guc/uyku ayarlari.
+    try { Install-TestMachineMarker } catch { Write-Host "  Test makinesi isareti atlandi: $($_.Exception.Message)" -ForegroundColor DarkYellow }
+    Set-PowerForLongRun
     $env:UBDEN_WINDOWS_BRIDGE = Join-Path $SourceRoot 'windows-bridge.ps1'
     Write-Host ''
     Write-Host '  Tarayici arayuzu baslatiliyor; varsayilan tarayici acilacak.' -ForegroundColor Cyan
     Write-Host '  Bu pencere SUNUCUDUR ve acik kalmalidir. Tarama tarayicida yurur;' -ForegroundColor DarkYellow
     Write-Host '  her tarama bitince bu pencerede "RAPOR HAZIR" bandi ve rapor yolu gorunur.' -ForegroundColor DarkYellow
-    Write-Host '  Kapatmak icin: tarayici sekmesini kapatin ve bu pencereyi kapatin.' -ForegroundColor DarkYellow
-    & $VenvPython (Join-Path $SourceRoot 'webapp.py')
+    Write-Host '  Temiz kapatmak icin bu pencerede Ctrl+C. Beklenmedik cokmede sunucu otomatik yeniden baslar.' -ForegroundColor DarkYellow
+    # Denetleyici (supervisor): sunucu beklenmedik sekilde cokerse otomatik yeniden
+    # baslatir; pencere HICBIR durumda kendiliginden kapanmaz. Ctrl+C = temiz cikis.
+    $webapp = Join-Path $SourceRoot 'webapp.py'
+    $attempt = 0
+    while ($true) {
+        $attempt++
+        $code = 0
+        try { & $VenvPython $webapp; $code = $LASTEXITCODE }
+        catch { $code = 1; Write-Host ("  Sunucu istisnasi: " + $_.Exception.Message) -ForegroundColor Red }
+        if ($null -eq $code -or $code -eq 0) { break }   # temiz cikis (Ctrl+C)
+        if ($attempt -ge 100) { Write-Host '  Cok fazla yeniden baslatma; denetleyici durduruldu.' -ForegroundColor Red; break }
+        Write-Host ("  Sunucu beklenmedik sekilde durdu (kod $code). 5 sn icinde yeniden baslatiliyor (deneme $attempt)...") -ForegroundColor DarkYellow
+        Start-Sleep -Seconds 5
+    }
+    Restore-Power
+    Write-Host ''
+    Write-Host '  Sunucu durdu. Guc plani geri alindi.' -ForegroundColor Cyan
+    try { Read-Host '  Kapatmak icin Enter tusuna basin' | Out-Null } catch {}
 }
 
 function Invoke-Status {
@@ -232,5 +437,8 @@ try {
 }
 catch {
     Write-Host ("UBDEN: " + $_.Exception.Message) -ForegroundColor Red
-    throw
+    Write-Host ($_.ScriptStackTrace) -ForegroundColor DarkGray
+    # Pencere hicbir durumda kendiliginden kapanmasin: hatayi goster ve bekle.
+    try { Read-Host 'Bir hata olustu. Kapatmak icin Enter tusuna basin' | Out-Null } catch {}
+    exit 1
 }

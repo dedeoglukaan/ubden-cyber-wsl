@@ -42,6 +42,7 @@ from rootdse_probe import discover as discover_rootdse
 import credential_probes
 import netbios_probe
 import web_identify
+import optional_tools
 from environment_doctor import inspect as inspect_environment
 
 ROOT = Path(__file__).resolve().parent
@@ -1125,6 +1126,19 @@ def run_probe_suite(target, meta, root, raw, events, assets, discovered_ports,
         network_extras(assets,discovered_ports,raw,events,command)
         snmp_extras(assets,raw,events,command)
         credential_probes.run(target,assets,discovered_ports,raw,events,meta)
+        # Opt-in, authorization-gated intrusive extras (no-op unless the operator
+        # enabled the module flag and a written authorization reference is set).
+        web_roots=[]
+        for ip in assets:
+            opened=set(discovered_ports.get(ip,[]))
+            for scheme,port in (("https",443),("http",80),("http",8080),("https",8443)):
+                if port in opened:
+                    host=f"[{ip}]" if ':' in ip else ip
+                    suffix="" if port in (80,443) else f":{port}"
+                    web_roots.append((ip,f"{scheme}://{host}{suffix}/"))
+                    break
+        optional_tools.run_sqlmap(web_roots,raw,events,command,meta)
+        optional_tools.run_sipvicious(target,raw,events,command,meta)
         if 'supplemental_network' in meta.get('enabled_modules',[]):
             run_supplemental(target,assets,discovered_ports,raw,events,command,profile)
         for item in ssh_tests:
