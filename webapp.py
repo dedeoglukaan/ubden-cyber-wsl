@@ -73,8 +73,12 @@ def _run_attack_job(job_id: str, run_dir: str, opts: dict) -> None:
             with _LOCK:
                 _JOBS[job_id]["status"] = "error"
             return
+        control: dict = {}
+        with _LOCK:
+            _JOBS[job_id]["control"] = control  # holds the live proc for /api/stop
         result = attack_bridge.run(
-            run_dir, opts, progress=lambda line, level="info": _emit(job_id, line, level))
+            run_dir, opts, progress=lambda line, level="info": _emit(job_id, line, level),
+            control=control)
         with _LOCK:
             _JOBS[job_id]["result"] = {"run_dir": run_dir, "report_html": str(Path(run_dir) / "REPORT.html"),
                                        "attack_status": result.get("status")}
@@ -236,7 +240,8 @@ border-left:3px solid var(--teal);border-radius:8px;padding:11px 16px;color:var(
 </div>
 <div class="card" id="progress" style="display:none">
 <div style="display:flex;justify-content:space-between;align-items:center">
-<strong>Ilerleme</strong><span id="state" class="pill">calisiyor</span></div>
+<strong>Ilerleme</strong><span id="state" class="pill">calisiyor</span>
+<button id="stopbtn" style="display:none;background:var(--critical);color:#fff;padding:7px 14px" onclick="stopAttack()">&#9940; DURDUR (acil)</button></div>
 <div id="lanes"></div>
 <div id="log"></div>
 <div id="done" style="display:none;margin-top:12px"></div>
@@ -272,8 +277,16 @@ function renderHost(d){const g=document.getElementById("hostgrid");
  `<div><div class="k">AD / katılım</div><div class="v">${dom} ${d.domain_role?('<span class="chip">'+esc(d.domain_role)+'</span>'):''}</div></div>`;
 }
 function lines(v){return v.split("\\n").map(s=>s.trim()).filter(Boolean);}
-let JOB=null,timer=null;
+let JOB=null,timer=null,ATTACK=false;
+async function stopAttack(){
+ if(!JOB)return;
+ if(!confirm("Saldırıyı ACİL durdur? (STOP dosyası yazılır + Kali'deki süreçler sonlandırılır)"))return;
+ const b=document.getElementById("stopbtn");b.disabled=true;b.textContent="durduruluyor…";
+ try{await fetch("/api/stop?t="+T+"&job="+JOB,{method:"POST"});}catch(e){}
+ b.disabled=false;b.textContent="⛠ DURDUR (acil)";
+}
 async function start(){
+ ATTACK=false;document.getElementById("stopbtn").style.display="none";
  const body={client:c("client"),project:c("project"),authorization_reference:c("auth"),
  tester:c("tester"),targets:lines(v("targets")),exclusions:lines(v("exclusions")),
  profile:v("profile"),top_ports:v("top_ports"),max_rate:v("max_rate"),lanes:v("lanes"),
@@ -301,6 +314,7 @@ async function poll(){
  renderLanes(d.lanes||{});
  document.getElementById("state").textContent=d.status;
  if(d.status==="done"||d.status==="error"){clearInterval(timer);
+ document.getElementById("stopbtn").style.display="none";ATTACK=false;
  document.getElementById("go").disabled=false;showDone(d);}
 }
 function renderLanes(lanes){const box=document.getElementById("lanes");
@@ -366,10 +380,12 @@ async function startAttack(){
  const d=await r.json();
  if(!d.job){document.getElementById('at_msg').textContent='hata: '+(d.error||'?');return;}
  if(timer)clearInterval(timer);
- JOB=d.job;
+ JOB=d.job;ATTACK=true;
  document.getElementById('done').style.display='none';
  document.getElementById('log').innerHTML='';
  document.getElementById('progress').style.display='block';
+ document.getElementById('stopbtn').style.display='inline-block';
+ document.getElementById('stopbtn').disabled=false;
  timer=setInterval(poll,1200);poll();
 }
 function stat(n,l){return `<div class="stat"><div class="n">${esc(n)}</div><div class="l">${esc(l)}</div></div>`;}
@@ -489,6 +505,16 @@ class Handler(BaseHTTPRequestHandler):
             attack_job = _new_job()
             threading.Thread(target=_run_attack_job, args=(attack_job, run_dir, opts), daemon=True).start()
             return self._send(200, json.dumps({"job": attack_job}))
+        if parsed.path == "/api/stop":
+            job = query.get("job", [""])[0]
+            with _LOCK:
+                data = _JOBS.get(job)
+            control = (data or {}).get("control") if data else None
+            if attack_bridge is None or not control:
+                return self._send(400, json.dumps({"ok": False, "error": "no_active_attack"}))
+            _emit(job, "⛔ ACİL DURDURMA istendi — STOP dosyası + süreç sonlandırma…", "warn")
+            res = attack_bridge.request_stop(control)
+            return self._send(200, json.dumps(res))
         if parsed.path == "/api/open":
             job = query.get("job", [""])[0]
             with _LOCK:

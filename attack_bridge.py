@@ -14,6 +14,7 @@ only when the caller explicitly opts in.
 from __future__ import annotations
 
 import json
+import os
 import shlex
 import subprocess
 import sys
@@ -129,9 +130,10 @@ def build_doctor_command(distro: str, wsl_run: str, wsl_scope: str, opts: dict) 
     return [WSL, "-d", distro, "--", "bash", "-lic", inner]
 
 
-def _stream(cmd: list[str], progress, mask=()) -> tuple[int, str]:
+def _stream(cmd: list[str], progress, mask=(), control=None) -> tuple[int, str]:
     """Run cmd, stream stdout line-by-line to progress(), return (exit_code, full_text).
-    Secrets in `mask` are redacted from every emitted line."""
+    Secrets in `mask` are redacted from every emitted line. If `control` is a dict,
+    the live process is registered as control['proc'] so an emergency stop can kill it."""
     masks = [m for m in mask if m]
     collected = []
     try:
@@ -140,6 +142,8 @@ def _stream(cmd: list[str], progress, mask=()) -> tuple[int, str]:
     except Exception as exc:
         progress(f"Komut başlatılamadı: {exc}", "warn")
         return 1, ""
+    if isinstance(control, dict):
+        control["proc"] = proc
     for line in proc.stdout:
         line = line.rstrip()
         for m in masks:
@@ -166,8 +170,51 @@ def _regenerate_report(run_dir, progress) -> None:
         progress(f"Rapor yeniden üretilemedi: {exc}", "warn")
 
 
-def run(run_dir, opts: dict, progress) -> dict:
-    """Run the offensive-ext chain in Kali against run_dir. Never raises."""
+def request_stop(control: dict) -> dict:
+    """Emergency stop for a running attack. Three layers, best-effort:
+    1. STOP file in the run dir — offensive-ext honors it BEFORE the next step
+       (cooperative, clean abort; partial evidence retained).
+    2. Kill the Windows-side wsl.exe process tree (taskkill /T).
+    3. pkill the Kali-side offensive tools so nothing is orphaned in the WSL VM.
+    """
+    if not isinstance(control, dict):
+        return {"ok": False, "detail": "no_control"}
+    control["stopped"] = True
+    run_dir = control.get("run_dir")
+    distro = control.get("distro")
+    proc = control.get("proc")
+    out = {"ok": True, "stop_file": False, "proc_killed": False, "wsl_pkill": False}
+    try:
+        if run_dir:
+            (Path(run_dir) / "STOP").write_text("stop\n", encoding="utf-8")  # /mnt/.../STOP in Kali
+            out["stop_file"] = True
+    except OSError:
+        pass
+    try:
+        if proc is not None and proc.poll() is None:
+            if os.name == "nt":
+                subprocess.run(["taskkill", "/T", "/F", "/PID", str(proc.pid)],
+                               capture_output=True, timeout=20, check=False)
+            else:
+                proc.terminate()
+            out["proc_killed"] = True
+    except Exception:
+        pass
+    try:
+        if distro:
+            subprocess.run([WSL, "-d", distro, "--", "bash", "-lic",
+                            "for p in pipeline.py GetUserSPNs GetNPUsers certipy nxc netexec "
+                            "bloodhound secretsdump coercer hashcat john; do pkill -f \"$p\"; done; true"],
+                           capture_output=True, timeout=25, check=False)
+            out["wsl_pkill"] = True
+    except Exception:
+        pass
+    return out
+
+
+def run(run_dir, opts: dict, progress, control=None) -> dict:
+    """Run the offensive-ext chain in Kali against run_dir. Never raises.
+    If `control` is a dict, it is populated so request_stop(control) can abort."""
     def emit(line, level="info"):
         try:
             progress(line, level)
@@ -175,10 +222,14 @@ def run(run_dir, opts: dict, progress) -> dict:
             pass
 
     run_dir = str(run_dir)
+    if isinstance(control, dict):
+        control["run_dir"] = run_dir
     distro = opts.get("distro") or find_distro()
     if not distro:
         emit("Kali WSL bulunamadı. Önce çalıştırın: ubden-win setup-offensive", "warn")
         return {"status": "error", "reason": "no_kali_distro"}
+    if isinstance(control, dict):
+        control["distro"] = distro
     if not kali_offensive_installed(distro):
         emit(f"offensive-ext Kali'de kurulu değil ({distro}). Önce: ubden-win setup-offensive", "warn")
         return {"status": "error", "reason": "not_installed", "distro": distro}
@@ -196,14 +247,22 @@ def run(run_dir, opts: dict, progress) -> dict:
 
     emit(f"Kali/WSL: {distro} · hedef klasör: {wsl_run}", "info")
     emit("Ön-uçuş kontrolü (doctor.py — salt-okunur GO/NO-GO)…", "info")
-    _, doctor_text = _stream(build_doctor_command(distro, wsl_run, wsl_scope, opts), progress, mask)
+    _, doctor_text = _stream(build_doctor_command(distro, wsl_run, wsl_scope, opts), progress, mask, control)
+    if isinstance(control, dict) and control.get("stopped"):
+        emit("Kullanıcı durdurdu (ön-uçuştan sonra).", "warn")
+        return {"status": "stopped", "distro": distro, "run_dir": run_dir}
     if "NO-GO" in doctor_text.upper() and not opts.get("force"):
         emit("doctor NO-GO verdi; saldırı başlatılmadı. Eksikleri giderin veya force ile geçin.", "warn")
         return {"status": "no_go", "distro": distro, "run_dir": run_dir}
 
     mode = "TAM (writes + DCSync)" if opts.get("writes") else "salt-okunur zincir"
     emit(f"Saldırı zinciri çalışıyor (Kali/WSL) — mod: {mode}…", "info")
-    code, _ = _stream(build_wsl_command(distro, wsl_run, wsl_scope, opts), progress, mask)
+    emit("Acil durdurma: web arayüzündeki ⛔ DURDUR düğmesi (STOP dosyası + süreç sonlandırma).", "info")
+    code, _ = _stream(build_wsl_command(distro, wsl_run, wsl_scope, opts), progress, mask, control)
+    if isinstance(control, dict) and control.get("stopped"):
+        emit("Saldırı kullanıcı tarafından durduruldu (STOP + süreç sonlandırma).", "warn")
+        _regenerate_report(run_dir, emit)
+        return {"status": "stopped", "distro": distro, "run_dir": run_dir}
 
     emit("Rapor Windows tarafında yeniden üretiliyor…", "info")
     _regenerate_report(run_dir, emit)

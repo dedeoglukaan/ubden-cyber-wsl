@@ -84,7 +84,7 @@ class RunTests(unittest.TestCase):
         with patch.object(ab, "find_distro", return_value="kali"), \
                 patch.object(ab, "kali_offensive_installed", return_value=True), \
                 patch.object(ab, "to_wsl_path", return_value="/mnt/c/r"), \
-                patch.object(ab, "_stream", side_effect=lambda cmd, p, mask=(): calls.append(cmd) or (1, "==> NO-GO: scope")), \
+                patch.object(ab, "_stream", side_effect=lambda cmd, p, mask=(), control=None: calls.append(cmd) or (1, "==> NO-GO: scope")), \
                 patch.object(ab, "_regenerate_report") as regen:
             res = ab.run(self._run_dir(), {"user": "u", "password": "p"}, lambda l, lvl="info": None)
         self.assertEqual(res["status"], "no_go")
@@ -101,6 +101,48 @@ class RunTests(unittest.TestCase):
                          lambda l, lvl="info": None)
         self.assertEqual(res["status"], "completed")
         regen.assert_called_once()
+
+
+class StopTests(unittest.TestCase):
+    def test_request_stop_writes_stopfile_and_kills(self):
+        d = Path(tempfile.mkdtemp())
+
+        class P:
+            pid = 4242
+            def poll(self):
+                return None      # still running
+
+            def terminate(self):
+                pass
+        calls = []
+
+        def fake_run(argv, *a, **k):
+            calls.append(argv)
+            return type("R", (), {"returncode": 0})()
+        with patch.object(ab.subprocess, "run", side_effect=fake_run):
+            res = ab.request_stop({"run_dir": str(d), "distro": "kali", "proc": P()})
+        self.assertTrue((d / "STOP").exists())        # cooperative kill-switch armed
+        self.assertTrue(res["ok"] and res["stop_file"] and res["wsl_pkill"])
+        joined = " ".join(" ".join(map(str, c)) for c in calls)
+        self.assertIn("pkill", joined)               # Kali-side tools terminated
+
+    def test_request_stop_bad_control(self):
+        self.assertFalse(ab.request_stop(None)["ok"])
+
+    def test_run_short_circuits_when_stopped_after_doctor(self):
+        def doctor_stream(cmd, p, mask=(), control=None):
+            if isinstance(control, dict):
+                control["stopped"] = True   # simulate an operator STOP during pre-flight
+            return (0, "==> GO")
+        with patch.object(ab, "find_distro", return_value="kali"), \
+                patch.object(ab, "kali_offensive_installed", return_value=True), \
+                patch.object(ab, "to_wsl_path", return_value="/mnt/c/r"), \
+                patch.object(ab, "_stream", side_effect=doctor_stream), \
+                patch.object(ab, "_regenerate_report"):
+            d = Path(tempfile.mkdtemp())
+            (d / "engagement.json").write_text('{"targets":["10.0.0.0/24"]}', encoding="utf-8")
+            res = ab.run(d, {"user": "u", "password": "p"}, lambda l, lvl="info": None, control={})
+        self.assertEqual(res["status"], "stopped")
 
 
 if __name__ == "__main__":
