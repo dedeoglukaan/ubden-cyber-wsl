@@ -1,0 +1,206 @@
+# offensive-ext — Tek Sayfa Komut Kağıdı
+
+Tam anlatım `RUNBOOK.md`'de. Bu sayfa sadece **sırayla yapıştırılacak komutlar**.
+Her komutun çıktısını Claude'a yapıştır. **Tek bir yeri doldur (§0B), gerisi düzeltmesiz yapışır.**
+
+---
+
+## 0A — AnyDesk'e bağlanınca: ilk 5 dakika (müşteri makinesinde, Windows cmd)
+
+Amaç: §0B'deki `DOM` / `DC` / `IP` değerlerini **müşteriden istemeden makineden çıkarmak**, ve
+kimlik denemesi yapmadan **kilitlenme eşiğini** öğrenmek. Hepsi salt okunur, hiçbiri parola denemez,
+hiçbiri yönetici yetkisi istemez — oturum açmış kullanıcının hakkıyla çalışır.
+
+```cmd
+echo %USERDNSDOMAIN%
+echo %USERDOMAIN%
+whoami /upn
+whoami /groups
+nltest /dsgetdc:%USERDNSDOMAIN%
+nltest /dclist:%USERDNSDOMAIN%
+ipconfig /all
+net accounts /domain
+```
+
+Hangi çıktı neyi doldurur:
+
+| çıktı | ne verir |
+|---|---|
+| `echo %USERDNSDOMAIN%` | **`DOM`** — AD alan adı |
+| `nltest /dsgetdc:` | **`DC`** (FQDN) + **`IP`** — o an kullanılan DC |
+| `nltest /dclist:` | **tüm** DC'ler. Müşterinin verdiği envanterde iki DC'ye aynı IP yazılmış olabilir (sık rastlanan bir yazım hatası); gerçeği burada çıkar |
+| `ipconfig /all` | hangi VLAN'dayız + DNS sunucuları (genelde DC'lerin ta kendisi) |
+| `whoami /groups` | elimizdeki oturumun yetkisi — yönetici çıkarsa §5 zinciri düşük yetkiden başlamıyor demektir, raporda belirtilir |
+| `net accounts /domain` | parola politikası + **kilitlenme eşiği** |
+
+⚠️ **`net accounts /domain` çıktısındaki kilitlenme eşiğini §4'e girmeden oku.** Eşik 3 veya altıysa
+`guard.py`'nin bütçesini **1**'e indir. Gerçek kullanıcı hesabını kilitlemek sözleşme madde 5 kapsamında
+üretim kesintisidir; ortak kullanılan bir hesabı kilitlemek doğrudan iş durdurur.
+
+**Makine domain'e katılı değilse** alan adı yine alınır:
+
+```cmd
+nslookup -type=SRV _ldap._tcp.dc._msdcs.<alan-adi>
+```
+
+Kali tarafından, kimlik doğrulamasız (anonim RootDSE — alan adını ve naming context'i verir):
+
+```bash
+ldapsearch -x -H ldap://<DC_IP> -s base -b "" namingContexts defaultNamingContext
+```
+
+**Makineden ÇIKMAYAN tek şey parola.** Bunu müşterinin BT yetkilisinin (test sırasında bizimle olan kişi)
+yazması gerekir. **Yönetici olmasına gerek yok, olmaması tercih edilir** — zincirin amacı
+"sıradan bir kullanıcıdan nereye kadar gidiliyor" sorusunu cevaplamak. Parola yoksa tarama, port/sürüm,
+SMB imzalama ve paylaşım kontrolleri yine çalışır; **kerberoast / AS-REP / ADCS / BloodHound düşer** ve
+`pipeline.py` zaten kimlik olmadan plan kurmayı reddeder (`no credential — refusing to build a plan`).
+
+## 0B — Değişkenler (Kali WSL'de, BİR kez; aynı terminalde kal)
+
+```bash
+export RUN='/root/Desktop/UBDEN-Cyber-Reports/<CLIENT>_<tarih>_<id>'   # Can'ın UBDEN run klasörü
+export DOM='<DOMAIN>'            # ör. corp.local
+export DC='<DC_FQDN>'            # ör. dc01.corp.local
+export IP='<DC_IP>'              # ör. 10.0.0.10
+export U='<TEST_KULLANICI>'      # client'ın verdiği read-only hesap
+export P='<PAROLA>'
+export EXT="$HOME/offensive-ext"     # offensive-ext'in bulunduğu yer
+export PY="$EXT/.venv/bin/python3"
+export UBDEN_REVIEWER='<FIRMA/ANALIST ADI>'   # rapora "Doğrulayan analist" olarak basılır
+printf '%s\n' '<CIDR>' "$IP" "$DC" > "$HOME/scope.txt"   # sözleşmedeki hedefler, satır başına bir tane
+export SCOPE="$HOME/scope.txt"
+cat "$SCOPE"
+```
+
+Kontrol: `echo "$RUN" && ls "$RUN" | head` → run klasörü doğru mu?
+
+⚠️ **Scope'a DOMAIN adı yazmak host'ları yetkilendirmez.** `corp.local` satırı `dc01.corp.local`'i
+kapsama ALMAZ — sözleşmedeki **her hostname'i ayrı satıra birebir yaz** (CIDR'ler zaten içindekileri
+kapsar). Yanlışını §3'teki `N in / M dropped` satırından anlarsın: `dropped > 0` ise düşen hedef
+sözleşmede varsa scope dosyasına eklenmeli. (Bilerek böyle: domain adını joker saymak, sözleşme dışı
+bir host'a sessizce yayılmak demek olurdu.)
+
+## 1 — Kurulum (makinede bir kez)
+
+```bash
+sudo bash "$EXT/setup-offensive.sh" && source ~/.bashrc
+```
+
+Bakılacak satırlar: `[OK] nxc -> netexec`, `[OK] hashcat backend -> ...`, `[OK] Offensive toolchain hazir`.
+`hashcat backend YOK` çıkarsa kırma adımında **john** kullan (§5), hashcat hiçbir şey kıramaz.
+
+## 2 — GO / NO-GO (canlıdan önce; hiçbir kimlik denemesi yapmaz)
+
+```bash
+"$PY" "$EXT/doctor.py" --scope "$SCOPE" --run-dir "$RUN" \
+  --dc "$DC" --domain "$DOM" --ip "$IP" --user "$U" --password "$P"
+```
+
+**`==> GO` görmeden ilerleme.** `clock skew` FAIL/WARN → `sudo ntpdate "$IP"` (>5 dk fark tüm Kerberos'u öldürür).
+
+## 3 — Planı gör (hiçbir şey çalıştırmaz)
+
+```bash
+"$PY" "$EXT/pipeline.py" --run-dir "$RUN" --scope "$SCOPE" \
+  --dc "$DC" --domain "$DOM" --ip "$IP" --user "$U" --password "$P" --dry-run
+```
+
+**`# scope: N in / M dropped` satırını oku.** `0 in` = hiçbir host'a dokunulmayacak → `$SCOPE` ile
+UBDEN'in hedef listesi uyuşmuyor, düzelt. Planı Claude'a yapıştır.
+
+## 4 — Lockout bütçesi (kimseyi kilitlemeyelim)
+
+```bash
+"$PY" "$EXT/guard.py" --policy --dc "$DC" --domain "$DOM" --ip "$IP" --user "$U" --password "$P"
+```
+
+`SAFE BUDGET` satırını Claude'a göster.
+
+## 5 — CANLI (read-only zincir; yazma/dump KAPALI)
+
+```bash
+"$PY" "$EXT/pipeline.py" --run-dir "$RUN" --scope "$SCOPE" \
+  --dc "$DC" --domain "$DOM" --ip "$IP" --user "$U" --password "$P"
+```
+
+Sonra **iki şeyi birden oku**:
+
+```bash
+sed -n '1,40p' "$RUN/offensive-ext/SUMMARY.md"
+```
+
+⚠️ **`!! N step(s) did NOT complete cleanly` uyarısı varsa, `0 bulgu` "hedef temiz" DEMEK DEĞİLDİR.**
+Adı geçen adımları tekrar çalıştır veya elle karşılığını dene (RUNBOOK § Elle yedek komutlar).
+
+## 6 — Hash'leri OFFLINE kır (ağa dokunmaz, kilitleme riski yok)
+
+```bash
+"$PY" "$EXT/crack.py" "$RUN"          # hash dosyalarını + doğru hashcat/john komutlarını basar
+```
+
+Bastığı komutu çalıştır, sonra sonucu geri besle:
+
+```bash
+"$PY" "$EXT/crack.py" "$RUN" --results show.txt                        # hashcat kullandıysan
+"$PY" "$EXT/crack.py" "$RUN" --results "$RUN/offensive-ext/hashes/john.pot"   # john kullandıysan
+"$PY" "$EXT/pipeline.py" --run-dir "$RUN" --skip-attack --no-report    # bulguya işle
+```
+
+## 7 — ACİL DURUM
+
+```bash
+touch "$RUN/STOP"      # çalışan zincir bir sonraki adımdan ÖNCE durur, kısmi kanıt kalır
+rm -f "$RUN/STOP"      # devam etmek için sil
+```
+
+Bir hesap kilitlendiyse / müşteri şikâyet ettiyse: **durdur, Claude'a söyle, client'ı bilgilendir.**
+
+## 8 — Yazma/dump (yalnız gerekliyse, Claude onaylarsa)
+
+```bash
+"$PY" "$EXT/pipeline.py" --run-dir "$RUN" --scope "$SCOPE" \
+  --dc "$DC" --domain "$DOM" --ip "$IP" --user "$U" --password "$P" \
+  --enable-writes --allow-dcsync
+```
+
+Elle `YETKILIYIM` yaz. ⚠️ **`--assume-yes` KULLANMA** — insan onayı olmadan tüm domain hash'lerini döker.
+
+## 8B — Rapordan ÖNCE: elle girilecek iki bulgu
+
+UBDEN bu ikisini topluyor ama raporuna basmıyor. `review.json`'a elle gir:
+
+```bash
+python3 -c "import json;d=json.load(open('$RUN/AD_ASSESSMENT.json'));print(d.get('password_policy'),d.get('machine_account_quota'))"
+python3 - "$RUN" <<'EOF'
+import glob,sys,xml.etree.ElementTree as ET
+bad=set()
+for f in glob.glob(sys.argv[1]+'/targets/*/raw/*.xml'):
+    try: root=ET.parse(f).getroot()
+    except Exception: continue
+    for h in root.iter('host'):
+        ip=next((a.get('addr') for a in h.iter('address') if a.get('addrtype')=='ipv4'),'')
+        for s in h.iter('script'):
+            if s.get('id') in ('smb-security-mode','smb2-security-mode'):
+                for el in s.iter('elem'):
+                    if el.get('key')=='message_signing' and (el.text or '').strip()=='disabled':
+                        bad.add(ip)
+print('SMB imzalama KAPALI:', ', '.join(sorted(bad)) or 'yok')
+EOF
+```
+
+1. **Parola/kilitlenme politikası** — `lockout_threshold` 0 ise kilitlenme yok; `machine_account_quota`
+   0 olmalı; `min_length`. Rapor bu bloğu basmaz, "ayrıca kaydedilen kontrollerle değerlendirilmiş
+   sayılır" der.
+2. **SMB imzalama** — `disabled` çıkan host varsa bulgudur. Rapor TCP/445 için "imzalama
+   denetlenmedi" yazar, halbuki nmap denetlemiştir.
+
+⚠️ CVE listesi ve kullanıcı/grup/bilgisayar sayıları rapora **zaten giriyor** — tekrar yazma.
+
+## 9 — Temizlik (iş biter bitmez)
+
+```bash
+shred -u "$RUN/offensive-ext/dcsync_dump.txt" "$RUN/offensive-ext/hashes/"*.hash show.txt 2>/dev/null
+sudo passwd ubden       # UBDEN'in zayıf 'ubden' hesabı (şifre: password)
+```
+
+DCSync hash'lerini **kendi laptobuna çekme**; rapora sadece asgari kanıt girer.
