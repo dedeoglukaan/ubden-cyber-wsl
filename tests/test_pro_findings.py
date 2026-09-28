@@ -180,6 +180,65 @@ class AdAssessmentReadsTests(unittest.TestCase):
         self.assertEqual(result['domain_admins']['count'], 2)
         self.assertIn('eset', result['domain_admins']['members'])
 
+    def test_falls_back_to_insecure_ldaps_when_strict_fails(self):
+        import types
+        from unittest.mock import patch
+        import ad_assessment
+
+        class E:
+            def __init__(self, data): self._d = data
+            def __contains__(self, k): return k in self._d
+            def __getitem__(self, k): return types.SimpleNamespace(value=self._d[k])
+        seq = [[E({'rootDomainNamingContext': 'DC=x'})], [E({})], [E({})], [E({})], [E({})], []]
+        attempts = {"n": 0}
+
+        class Conn:
+            entries = []
+            def __init__(self, *a, **k):
+                attempts["n"] += 1
+                if attempts["n"] == 1:  # LDAPS-strict cert handshake fails
+                    raise RuntimeError("LDAPSocketOpenError")
+            def search(self, *a, **k):
+                self.entries = seq.pop(0) if seq else []
+                return True
+            def unbind(self): pass
+
+        fake = types.SimpleNamespace(BASE=0, NONE=0, Connection=Conn,
+                                     Server=lambda *a, **k: 's', Tls=lambda *a, **k: 't')
+        with patch.dict(sys.modules, {'ldap3': fake}):
+            res = ad_assessment.inspect('dc.x.test', 'x.test', 'u', 'p', '192.0.2.5')
+        self.assertEqual(res['status'], 'ok')
+        self.assertEqual(res['transport'], 'ldaps_insecure')
+        self.assertIn('security_warning', res)
+
+    def test_plaintext_is_opt_in_only(self):
+        import types
+        from unittest.mock import patch
+        import ad_assessment
+
+        tried = []
+
+        class Conn:
+            entries = []
+            def __init__(self, *a, **k):
+                # Record the port so we can see which transports were attempted, then fail.
+                raise RuntimeError("LDAPSocketOpenError")
+
+        def server(host, **k):
+            tried.append(k.get("port"))
+            return "s"
+
+        fake = types.SimpleNamespace(BASE=0, NONE=0, Connection=Conn, Server=server,
+                                     Tls=lambda *a, **k: 't')
+        with patch.dict(sys.modules, {'ldap3': fake}):
+            res = ad_assessment.inspect('dc.x.test', 'x.test', 'u', 'p', '192.0.2.5')
+        self.assertEqual(res['status'], 'error')
+        self.assertEqual(len(tried), 3)  # ldaps_strict, ldaps_insecure, starttls — no plaintext
+        tried.clear()
+        with patch.dict(sys.modules, {'ldap3': fake}):
+            ad_assessment.inspect('dc.x.test', 'x.test', 'u', 'p', '192.0.2.5', allow_plaintext=True)
+        self.assertEqual(len(tried), 4)  # opt-in adds the plaintext mode
+
 
 if __name__ == '__main__':
     unittest.main()

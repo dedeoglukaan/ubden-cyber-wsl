@@ -182,6 +182,8 @@ border-left:3px solid var(--teal);border-radius:8px;padding:11px 16px;color:var(
 <div><label>LDAP kullanıcı (salt-okunur)</label><input id="ad_user" placeholder="okuma@ornek.local"></div>
 <div><label>LDAP parola</label><input id="ad_pass" type="password" placeholder="••••••"></div>
 </div>
+<label class="adapters"><input type="checkbox" id="ad_plain"> Şifreli LDAP yoksa düz metin LDAP'a (389) izin ver — kimlik bilgisi şifrelenmeden iletilir (opt-in)</label>
+<div class="hint">Sıra: LDAPS 636 (sertifika doğrulanır) → LDAPS 636 (sertifika doğrulanmaz, self-signed için) → StartTLS 389. Çoğu DC'de self-signed sertifika bu fallback ile çözülür; düz metin yalnız bu kutu işaretliyse denenir.</div>
 <button class="sec" type="button" onclick="testConn('ldap')">LDAP bağlantı testi</button> <span id="t_ldap" class="dim"></span>
 <div class="eyebrow" style="margin-top:16px">Web uygulaması / API</div>
 <div class="row">
@@ -253,6 +255,7 @@ async function start(){
  sql_injection_test:document.getElementById("sqli").checked,
  voip_scan:document.getElementById("voip").checked,
  ad_domain:c("ad_domain"),ad_dc:c("ad_dc"),ad_user:c("ad_user"),ad_pass:v("ad_pass"),
+ ad_allow_plaintext:document.getElementById("ad_plain").checked,
  web_url:c("web_url"),swagger_url:c("swagger_url"),
  ssh_host:c("ssh_host"),ssh_user:c("ssh_user"),ssh_pass:v("ssh_pass"),
  claude_api_key:v("claude_key"),claude_raw:document.getElementById("claude_raw").checked,
@@ -332,7 +335,7 @@ function toast(msg){const t=document.createElement("div");t.className="toast";t.
 async function testConn(kind){
  const out=document.getElementById("t_"+kind);out.textContent="test ediliyor…";out.style.color="";
  let body={};
- if(kind==="ldap")body={dc:c("ad_dc"),domain:c("ad_domain"),user:c("ad_user"),password:v("ad_pass")};
+ if(kind==="ldap")body={dc:c("ad_dc"),domain:c("ad_domain"),user:c("ad_user"),password:v("ad_pass"),allow_plaintext:document.getElementById("ad_plain").checked};
  else if(kind==="http")body={url:c("web_url")||c("swagger_url")};
  else if(kind==="ssh")body={host:c("ssh_host"),user:c("ssh_user"),password:v("ssh_pass")};
  try{const r=await fetch("/api/test/"+kind+"?t="+T,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});

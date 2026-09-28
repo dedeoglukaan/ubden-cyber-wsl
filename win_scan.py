@@ -146,7 +146,8 @@ def test_connection(kind: str, body: dict) -> dict:
             return {"ok": False, "detail": "DC / alan adı / kullanıcı / parola gerekli"}
         try:
             import ad_assessment
-            res = ad_assessment.inspect(dc, domain, user, pw, dc if _looks_ip(dc) else None)
+            res = ad_assessment.inspect(dc, domain, user, pw, dc if _looks_ip(dc) else None,
+                                        allow_plaintext=bool(body.get("allow_plaintext")))
             ok = res.get("status") == "ok"
             return {"ok": ok, "detail": (res.get("reason") or res.get("source") or
                                          ("bağlandı, dizin okunabildi" if ok else "başarısız"))[:120]}
@@ -390,7 +391,8 @@ def _ad_spec(form: dict, host_snapshot: dict) -> dict:
     domain = (form.get("ad_domain") or "").strip()
     user = (form.get("ad_user") or "").strip()
     if dc and domain and user and (form.get("ad_pass") or ""):
-        return {"mode": "supplied", "dc": dc, "domain": domain, "account": user}
+        return {"mode": "supplied", "dc": dc, "domain": domain, "account": user,
+                "allow_plaintext": bool(form.get("ad_allow_plaintext"))}
     if isinstance(host_snapshot, dict) and host_snapshot.get("part_of_domain"):
         return {"mode": "joined", "domain": host_snapshot.get("domain", "")}
     return {"mode": "disabled"}

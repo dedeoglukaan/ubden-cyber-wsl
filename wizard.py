@@ -1556,7 +1556,8 @@ def run_ad_module(root,meta,secret,events):
             raw=root/'targets'/'authorized_ad'/'raw'
             raw.mkdir(parents=True,exist_ok=True)
             allowed=route_guard(approved,meta.get('selected_interfaces',[]),raw,events,dc)
-            result=(inspect_ad(dc,config['domain'],config['account'],secret['password'],approved[0])
+            result=(inspect_ad(dc,config['domain'],config['account'],secret['password'],approved[0],
+                               allow_plaintext=bool(config.get('allow_plaintext')))
                     if set(allowed)==set(approved) else
                     {'status':'blocked','reason':'AD DC secilen Windows rotasinda degil'})
     else:
