@@ -37,6 +37,7 @@ DEFAULT_MODEL = "claude-sonnet-5"          # triage / action planning
 DEFAULT_DEEP_MODEL = "claude-opus-5-5"     # deep per-domain analysis
 MAX_ACTIONS = 24
 MAX_TOKENS = 8000
+DEEP_MAX_TOKENS = 16000  # deep analysis emits a large JSON; too low truncates -> unparseable
 
 # Read-only NSE scripts only (no brute/dos/exploit categories).
 SAFE_NSE = frozenset({
@@ -291,13 +292,14 @@ _ANALYZE_SYSTEM = (
     "web-application checklist categories the automated scan cannot fully cover: for each "
     "listed category, say what the evidence suggests to test first, the likely surface, "
     "and what the analyst must still confirm — a starting point, not a verified result. "
-    "Findings are analyst DRAFTS; never claim a vulnerability is confirmed. Keep each field concise.")
+    "Findings are analyst DRAFTS; never claim a vulnerability is confirmed. Keep each field "
+    "concise, and report at most the 40 most significant findings so the JSON stays complete.")
 
 
 def analyze(config, bundle, request_fn=None):
     model = config.get("deep_model", DEFAULT_DEEP_MODEL)
     out = _call_claude(config["key"], model, _ANALYZE_SYSTEM, {"evidence": bundle},
-                       request_fn=request_fn, max_tokens=MAX_TOKENS)
+                       request_fn=request_fn, max_tokens=DEEP_MAX_TOKENS)
     findings = out.get("findings", [])
     return {
         "executive_summary": str(out.get("executive_summary", ""))[:4000],
@@ -432,3 +434,36 @@ def _atomic(path: Path, data):
     tmp = path.with_suffix(path.suffix + ".pending")
     tmp.write_text(json.dumps(data, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     tmp.replace(path)
+
+
+def check(api_key, model=None, request_fn=None):
+    """Minimal connectivity/model probe. Returns {ok, model, detail} with the exact
+    reason (bad key, unknown model, network, empty response) — no full scan needed.
+    The key is never echoed back."""
+    model = model or DEFAULT_DEEP_MODEL
+    try:
+        out = _call_claude(api_key, model,
+                           "Reply with JSON only: {\"ok\":true}",
+                           {"ping": "ok"}, request_fn=request_fn, max_tokens=64)
+        return {"ok": bool(out.get("ok", True)), "model": model,
+                "detail": "Baglanti ve model calisiyor."}
+    except Exception as exc:
+        return {"ok": False, "model": model, "detail": f"{type(exc).__name__}: {exc}"[:400]}
+
+
+if __name__ == "__main__":
+    import argparse
+    import os
+    parser = argparse.ArgumentParser(description="UBDEN AI operatör bağlantı testi")
+    parser.add_argument("--check", action="store_true", help="API anahtarı + model bağlantısını test et")
+    parser.add_argument("--model", default=None, help="Model kimliği (varsayılan: %s)" % DEFAULT_DEEP_MODEL)
+    args = parser.parse_args()
+    if args.check:
+        key = os.environ.get("UBDEN_AI_KEY") or os.environ.get("ANTHROPIC_API_KEY") or ""
+        if not key:
+            print("UBDEN_AI_KEY (veya ANTHROPIC_API_KEY) ortam değişkeni gerekli. Anahtar ekrana yazılmaz.")
+            raise SystemExit(2)
+        res = check(key, args.model or os.environ.get("UBDEN_AI_DEEP_MODEL"))
+        print(("[OK] " if res["ok"] else "[HATA] ") + f"model={res['model']} · {res['detail']}")
+        raise SystemExit(0 if res["ok"] else 1)
+    parser.print_help()

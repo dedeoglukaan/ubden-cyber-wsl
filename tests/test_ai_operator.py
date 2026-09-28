@@ -137,6 +137,18 @@ class RunTests(unittest.TestCase):
         self.assertIn("400", status.get("error", ""))
         self.assertIn("unknown model", status.get("error", ""))
 
+    def test_check_reports_ok_and_exact_error(self):
+        import io, urllib.error
+        ok = ai_operator.check("sk", request_fn=lambda req: _FakeResp({"ok": True}))
+        self.assertTrue(ok["ok"])
+        def http401(req):
+            raise urllib.error.HTTPError(req.full_url, 401, "Unauthorized", {},
+                                         io.BytesIO(b'{"error":{"message":"invalid x-api-key"}}'))
+        bad = ai_operator.check("sk", request_fn=http401)
+        self.assertFalse(bad["ok"])
+        self.assertIn("401", bad["detail"])
+        self.assertIn("x-api-key", bad["detail"])
+
     def test_empty_response_is_reported_not_silent(self):
         # 200 OK but no text blocks -> must fail loudly, not "completed with 0 findings".
         class Empty:
