@@ -14,7 +14,8 @@ WIN_FILES = ["ubden-win.ps1", "windows-bridge.ps1", "webapp.py", "win_scan.py",
              "win_proc.py", "win_tools.py", "report_v2.py", "device_inventory.py",
              "wizard.py", "eol_data.py", "service_probes.py", "credential_probes.py",
              "netbios_probe.py", "ai_operator.py", "web_identify.py", "wifi_scan.py",
-             "power_manager.py", "case_coverage.py", "optional_tools.py", "requirements.txt"]
+             "power_manager.py", "case_coverage.py", "optional_tools.py",
+             "attack_bridge.py", "requirements.txt"]
 
 
 class WinBootstrapManifestTests(unittest.TestCase):

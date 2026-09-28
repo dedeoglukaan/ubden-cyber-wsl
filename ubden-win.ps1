@@ -1,6 +1,12 @@
 param(
-    [ValidateSet('run', 'setup', 'status')]
-    [string] $Action = 'run'
+    [ValidateSet('run', 'setup', 'status', 'setup-offensive', 'offensive')]
+    [string] $Action = 'run',
+    # Only used by the optional 'offensive' action (offensive-ext via Kali/WSL):
+    [string] $RunDir = '',
+    [string] $User = '',
+    [string] $Domain = '',
+    [string] $Dc = '',
+    [switch] $Writes
 )
 
 # UBDEN uPenetrator - Windows-native (WSL YOK) tarayici arayuzlu tarama motoru.
@@ -428,10 +434,64 @@ function Invoke-Status {
     }
 }
 
+function Get-KaliDistro {
+    if (-not (Get-Command wsl.exe -ErrorAction SilentlyContinue)) { return '' }
+    try { $names = (& wsl.exe -l -q) 2>$null } catch { return '' }
+    $clean = @($names | ForEach-Object { ($_ -replace "`0", '').Trim() } | Where-Object { $_ })
+    $kali = @($clean | Where-Object { $_ -match 'kali' })
+    if ($kali.Count) { return $kali[0] } elseif ($clean.Count) { return $clean[0] } else { return '' }
+}
+
+function Invoke-SetupOffensive {
+    # OPSIYONEL: offensive-ext'i Kali WSL'e kur (araclar orada native calisir). Bu adim
+    # cekirdek taramayi etkilemez; hic calistirilmazsa hicbir sey degismez.
+    Write-UbdenBanner
+    $distro = Get-KaliDistro
+    if (-not $distro) {
+        Write-Host '  Kali WSL bulunamadi. offensive-ext Kali/Debian icindir; once Kali WSL kurun' -ForegroundColor Red
+        Write-Host '  (orijinal ubden Kali-WSL kurulumu ile gelir).' -ForegroundColor DarkYellow
+        return
+    }
+    $extWin = Join-Path $SourceRoot 'offensive-ext'
+    if (-not (Test-Path -LiteralPath $extWin)) { throw "offensive-ext klasoru bulunamadi: $extWin" }
+    $extWsl = (& wsl.exe -d $distro wslpath -a "$extWin").Trim()
+    Write-Host "  Kali: $distro  ·  offensive-ext kopyalaniyor ve kuruluyor..." -ForegroundColor Cyan
+    Write-Host '  (setup-offensive.sh apt/pipx ile araclari kurar; sudo parolasi sorabilir.)' -ForegroundColor DarkYellow
+    $inner = 'set -e; mkdir -p "$HOME/ubden-offensive"; cp -rf "' + $extWsl + '/." "$HOME/ubden-offensive/"; ' +
+             'cd "$HOME/ubden-offensive"; sudo bash setup-offensive.sh'
+    & wsl.exe -d $distro -- bash -lic $inner
+    if ($LASTEXITCODE -ne 0) { Write-Host "  Kurulum uyari/hata dondu (kod $LASTEXITCODE); ayrintilar yukarida." -ForegroundColor DarkYellow }
+    else { Write-Host '  offensive-ext Kali kurulumu tamam. Artik webapp butonu veya: ubden-win offensive' -ForegroundColor Green }
+}
+
+function Invoke-Offensive {
+    # OPSIYONEL: offensive-ext saldiri asamasini bir tarama klasorune karsi calistirir
+    # (Kali/WSL). Parola argv'ye yazilmaz; attack_bridge getpass ile sorar.
+    Write-UbdenBanner
+    if (-not (Test-Path -LiteralPath $VenvPython)) { throw 'Windows Python venv yok; once: ubden-win setup' }
+    $target = $RunDir
+    if (-not $target) {
+        $reports = Join-Path $env:LOCALAPPDATA 'UBDEN-Cyber\Reports'
+        $latest = Get-ChildItem -LiteralPath $reports -Directory -ErrorAction SilentlyContinue |
+                  Sort-Object LastWriteTime -Descending | Select-Object -First 1
+        if (-not $latest) { throw "Tarama klasoru bulunamadi. -RunDir <yol> verin veya once tarama yapin." }
+        $target = $latest.FullName
+    }
+    Write-Host "  Hedef tarama klasoru: $target" -ForegroundColor Cyan
+    $argv = @((Join-Path $SourceRoot 'attack_bridge.py'), '--run-dir', $target)
+    if ($User)   { $argv += @('--user', $User) }
+    if ($Domain) { $argv += @('--domain', $Domain) }
+    if ($Dc)     { $argv += @('--dc', $Dc, '--ip', $Dc) }
+    if ($Writes) { $argv += '--writes' }
+    & $VenvPython @argv
+}
+
 try {
     switch ($Action) {
         'status' { Invoke-Status }
         'setup' { Invoke-Setup }
+        'setup-offensive' { Invoke-SetupOffensive }
+        'offensive' { Invoke-Offensive }
         default { Invoke-Run }
     }
 }

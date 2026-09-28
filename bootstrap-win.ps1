@@ -9,7 +9,7 @@ param(
 
 $ErrorActionPreference = 'Stop'
 $repo = 'ubden/ubden-cyber-wsl'
-$tag = 'v5.0.0-wsl.26'
+$tag = 'v5.0.0-wsl.27'
 $installBase = Join-Path $env:LOCALAPPDATA 'Programs\UBDEN-Cyber'
 $releaseRoot = Join-Path $installBase $tag
 $entryPoint = Join-Path $releaseRoot 'ubden-win.ps1'
@@ -17,7 +17,8 @@ $requiredFiles = @(
     'ubden-win.ps1', 'windows-bridge.ps1', 'webapp.py', 'win_scan.py', 'win_proc.py',
     'win_tools.py', 'report_v2.py', 'device_inventory.py', 'wizard.py', 'eol_data.py',
     'service_probes.py', 'credential_probes.py', 'netbios_probe.py', 'web_identify.py', 'wifi_scan.py',
-    'ai_operator.py', 'ai_analyst.py', 'power_manager.py', 'case_coverage.py', 'optional_tools.py', 'requirements.txt'
+    'ai_operator.py', 'ai_analyst.py', 'power_manager.py', 'case_coverage.py', 'optional_tools.py',
+    'attack_bridge.py', 'offensive-ext\pipeline.py', 'requirements.txt'
 )
 
 function Assert-InstallChild([string] $Path) {

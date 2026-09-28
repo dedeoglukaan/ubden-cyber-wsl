@@ -22,6 +22,10 @@ from pathlib import Path
 from urllib.parse import urlparse, parse_qs
 
 import win_scan
+try:
+    import attack_bridge  # OPTIONAL offensive-ext stage; absent/unused = no effect
+except Exception:
+    attack_bridge = None
 
 TOKEN = secrets.token_urlsafe(18)
 _JOBS: dict[str, dict] = {}
@@ -54,6 +58,28 @@ def _run_job(job_id: str, form: dict) -> None:
             _JOBS[job_id]["result"] = result
             _JOBS[job_id]["status"] = "done"
     except Exception as exc:  # a crash must surface, not hang the UI
+        _emit(job_id, f"Beklenmeyen hata: {type(exc).__name__}: {exc}", "warn")
+        with _LOCK:
+            _JOBS[job_id]["status"] = "error"
+
+
+def _run_attack_job(job_id: str, run_dir: str, opts: dict) -> None:
+    """OPTIONAL offensive-ext stage in Kali/WSL against a finished run folder.
+    Streams into a fresh job the browser repoints its poll to. Never touches the
+    scan/report code path — only the run folder it already produced."""
+    try:
+        if attack_bridge is None:
+            _emit(job_id, "attack_bridge yüklenemedi.", "warn")
+            with _LOCK:
+                _JOBS[job_id]["status"] = "error"
+            return
+        result = attack_bridge.run(
+            run_dir, opts, progress=lambda line, level="info": _emit(job_id, line, level))
+        with _LOCK:
+            _JOBS[job_id]["result"] = {"run_dir": run_dir, "report_html": str(Path(run_dir) / "REPORT.html"),
+                                       "attack_status": result.get("status")}
+            _JOBS[job_id]["status"] = "done"
+    except Exception as exc:
         _emit(job_id, f"Beklenmeyen hata: {type(exc).__name__}: {exc}", "warn")
         with _LOCK:
             _JOBS[job_id]["status"] = "error"
@@ -299,6 +325,7 @@ async function showDone(d){const el=document.getElementById("done");el.style.dis
  out+=`<a href="#" onclick="openFolder();return false;">Klasörü aç</a></p>`;}
  else{out+=`<p class="l-warn">Rapor üretilemedi; ilerleme kaydını inceleyin.</p>`;}
  el.innerHTML=out;
+ if(d.result&&d.result.run_dir){el.insertAdjacentHTML("beforeend",attackPanel());}
  // Rich device results from DEVICE_INVENTORY.json (category-grouped, like the report).
  try{
  const r=await fetch(`/r/DEVICE_INVENTORY.json?t=${T}&job=${JOB}`);const inv=await r.json();
@@ -312,6 +339,38 @@ async function showDone(d){const el=document.getElementById("done");el.style.dis
  el.insertAdjacentHTML("beforeend",deviceTable(devs));
  toast(`${devs.length} cihaz, ${inv.mac_count||0} MAC tespit edildi`);
  }catch(e){}
+}
+function attackPanel(){
+ const g=id=>{const e=document.getElementById(id);return e?e.value.trim():"";};
+ return `<div class="card" style="margin-top:14px;border-color:var(--red)">`+
+  `<h3 style="margin-top:0;color:var(--red)">&#9876; Attack Mode &amp; Auto Analist</h3>`+
+  `<p class="hint">Opsiyonel, %100 izole saldırı aşaması. Taramada bulunan hostlara karşı Kali/WSL'de gerçek AD saldırı zinciri (kerberoast, AS-REP, ADCS, BloodHound, SMB) çalışır ve bulguları AYNI rapora işler. Kapsam, görevin dondurulmuş hedefleridir. Varsayılan salt-okunur.</p>`+
+  `<div class="row"><div><label>Domain</label><input id="at_domain" value="${esc(g('ad_domain'))}"></div>`+
+  `<div><label>DC IP / ad</label><input id="at_dc" value="${esc(g('ad_dc'))}"></div></div>`+
+  `<div class="row"><div><label>Kullanıcı (yetkili test hesabı)</label><input id="at_user" value="${esc(g('ad_user'))}"></div>`+
+  `<div><label>Parola</label><input id="at_pass" type="password" value="${esc(g('ad_pass'))}"></div></div>`+
+  `<div><label>Analist imzası (rapora işlenir)</label><input id="at_reviewer" value="${esc(g('tester'))}"></div>`+
+  `<label class="adapters" style="margin-top:8px"><input type="checkbox" id="at_writes"> Tam istismar: writes + DCSync (tam domain NTLM dump) — yazılı müşteri onayı şart, geri dönüşü olmayabilir</label>`+
+  `<div style="margin-top:10px"><button style="background:var(--red);color:#fff" onclick="startAttack()">&#9876; Attack Mode &amp; Auto Analist Start</button> <span id="at_msg" class="dim"></span></div>`+
+  `</div>`;
+}
+async function startAttack(){
+ const g=id=>{const e=document.getElementById(id);return e?e.value.trim():"";};
+ const pw=(document.getElementById('at_pass')||{}).value||"";
+ if(!g('at_user')||!pw){alert('Kullanıcı ve parola gerekli (yetkili test hesabı).');return;}
+ if(document.getElementById('at_writes').checked && !confirm('TAM İSTİSMAR (writes + DCSync) etkinleştirilecek. Yazılı müşteri onayınız var mı?'))return;
+ const body={job:JOB,domain:g('at_domain'),dc:g('at_dc'),ip:g('at_dc'),user:g('at_user'),password:pw,
+  reviewer:g('at_reviewer'),writes:document.getElementById('at_writes').checked};
+ document.getElementById('at_msg').textContent='başlatılıyor…';
+ const r=await fetch('/api/attack?t='+T,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+ const d=await r.json();
+ if(!d.job){document.getElementById('at_msg').textContent='hata: '+(d.error||'?');return;}
+ if(timer)clearInterval(timer);
+ JOB=d.job;
+ document.getElementById('done').style.display='none';
+ document.getElementById('log').innerHTML='';
+ document.getElementById('progress').style.display='block';
+ timer=setInterval(poll,1200);poll();
 }
 function stat(n,l){return `<div class="stat"><div class="n">${esc(n)}</div><div class="l">${esc(l)}</div></div>`;}
 function deviceTable(devs){
@@ -410,6 +469,26 @@ class Handler(BaseHTTPRequestHandler):
             job_id = _new_job()
             threading.Thread(target=_run_job, args=(job_id, form), daemon=True).start()
             return self._send(200, json.dumps({"job": job_id}))
+        if parsed.path == "/api/attack":
+            length = int(self.headers.get("Content-Length", "0") or "0")
+            try:
+                body = json.loads(self.rfile.read(length).decode("utf-8")) if length else {}
+            except (ValueError, UnicodeDecodeError):
+                return self._send(400, json.dumps({"error": "bad_json"}))
+            if not isinstance(body, dict):
+                return self._send(400, json.dumps({"error": "bad_form"}))
+            src = body.get("job", "")
+            with _LOCK:
+                data = _JOBS.get(src)
+            run_dir = (data or {}).get("result", {}).get("run_dir") if data else None
+            if not run_dir or not Path(run_dir).is_dir():
+                return self._send(400, json.dumps({"error": "no_run_dir"}))
+            opts = {k: body.get(k) for k in ("dc", "domain", "user", "password", "hashes", "reviewer")}
+            opts["writes"] = bool(body.get("writes"))
+            opts["dc_ip"] = body.get("dc_ip") or body.get("ip")
+            attack_job = _new_job()
+            threading.Thread(target=_run_attack_job, args=(attack_job, run_dir, opts), daemon=True).start()
+            return self._send(200, json.dumps({"job": attack_job}))
         if parsed.path == "/api/open":
             job = query.get("job", [""])[0]
             with _LOCK:
