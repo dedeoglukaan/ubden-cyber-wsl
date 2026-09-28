@@ -24,6 +24,7 @@ import hashlib
 import json
 import re
 import ssl
+import urllib.error
 import urllib.request
 from pathlib import Path
 
@@ -125,22 +126,44 @@ def _call_claude(api_key, model, system, user_obj, request_fn=None, max_tokens=M
         opener = urllib.request.build_opener(urllib.request.ProxyHandler({}), _NoRedirect(),
                                              urllib.request.HTTPSHandler(context=ssl.create_default_context()))
         request_fn = lambda request: opener.open(request, timeout=90)
-    with request_fn(req) as response:
-        if response.status != 200:
-            raise ValueError(f"Claude API HTTP {response.status}")
-        raw = response.read(400001)
-        if len(raw) > 400000:
-            raise ValueError("Claude yanıtı sınırı aştı")
+    # Surface API errors instead of hiding them: a 4xx/5xx (bad key, unknown model,
+    # rate/credit) makes urllib raise HTTPError — re-raise with the response body so
+    # the reason reaches AI_OPERATOR.json rather than a silent "0 findings".
+    try:
+        with request_fn(req) as response:
+            status = getattr(response, "status", 200)
+            raw = response.read(400001)
+    except urllib.error.HTTPError as exc:
+        detail = ""
+        try:
+            detail = exc.read(2000).decode("utf-8", "replace")
+        except Exception:
+            detail = ""
+        detail = re.sub(r'"?api[_-]?key"?\s*:\s*"[^"]*"', '', detail)  # never echo a key
+        raise ValueError(f"Claude API HTTP {exc.code}: {detail[:400]}") from None
+    except urllib.error.URLError as exc:
+        raise ValueError(f"Claude API'ye ulaşılamadı: {getattr(exc, 'reason', exc)}") from None
+    if status != 200:
+        raise ValueError(f"Claude API HTTP {status}")
+    if len(raw) > 400000:
+        raise ValueError("Claude yanıtı sınırı aştı")
     data = json.loads(raw)
+    stop = str(data.get("stop_reason", ""))
     content = "\n".join(str(b.get("text", "")) for b in data.get("content", []) if b.get("type") == "text")
     content = content.strip().removeprefix("```json").removeprefix("```").removesuffix("```").strip()
+    if not content:
+        raise ValueError(f"Claude yanıtında metin yok (stop_reason={stop or '?'})")
     try:
-        parsed = json.loads(content)
+        return json.loads(content)
     except (json.JSONDecodeError, ValueError):
-        # Recover the first JSON object if the model wrapped it in prose.
-        match = re.search(r"\{.*\}", content, re.S)
-        parsed = json.loads(match.group(0)) if match else {}
-    return parsed if isinstance(parsed, dict) else {}
+        match = re.search(r"\{.*\}", content, re.S)  # recover a JSON object wrapped in prose
+        if match:
+            try:
+                return json.loads(match.group(0))
+            except (json.JSONDecodeError, ValueError):
+                pass
+    hint = " (max_tokens'e takılmış olabilir)" if stop == "max_tokens" else ""
+    raise ValueError(f"Claude yanıtı JSON olarak ayrıştırılamadı{hint}: {content[:200]}")
 
 
 # --------------------------------------------------------------------------- #

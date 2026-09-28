@@ -55,3 +55,15 @@ class WinProcTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class ExitClassifyTests(unittest.TestCase):
+    def test_benign_no_service_and_review_not_error(self):
+        import win_proc
+        self.assertEqual(win_proc._classify_exit("curl", 0)[0], "ok")
+        self.assertEqual(win_proc._classify_exit("curl", 7)[0], "no_response")   # connect refused
+        self.assertEqual(win_proc._classify_exit("curl", 28)[0], "no_response")  # timeout
+        self.assertEqual(win_proc._classify_exit("ping", 1)[0], "no_response")   # no reply
+        self.assertEqual(win_proc._classify_exit("curl", 60)[0], "review")       # TLS cert / IP
+        self.assertEqual(win_proc._classify_exit("curl", 22)[0], "error")        # real HTTP error
+        self.assertEqual(win_proc._classify_exit("nmap", 1)[0], "error")         # other tool non-zero

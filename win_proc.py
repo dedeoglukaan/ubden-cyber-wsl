@@ -92,6 +92,24 @@ def web_budget_wait() -> None:
         _web_next[0] = max(_web_next[0], time.monotonic()) + 0.2
 
 
+def _classify_exit(base, code):
+    """Map a tool exit code to (status, detail). Benign "no service" outcomes during a
+    broad sweep must NOT be counted as errors (they otherwise drown real failures and
+    alarm the reader). curl 5/6/7/28 = DNS/connect/timeout; ping non-zero = no reply ->
+    no_response. curl 35/52/60 = live service but empty/TLS-cert issue (recovered by the
+    --insecure retry) -> review. Everything else non-zero -> error."""
+    if code == 0:
+        return "ok", ""
+    if base == "ping":
+        return "no_response", "ICMP yaniti yok; TCP servis bulgulari bundan etkilenmez"
+    if base == "curl" and code in (5, 6, 7, 28):
+        return "no_response", "Baglanti kurulamadi/zaman asimi; bu portta servis yok sayilir"
+    if base == "curl" and code in (35, 52, 60):
+        return "review", ("TLS/HTTP yaniti dogrulanamadi (sertifika IP ile eslesmeyebilir veya bos "
+                          "yanit); servis acik, --insecure denemesiyle incelenir")
+    return "error", ""
+
+
 def run(name, argv, folder, events, timeout=900, stop_on=(), on_tick=None):
     """Run ``argv`` writing ``<name>.txt`` into ``folder`` and append a record.
 
@@ -150,13 +168,10 @@ def run(name, argv, folder, events, timeout=900, stop_on=(), on_tick=None):
                     else:
                         record.update(status="timeout", detail=f"{timeout} saniye aşıldı")
                 else:
-                    record.update(status="ok" if code == 0 else "error", exit_code=code)
-                    if base == "curl" and code == 60:
-                        record["detail"] = ("TLS sertifikasi istenen IP/alan adiyla eslesmiyor; "
-                                            "TCP ve TLS erisimi ayri degerlendirilir")
-                    elif base == "curl" and code == 52:
-                        record["detail"] = ("Baglanti kuruldu fakat HTTP yaniti bos; "
-                                            "acik port atlanmis sayilmaz")
+                    status, detail = _classify_exit(base, code)
+                    record.update(status=status, exit_code=code)
+                    if detail:
+                        record["detail"] = detail
         except (OSError, ValueError) as exc:
             record.update(status="error", detail=str(exc))
     record.update(finished_at=now(), seconds=round(time.monotonic() - started, 2))

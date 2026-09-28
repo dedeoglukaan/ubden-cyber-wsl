@@ -1106,7 +1106,12 @@ def pdf(root, filename, meta, steps, hosts, findings, review, executive=False):
                 for f in top),st['SmallX']))
     else:
         story.append(P('Analist tarafından doğrulanmış bulgu bulunmuyor; aşağıdaki gözlemler inceleme adayıdır.',st['BodyX']))
-    story.append(P(f'Doğrulanmayı bekleyen bulgu: {len(pending)}. Tamamlanan adım: {sum(s.get("status")=="ok" for s in steps)}. Hatalı/eksik/atlanan adım: {sum(s.get("status") not in ("ok","excluded") for s in steps)}.',st['BodyX']))
+    _done=sum(s.get("status")=="ok" for s in steps)
+    _hard=sum(s.get("status") in ("error","timeout","blocked") for s in steps)
+    _benign=sum(s.get("status") in ("no_response","review","skipped","missing_tool","not_applicable","excluded","mismatch") for s in steps)
+    story.append(P(f'Doğrulanmayı bekleyen bulgu: {len(pending)}. Tamamlanan adım: {_done}. '
+                   f'Gerçek hata / zaman aşımı: {_hard}. Beklenen sonuç (servis yok / inceleme / atlanan): {_benign}. '
+                   '“Servis yok” ve “TLS-IP uyuşmazlığı” geniş ağ taramasında normaldir; hata sayılmaz.',st['BodyX']))
     corr=json.loads((root/'UBDEN_CORRELATION.json').read_text(encoding='utf-8')) if (root/'UBDEN_CORRELATION.json').is_file() else {}
     if corr and (corr.get('correlations') or corr.get('graph',{}).get('nodes')):
         story.append(P('Çapraz-katman maruziyet analizi',st['SectionX']))

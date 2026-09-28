@@ -922,8 +922,8 @@ def recover_http_probe(name, argv, result, raw, events, target, ip, scheme, allo
     request=argv
     unverified=False
     if scheme=='https' and is_ip(target) and result.get('exit_code')==60:
-        events.append({'step':'tls_identity','target':ip,'status':'mismatch',
-            'detail':'IP hedefinin TLS sertifikasi IP adresiyle eslesmiyor; HTTP gozlemi icin kimlik dogrulamasi devre disi bir kez denenecek'})
+        events.append({'step':'tls_identity','target':ip,'status':'review',
+            'detail':'Beklenen durum: IP hedefinin TLS sertifikasi IP adresiyle eslesmez (sertifikalar host adina verilir); HTTP gozlemi icin kimlik dogrulamasi devre disi bir kez denenecek. Bu bir hata degildir.'})
         UI.say(f'  {ip}: TCP/443 ve TLS ayri kaydedildi; sertifika IP ile eslesmiyor. HTTP basliklari dogrulamasiz tek denemeyle kontrol edilecek.','yellow')
         request=argv[:-1]+['--insecure',argv[-1]]
         current=command(name+'_tls_unverified',request,raw,events,25)

@@ -126,6 +126,30 @@ class RunTests(unittest.TestCase):
         self.assertEqual(status["status"], "failed")
         self.assertTrue((root / "AI_OPERATOR.json").is_file())
 
+    def test_http_error_reason_is_surfaced(self):
+        import io, urllib.error
+        root = _run_dir()
+        def http400(req):
+            raise urllib.error.HTTPError(req.full_url, 400, "Bad Request", {},
+                                         io.BytesIO(b'{"error":{"message":"model: unknown model"}}'))
+        status = ai_operator.run(root, META, [], {"key": "sk", "enable_actions": False, "request_fn": http400})
+        self.assertEqual(status["status"], "failed")
+        self.assertIn("400", status.get("error", ""))
+        self.assertIn("unknown model", status.get("error", ""))
+
+    def test_empty_response_is_reported_not_silent(self):
+        # 200 OK but no text blocks -> must fail loudly, not "completed with 0 findings".
+        class Empty:
+            status = 200
+            def __enter__(self): return self
+            def __exit__(self, *a): return False
+            def read(self, n=-1): return json.dumps({"content": [], "stop_reason": "end_turn"}).encode()
+        root = _run_dir()
+        status = ai_operator.run(root, META, [], {"key": "sk", "enable_actions": False,
+                                                  "request_fn": lambda req: Empty()})
+        self.assertEqual(status["status"], "failed")
+        self.assertIn("metin yok", status.get("error", ""))
+
 
 if __name__ == "__main__":
     unittest.main()
