@@ -89,6 +89,60 @@ def _run_attack_job(job_id: str, run_dir: str, opts: dict) -> None:
             _JOBS[job_id]["status"] = "error"
 
 
+def _runs_base() -> Path:
+    try:
+        return win_scan.choose_run_base()
+    except Exception:
+        return Path(os.environ.get("LOCALAPPDATA", str(Path.home()))) / "UBDEN-Cyber" / "Reports"
+
+
+def _resolve_run_name(name: str):
+    """Resolve a run FOLDER NAME to an absolute path under the reports base (no traversal).
+    Lets a post-reboot session target a past scan without any in-memory job."""
+    if not name or "/" in name or "\\" in name or ".." in name:
+        return None
+    base = _runs_base().resolve()
+    target = (base / name).resolve()
+    try:
+        if os.path.commonpath([str(base), str(target)]) != str(base):
+            return None
+    except ValueError:
+        return None
+    return target if target.is_dir() else None
+
+
+def _list_runs():
+    """Past scan folders (newest first) with light metadata for the 'geçmiş taramalar' panel."""
+    base = _runs_base()
+    runs = []
+    try:
+        dirs = [d for d in base.iterdir() if d.is_dir()]
+    except OSError:
+        return runs
+    for d in sorted(dirs, key=lambda p: p.stat().st_mtime, reverse=True)[:100]:
+        info = {"name": d.name, "client": "", "project": "", "targets": [],
+                "hosts": 0, "mac": 0, "has_report": (d / "REPORT.html").is_file(), "ts": ""}
+        try:
+            meta = json.loads((d / "engagement.json").read_text(encoding="utf-8"))
+            info["client"] = str(meta.get("client", ""))[:80]
+            info["project"] = str(meta.get("project", ""))[:80]
+            info["targets"] = [str(t) for t in meta.get("targets", [])][:8]
+            info["ts"] = str(meta.get("finished_at") or meta.get("started_at") or "")[:19]
+            ad = meta.get("ad") if isinstance(meta.get("ad"), dict) else {}
+            info["dc"] = str(ad.get("dc", ""))[:60]
+            info["domain"] = str(ad.get("domain", ""))[:80]
+        except (OSError, ValueError):
+            pass
+        try:
+            inv = json.loads((d / "DEVICE_INVENTORY.json").read_text(encoding="utf-8"))
+            info["hosts"] = inv.get("host_count", 0)
+            info["mac"] = inv.get("mac_count", 0)
+        except (OSError, ValueError):
+            pass
+        runs.append(info)
+    return runs
+
+
 # The page is a plain string with a single __TOKEN__ placeholder (str.replace,
 # NOT str.format) — so braces below are literal CSS/JS braces.
 PAGE = """<!doctype html><html lang="tr"><head><meta charset="utf-8">
@@ -174,6 +228,9 @@ border-left:3px solid var(--teal);border-radius:8px;padding:11px 16px;color:var(
 <main>
 <div class="card" id="hostcard"><div class="eyebrow">Bu Makine — Test Bilgisayarı</div>
 <div id="hostgrid" class="hostgrid"><div class="v">Bilgiler yükleniyor…</div></div></div>
+<details class="card" id="runsCard"><summary style="cursor:pointer;color:var(--teal);font-family:'IBM Plex Mono',monospace">&#9876; Geçmiş taramalar — Attack Mode başlat / rapor aç</summary>
+<div class="hint">Yeniden başlatma sonrası bile: eski bir taramayı seçip yeni tarama yapmadan saldırı aşamasını başlatabilir veya raporunu açabilirsiniz.</div>
+<div id="runs" style="margin-top:10px">yükleniyor…</div></details>
 <div class="card"><div class="row">
 <div><label>Musteri</label><input id="client" placeholder="Musteri adi"></div>
 <div><label>Proje</label><input id="project" placeholder="Gorev adi"></div>
@@ -246,10 +303,27 @@ border-left:3px solid var(--teal);border-radius:8px;padding:11px 16px;color:var(
 <div id="log"></div>
 <div id="done" style="display:none;margin-top:12px"></div>
 </div>
+<div id="attackform" style="display:none"></div>
 </main>
 <script>
 const T="__TOKEN__";
 function kv(k,v){return `<div><div class="k">${esc(k)}</div><div class="v">${esc(v||"—")}</div></div>`;}
+async function loadRuns(){
+ const el=document.getElementById("runs");
+ let runs=[];
+ try{const r=await fetch("/api/runs?t="+T);const d=await r.json();runs=d.runs||[];}
+ catch(e){el.innerHTML="<p class='l-warn'>Liste alınamadı.</p>";return;}
+ if(!runs.length){el.innerHTML="<p class='dim'>Kayıtlı tarama yok.</p>";return;}
+ el.innerHTML=runs.map(x=>{
+  const rep=x.has_report?`<a class="sec" style="padding:6px 10px" href="/r/REPORT.html?t=${T}&run=${encodeURIComponent(x.name)}" target="_blank">Rapor</a> `:"";
+  const tg=(x.targets||[]).join(", ");
+  return `<div class="lane"><div style="flex:1;min-width:0">`+
+   `<b>${esc(x.client||x.name)}</b> <span class="dim">${esc(x.project||"")}</span><br>`+
+   `<span class="dim mono">${esc(x.name)}</span> · ${esc(tg)} · ${esc(x.hosts||0)} cihaz${x.ts?(" · "+esc(x.ts)):""}</div>`+
+   rep+
+   `<button style="background:var(--red);color:#fff;padding:6px 10px" onclick="openAttackForm('${esc(x.name)}','${esc(x.dc||"")}','${esc(x.domain||"")}')">&#9876; Attack</button></div>`;
+ }).join("");
+}
 async function loadAdapters(){
  let d={};
  try{const r=await fetch("/api/adapters?t="+T);d=await r.json();}catch(e){}
@@ -339,7 +413,7 @@ async function showDone(d){const el=document.getElementById("done");el.style.dis
  out+=`<a href="#" onclick="openFolder();return false;">Klasörü aç</a></p>`;}
  else{out+=`<p class="l-warn">Rapor üretilemedi; ilerleme kaydını inceleyin.</p>`;}
  el.innerHTML=out;
- if(d.result&&d.result.run_dir){el.insertAdjacentHTML("beforeend",attackPanel());}
+ if(d.result&&d.result.run_dir){el.insertAdjacentHTML("beforeend",`<p><button style="background:var(--red);color:#fff" onclick="openAttackForm('','','')">&#9876; Attack Mode &amp; Auto Analist</button></p>`);}
  // Rich device results from DEVICE_INVENTORY.json (category-grouped, like the report).
  try{
  const r=await fetch(`/r/DEVICE_INVENTORY.json?t=${T}&job=${JOB}`);const inv=await r.json();
@@ -354,13 +428,15 @@ async function showDone(d){const el=document.getElementById("done");el.style.dis
  toast(`${devs.length} cihaz, ${inv.mac_count||0} MAC tespit edildi`);
  }catch(e){}
 }
-function attackPanel(){
+function attackPanelHTML(runName,pdc,pdomain){
  const g=id=>{const e=document.getElementById(id);return e?e.value.trim():"";};
+ const dom=pdomain||g('ad_domain'), dc=pdc||g('ad_dc');
  return `<div class="card" style="margin-top:14px;border-color:var(--red)">`+
-  `<h3 style="margin-top:0;color:var(--red)">&#9876; Attack Mode &amp; Auto Analist</h3>`+
-  `<p class="hint">Opsiyonel, %100 izole saldırı aşaması. Taramada bulunan hostlara karşı Kali/WSL'de gerçek AD saldırı zinciri (kerberoast, AS-REP, ADCS, BloodHound, SMB) çalışır ve bulguları AYNI rapora işler. Kapsam, görevin dondurulmuş hedefleridir. Varsayılan salt-okunur.</p>`+
-  `<div class="row"><div><label>Domain</label><input id="at_domain" value="${esc(g('ad_domain'))}"></div>`+
-  `<div><label>DC IP / ad</label><input id="at_dc" value="${esc(g('ad_dc'))}"></div></div>`+
+  `<input type="hidden" id="at_run" value="${esc(runName||'')}">`+
+  `<h3 style="margin-top:0;color:var(--red)">&#9876; Attack Mode &amp; Auto Analist${runName?(' — '+esc(runName)):''}</h3>`+
+  `<p class="hint">Opsiyonel, %100 izole saldırı aşaması. Seçilen taramada bulunan hostlara karşı Kali/WSL'de gerçek AD saldırı zinciri (kerberoast, AS-REP, ADCS, BloodHound, SMB) çalışır ve bulguları AYNI rapora işler. Kapsam, görevin dondurulmuş hedefleridir. Varsayılan salt-okunur.</p>`+
+  `<div class="row"><div><label>Domain</label><input id="at_domain" value="${esc(dom)}"></div>`+
+  `<div><label>DC IP / ad</label><input id="at_dc" value="${esc(dc)}"></div></div>`+
   `<div class="row"><div><label>Kullanıcı (yetkili test hesabı)</label><input id="at_user" value="${esc(g('ad_user'))}"></div>`+
   `<div><label>Parola</label><input id="at_pass" type="password" value="${esc(g('ad_pass'))}"></div></div>`+
   `<div><label>Analist imzası (rapora işlenir)</label><input id="at_reviewer" value="${esc(g('tester'))}"></div>`+
@@ -368,13 +444,20 @@ function attackPanel(){
   `<div style="margin-top:10px"><button style="background:var(--red);color:#fff" onclick="startAttack()">&#9876; Attack Mode &amp; Auto Analist Start</button> <span id="at_msg" class="dim"></span></div>`+
   `</div>`;
 }
+function openAttackForm(runName,pdc,pdomain){
+ const f=document.getElementById('attackform');
+ f.innerHTML=attackPanelHTML(runName,pdc,pdomain);
+ f.style.display='block';f.scrollIntoView({behavior:'smooth',block:'center'});
+}
 async function startAttack(){
  const g=id=>{const e=document.getElementById(id);return e?e.value.trim():"";};
  const pw=(document.getElementById('at_pass')||{}).value||"";
  if(!g('at_user')||!pw){alert('Kullanıcı ve parola gerekli (yetkili test hesabı).');return;}
  if(document.getElementById('at_writes').checked && !confirm('TAM İSTİSMAR (writes + DCSync) etkinleştirilecek. Yazılı müşteri onayınız var mı?'))return;
- const body={job:JOB,domain:g('at_domain'),dc:g('at_dc'),ip:g('at_dc'),user:g('at_user'),password:pw,
+ const runName=(document.getElementById('at_run')||{}).value||"";
+ const body={domain:g('at_domain'),dc:g('at_dc'),ip:g('at_dc'),user:g('at_user'),password:pw,
   reviewer:g('at_reviewer'),writes:document.getElementById('at_writes').checked};
+ if(runName){body.run=runName;}else{body.job=JOB;}
  document.getElementById('at_msg').textContent='başlatılıyor…';
  const r=await fetch('/api/attack?t='+T,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
  const d=await r.json();
@@ -423,7 +506,7 @@ async function openFolder(){await fetch("/api/open?t="+T+"&job="+JOB,{method:"PO
 function v(id){return document.getElementById(id).value;}
 function c(id){return document.getElementById(id).value.trim();}
 function esc(s){return (s+"").replace(/[&<>]/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;"}[m]));}
-document.getElementById("go").addEventListener("click",start);loadAdapters();
+document.getElementById("go").addEventListener("click",start);loadAdapters();loadRuns();
 </script></body></html>"""
 
 
@@ -459,6 +542,8 @@ class Handler(BaseHTTPRequestHandler):
             return self._send(403, json.dumps({"error": "forbidden"}))
         if parsed.path == "/api/adapters":
             return self._send(200, json.dumps(win_scan.windows_inventory()))
+        if parsed.path == "/api/runs":
+            return self._send(200, json.dumps({"runs": _list_runs()}))
         if parsed.path == "/api/status":
             job = query.get("job", [""])[0]
             with _LOCK:
@@ -493,10 +578,17 @@ class Handler(BaseHTTPRequestHandler):
                 return self._send(400, json.dumps({"error": "bad_json"}))
             if not isinstance(body, dict):
                 return self._send(400, json.dumps({"error": "bad_form"}))
-            src = body.get("job", "")
-            with _LOCK:
-                data = _JOBS.get(src)
-            run_dir = (data or {}).get("result", {}).get("run_dir") if data else None
+            # Target either an in-memory scan job OR a past run folder by name (so a
+            # post-reboot session can attack a previous scan with no live job).
+            run_name = body.get("run", "")
+            if run_name:
+                resolved = _resolve_run_name(run_name)
+                run_dir = str(resolved) if resolved else None
+            else:
+                src = body.get("job", "")
+                with _LOCK:
+                    data = _JOBS.get(src)
+                run_dir = (data or {}).get("result", {}).get("run_dir") if data else None
             if not run_dir or not Path(run_dir).is_dir():
                 return self._send(400, json.dumps({"error": "no_run_dir"}))
             opts = {k: body.get(k) for k in ("dc", "domain", "user", "password", "hashes", "reviewer")}
@@ -537,10 +629,15 @@ class Handler(BaseHTTPRequestHandler):
         return self._send(404, json.dumps({"error": "not_found"}))
 
     def _serve_report(self, parsed, query):
-        job = query.get("job", [""])[0]
-        with _LOCK:
-            data = _JOBS.get(job)
-        run_dir = (data or {}).get("result", {}).get("run_dir") if data else None
+        run_name = query.get("run", [""])[0]
+        if run_name:
+            resolved = _resolve_run_name(run_name)  # past run by folder name
+            run_dir = str(resolved) if resolved else None
+        else:
+            job = query.get("job", [""])[0]
+            with _LOCK:
+                data = _JOBS.get(job)
+            run_dir = (data or {}).get("result", {}).get("run_dir") if data else None
         if not run_dir:
             return self._send(404, "Rapor hazir degil", "text/plain; charset=utf-8")
         base = Path(run_dir).resolve()

@@ -36,6 +36,16 @@ class WebappHandlerTests(unittest.TestCase):
         except urllib.error.HTTPError as exc:
             return exc.code, exc.read()
 
+    def _post(self, path, data=b""):
+        url = f"http://127.0.0.1:{self.port}{path}"
+        req = urllib.request.Request(url, data=data, method="POST",
+                                     headers={"Content-Type": "application/json"})
+        try:
+            with urllib.request.urlopen(req, timeout=5) as resp:
+                return resp.status, resp.read()
+        except urllib.error.HTTPError as exc:
+            return exc.code, exc.read()
+
     def test_binds_loopback_only(self):
         self.assertEqual(self.host, "127.0.0.1")
 
@@ -58,6 +68,45 @@ class WebappHandlerTests(unittest.TestCase):
     def test_report_without_job_is_not_found(self):
         code, _ = self._get(f"/r/REPORT.html?t={webapp.TOKEN}&job=none")
         self.assertEqual(code, 404)
+
+    def test_api_runs_requires_token_and_returns_list(self):
+        self.assertEqual(self._get("/api/runs")[0], 403)
+        import json
+        code, body = self._get(f"/api/runs?t={webapp.TOKEN}")
+        self.assertEqual(code, 200)
+        self.assertIn("runs", json.loads(body))
+
+    def test_attack_with_traversal_run_name_rejected(self):
+        import json
+        code, body = self._post(f"/api/attack?t={webapp.TOKEN}",
+                                 json.dumps({"run": "..\\evil", "user": "u", "password": "p"}).encode())
+        self.assertEqual(code, 400)  # no thread spawned; _resolve_run_name blocks traversal
+
+
+class RunHelperTests(unittest.TestCase):
+    def setUp(self):
+        import os
+        import tempfile
+        self._prev = os.environ.get("LOCALAPPDATA")
+        self._tmp = tempfile.mkdtemp()
+        os.environ["LOCALAPPDATA"] = self._tmp
+
+    def tearDown(self):
+        import os
+        if self._prev is not None:
+            os.environ["LOCALAPPDATA"] = self._prev
+
+    def test_list_and_resolve_and_block_traversal(self):
+        import json
+        base = Path(self._tmp) / "UBDEN-Cyber" / "Reports" / "PENTEST_demo"
+        base.mkdir(parents=True)
+        (base / "engagement.json").write_text(json.dumps(
+            {"client": "C", "project": "P", "targets": ["10.0.0.0/24"]}), encoding="utf-8")
+        names = [r["name"] for r in webapp._list_runs()]
+        self.assertIn("PENTEST_demo", names)
+        self.assertIsNotNone(webapp._resolve_run_name("PENTEST_demo"))
+        for bad in ("../x", "..\\x", "a/b", "sub\\dir", "nonexistent"):
+            self.assertIsNone(webapp._resolve_run_name(bad))
 
 
 if __name__ == "__main__":
