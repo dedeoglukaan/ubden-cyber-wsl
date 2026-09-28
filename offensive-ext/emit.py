@@ -111,8 +111,17 @@ def emit_findings(run_dir: str, findings: list[dict], reviewer: str = "") -> dic
             verified += 1
     os.umask(0o077)
     rpath = os.path.join(run_dir, "review.json")
-    with open(rpath, "w", encoding="utf-8") as fh:
+    # Atomic write: an interrupted write must never truncate/corrupt the analyst
+    # ledger produced by the UBDEN scan. Write a temp file then os.replace().
+    tpath = rpath + ".offensive.tmp"
+    with open(tpath, "w", encoding="utf-8") as fh:
         json.dump(review, fh, indent=2, ensure_ascii=False)
+        fh.flush()
+        try:
+            os.fsync(fh.fileno())
+        except OSError:
+            pass
+    os.replace(tpath, rpath)
     try:
         os.chmod(rpath, 0o600)  # review.json can hold sensitive finding detail
     except OSError:

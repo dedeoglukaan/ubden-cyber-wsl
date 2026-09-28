@@ -24,7 +24,9 @@ import attack, parse, score, attck, narrate, coverage, emit, remediation  # noqa
 
 STAGE_ORDER = {"unauth_smb": 0, "gpp_password": 1, "asrep_roast": 1, "kerberoast": 1,
                "cracked_credential": 2, "default_creds": 2, "local_admin": 3,
-               "coercion": 4, "adcs_esc": 4, "dcsync": 5}
+               "coercion": 4, "adcs_esc": 4, "dcsync": 5,
+               # parse.py emits typed ADCS variants; order them with the family.
+               "adcs_esc_direct": 4, "adcs_esc_chain": 4, "adcs_esc_acl": 4}
 
 
 def dedupe_findings(findings):

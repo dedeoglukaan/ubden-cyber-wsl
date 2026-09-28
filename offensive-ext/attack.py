@@ -98,19 +98,25 @@ def load_scope(path: str):
             s = line.split("#", 1)[0].strip()
             if not s or s.startswith("-"):
                 continue
+            # strict=True: a line like 10.0.0.5/24 (host bits set) must NOT be silently
+            # widened to a /24 — that would pull 255 unauthorized hosts into scope. Reject it.
             try:
-                nets.append(ipaddress.ip_network(s, strict=False))
+                nets.append(ipaddress.ip_network(s, strict=True))
                 continue
             except ValueError:
                 pass
             try:
                 ip = ipaddress.ip_address(s)
-                nets.append(ipaddress.ip_network(f"{s}/{'128' if ip.version == 6 else '32'}", strict=False))
+                nets.append(ipaddress.ip_network(f"{s}/{'128' if ip.version == 6 else '32'}", strict=True))
                 continue
             except ValueError:
                 pass
             if _HOSTNAME_RE.match(s):
                 hosts.add(s.lower())
+                continue
+            # Fail closed: an unparseable / host-bit scope line aborts rather than
+            # silently dropping (or widening) — the operator must fix the allowlist.
+            raise ValueError(f"Kapsam dosyasinda gecersiz satir (kapsam sessizce genisletilmez): {s!r}")
     return nets, hosts
 
 

@@ -44,6 +44,14 @@ _DESC_TR = {
 }
 
 
+def _fam(t: str) -> str:
+    """Collapse typed variants to their narrative family. parse.py emits
+    adcs_esc_direct/chain/acl (score.py keeps them distinct for CVSS), but the
+    kill-chain narrative and stage lookups key on the base 'adcs_esc'."""
+    t = t or ""
+    return "adcs_esc" if t.startswith("adcs_esc") else t
+
+
 def narrate(chain: list[dict], reached_da: bool, lang: str = "tr") -> str:
     """Return a numbered kill-chain narrative for the ordered chain."""
     lines = []
@@ -52,7 +60,7 @@ def narrate(chain: list[dict], reached_da: bool, lang: str = "tr") -> str:
     lines.append("=" * len(header))
     lines.append("")
     for i, f in enumerate(chain, 1):
-        t = f.get("type", "")
+        t = _fam(f.get("type", ""))
         stage = _STAGE_TR.get(t, "Adım")
         desc = _DESC_TR.get(t, f.get("description", "")).format(asset=f.get("asset", "?"))
         sev = (f.get("severity") or "").capitalize()
@@ -72,7 +80,7 @@ def narrate(chain: list[dict], reached_da: bool, lang: str = "tr") -> str:
         lines.append("Sonuç: Zincir Domain Admin'e FİİLEN ulaşmadı (yıkıcı/son adım sözleşme gereği "
                      "çalıştırılmadı); ancak yukarıdaki bulgular birlikte önemli bir risk oluşturur ve "
                      "öncelikle kapatılmalıdır.")
-        if any(f.get("type") in ("adcs_esc", "coercion", "dcsync") for f in chain):
+        if any(_fam(f.get("type")) in ("adcs_esc", "coercion", "dcsync") for f in chain):
             lines.append("Not: ADCS/coercion bulguları Domain Admin'e giden OLASI bir yolu gösterir; bu yol "
                          "istismar edilebilir görünüyor ancak son/yıkıcı adım güvenlik gereği ÇALIŞTIRILMADI, "
                          "yani domain ele geçirme fiilen kanıtlanmadı.")
