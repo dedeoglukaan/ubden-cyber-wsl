@@ -1,12 +1,13 @@
 param(
-    [ValidateSet('run', 'setup', 'status', 'setup-offensive', 'offensive')]
+    [ValidateSet('run', 'setup', 'status', 'setup-offensive', 'offensive', 'destroy')]
     [string] $Action = 'run',
     # Only used by the optional 'offensive' action (offensive-ext via Kali/WSL):
     [string] $RunDir = '',
     [string] $User = '',
     [string] $Domain = '',
     [string] $Dc = '',
-    [switch] $Writes
+    [switch] $Writes,
+    [switch] $Yes   # non-interactive confirm for 'destroy'
 )
 
 # UBDEN uPenetrator - Windows-native (WSL YOK) tarayici arayuzlu tarama motoru.
@@ -147,6 +148,14 @@ function Install-TestMachineMarker {
     $g.DrawString('https://www.ubden.com   |   security@ubden.com', $fFoot, $teal, $x, $y)
     $g.Dispose()
     $bmp.Save($wall, [System.Drawing.Imaging.ImageFormat]::Bmp); $bmp.Dispose()
+    # Onceki duvar kagidini destroy icin sakla (yalniz ilk kez; kendi bmp'mizi kaydetme).
+    try {
+        $prevWall = (Get-ItemProperty -Path 'HKCU:\Control Panel\Desktop' -Name WallPaper -ErrorAction SilentlyContinue).WallPaper
+        $prevFile = Join-Path $StateRoot 'prev-wallpaper.txt'
+        if (($prevWall -ne $wall) -and -not (Test-Path -LiteralPath $prevFile)) {
+            Set-Content -LiteralPath $prevFile -Value ([string]$prevWall) -ErrorAction SilentlyContinue
+        }
+    } catch {}
     try {
         Set-ItemProperty -Path 'HKCU:\Control Panel\Desktop' -Name WallpaperStyle -Value '10' -ErrorAction Stop
         Set-ItemProperty -Path 'HKCU:\Control Panel\Desktop' -Name TileWallpaper -Value '0' -ErrorAction Stop
@@ -179,8 +188,10 @@ function Set-PowerForLongRun {
                         'hibernate-timeout-ac', 'hibernate-timeout-dc', 'disk-timeout-ac', 'disk-timeout-dc') {
             & powercfg.exe /change $t 0 2>$null
         }
-        # Ekran koruyucuyu (ve onun kilit tetigini) kapat.
+        # Ekran koruyucuyu (ve onun kilit tetigini) kapat. Onceki degeri destroy icin sakla.
         try {
+            $prevSaver = (Get-ItemProperty -Path 'HKCU:\Control Panel\Desktop' -Name ScreenSaveActive -ErrorAction SilentlyContinue).ScreenSaveActive
+            if ($null -ne $prevSaver) { Set-Content -LiteralPath (Join-Path $StateRoot 'prev-screensaver.txt') -Value $prevSaver -ErrorAction SilentlyContinue }
             Set-ItemProperty -Path 'HKCU:\Control Panel\Desktop' -Name ScreenSaveActive -Value '0' -ErrorAction Stop
             Set-ItemProperty -Path 'HKCU:\Control Panel\Desktop' -Name ScreenSaveTimeOut -Value '0' -ErrorAction SilentlyContinue
         } catch {}
@@ -448,8 +459,16 @@ function Invoke-SetupOffensive {
     Write-UbdenBanner
     $distro = Get-KaliDistro
     if (-not $distro) {
-        Write-Host '  Kali WSL bulunamadi. offensive-ext Kali/Debian icindir; once Kali WSL kurun' -ForegroundColor Red
-        Write-Host '  (orijinal ubden Kali-WSL kurulumu ile gelir).' -ForegroundColor DarkYellow
+        Write-Host '  Kali WSL bulunamadi. offensive-ext Kali/Debian icindir; Kali WSL kuruluyor...' -ForegroundColor Yellow
+        if (Get-Command wsl.exe -ErrorAction SilentlyContinue) {
+            try { & wsl.exe --install -d kali-linux } catch { Write-Host "  wsl --install hata: $($_.Exception.Message)" -ForegroundColor DarkYellow }
+        } else {
+            Write-Host '  wsl.exe yok. Once WSL2 kurun: yonetici PowerShell -> wsl --install' -ForegroundColor Red
+        }
+        Write-Host ''
+        Write-Host '  ONEMLI: Kali WSL kurulumu genellikle YENIDEN BASLATMA ister ve ilk acilista Kali' -ForegroundColor Yellow
+        Write-Host '  kullanici hesabi olusturmanizi bekler. Yeniden baslatip Kali ilk kurulumu bittikten' -ForegroundColor Yellow
+        Write-Host '  sonra bu komutu TEKRAR calistirin: ubden-win setup-offensive' -ForegroundColor Yellow
         return
     }
     $extWin = Join-Path $SourceRoot 'offensive-ext'
@@ -486,12 +505,93 @@ function Invoke-Offensive {
     & $VenvPython @argv
 }
 
+function Invoke-Destroy {
+    # Windows tarafini VARSAYILANA dondurur: guvenligi geri ac, guc/masaustu ayarlarini
+    # geri al, kurdugumuz venv/araclar/eklentileri sil. Raporlar KORUNUR (teslimat).
+    Invoke-Elevated   # Defender/Guvenlik Duvari geri acmak icin yonetici gerekir
+    Write-UbdenBanner
+    Write-Host '  UBDEN uPenetrator KALDIRMA (destroy)' -ForegroundColor Red
+    Write-Host '  Bu islem: guvenligi geri acar, guc/masaustu ayarlarini varsayilana alir,' -ForegroundColor DarkYellow
+    Write-Host '  venv + araclar + eklentileri siler. RAPORLAR KORUNUR.' -ForegroundColor DarkYellow
+    if (-not $Yes) {
+        $ans = Read-Host '  Devam icin DESTROY yazin'
+        if ($ans -ne 'DESTROY') { Write-Host '  Iptal edildi.' -ForegroundColor Cyan; return }
+    }
+    # 1) Guvenligi geri ac (Disable-SecurityForTesting geri alma).
+    try { Set-MpPreference -DisableRealtimeMonitoring $false -ErrorAction SilentlyContinue } catch {}
+    try { Set-MpPreference -DisableIOAVProtection $false -ErrorAction SilentlyContinue } catch {}
+    try { Set-NetFirewallProfile -Profile Domain, Public, Private -Enabled True -ErrorAction SilentlyContinue }
+    catch { try { & netsh.exe advfirewall set allprofiles state on | Out-Null } catch {} }
+    foreach ($p in @($StateRoot, (Join-Path $StateRoot 'tools'), $Venv, $SourceRoot,
+                     (Join-Path $env:LOCALAPPDATA 'UBDEN-Cyber'))) {
+        try { Remove-MpPreference -ExclusionPath $p -ErrorAction SilentlyContinue } catch {}
+    }
+    foreach ($proc in 'nmap.exe', 'nuclei.exe', 'sslscan.exe', 'python.exe') {
+        try { Remove-MpPreference -ExclusionProcess $proc -ErrorAction SilentlyContinue } catch {}
+    }
+    Write-Host '  Windows Defender gercek-zamanli koruma ve Guvenlik Duvari geri acildi; istisnalar kaldirildi.' -ForegroundColor Green
+    # 2) Guc plani + ekran koruyucuyu geri al.
+    Restore-Power
+    try {
+        $ss = Join-Path $StateRoot 'prev-screensaver.txt'
+        $val = if (Test-Path -LiteralPath $ss) { (Get-Content -LiteralPath $ss | Select-Object -First 1).Trim() } else { '1' }
+        Set-ItemProperty -Path 'HKCU:\Control Panel\Desktop' -Name ScreenSaveActive -Value $val -ErrorAction SilentlyContinue
+    } catch {}
+    Write-Host '  Guc plani ve ekran koruyucu geri alindi.' -ForegroundColor Green
+    # 3) Masaustu / BGInfo isaretini kaldir, onceki duvar kagidini geri getir.
+    try {
+        $pf = Join-Path $StateRoot 'prev-wallpaper.txt'
+        $prev = if (Test-Path -LiteralPath $pf) { (Get-Content -LiteralPath $pf -Raw).Trim() } else { '' }
+        if (-not ([System.Management.Automation.PSTypeName]'UbdenWallpaper').Type) {
+            Add-Type @'
+using System; using System.Runtime.InteropServices;
+public class UbdenWallpaper {
+    [DllImport("user32.dll", SetLastError = true, CharSet = CharSet.Auto)]
+    public static extern bool SystemParametersInfo(int uAction, int uParam, string lpvParam, int fuWinIni);
+}
+'@
+        }
+        [UbdenWallpaper]::SystemParametersInfo(20, 0, $prev, 3) | Out-Null
+        $bmp = Join-Path $StateRoot 'ubden-testmachine.bmp'
+        if (Test-Path -LiteralPath $bmp) { Remove-Item -LiteralPath $bmp -Force -ErrorAction SilentlyContinue }
+    } catch { Write-Host "  Duvar kagidi geri alma atlandi: $($_.Exception.Message)" -ForegroundColor DarkYellow }
+    Write-Host '  Masaustu duvar kagidi / BGInfo paneli kaldirildi.' -ForegroundColor Green
+    # 4) Opsiyonel: Kali'deki offensive-ext eklentisini kaldir.
+    $distro = Get-KaliDistro
+    if ($distro) {
+        if ($Yes -or (Read-Host "  Kali'deki offensive-ext eklentisini de sil? (E/H)") -match '^(e|evet|y|yes)$') {
+            try { & wsl.exe -d $distro -- bash -lic 'rm -rf "$HOME/ubden-offensive"' 2>$null } catch {}
+            Write-Host '  Kali offensive-ext klasoru silindi (apt/pipx araclari elle kaldirilabilir).' -ForegroundColor Green
+        }
+    }
+    # 5) venv + araclar + durum (UBDEN ayak izi). Raporlar KORUNUR.
+    $reports = Join-Path $env:LOCALAPPDATA 'UBDEN-Cyber\Reports'
+    try { if (Test-Path -LiteralPath $StateRoot) { Remove-Item -LiteralPath $StateRoot -Recurse -Force -ErrorAction Stop } } catch {}
+    Write-Host '  venv + araclar + durum dosyalari silindi (%LOCALAPPDATA%\UBDEN).' -ForegroundColor Green
+    if (Test-Path -LiteralPath $reports) {
+        Write-Host "  RAPORLAR KORUNDU: $reports" -ForegroundColor Cyan
+    }
+    # 6) Opsiyonel: winget ile Python/Nmap kaldir (varsayilan HAYIR — sistem araclari).
+    if (-not $Yes -and (Get-Command winget.exe -ErrorAction SilentlyContinue)) {
+        if ((Read-Host '  Python 3.13 ve Nmap/Npcap paketlerini de kaldir? (baska yazilimlari etkileyebilir) (E/H)') -match '^(e|evet|y|yes)$') {
+            foreach ($id in 'Python.Python.3.13', 'Insecure.Nmap') {
+                try { & winget.exe uninstall --exact --id $id --silent | Out-Null } catch {}
+            }
+            Write-Host '  Python/Nmap kaldirma denendi.' -ForegroundColor Green
+        }
+    }
+    Write-Host ''
+    Write-Host '  Destroy tamam. Kurulum dizini (%LOCALAPPDATA%\Programs\UBDEN-Cyber) elle silinebilir.' -ForegroundColor Green
+    Write-Host '  (Bu betik oradan calistigi icin kendini silemez.)' -ForegroundColor DarkYellow
+}
+
 try {
     switch ($Action) {
         'status' { Invoke-Status }
         'setup' { Invoke-Setup }
         'setup-offensive' { Invoke-SetupOffensive }
         'offensive' { Invoke-Offensive }
+        'destroy' { Invoke-Destroy }
         default { Invoke-Run }
     }
 }
