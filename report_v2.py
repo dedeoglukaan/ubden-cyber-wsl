@@ -27,6 +27,7 @@ from analyst_workplan import write_plan
 from device_inventory import build_inventory, CATEGORY_ORDER, CATEGORY_ICONS
 import report_visuals as V
 import correlation as CORR
+import eol_data
 
 BASE = Path(__file__).resolve().parent
 NAVY = colors.HexColor('#101b32')
@@ -490,6 +491,23 @@ def finding_story(root,f,st,width):
     result.append(Spacer(1,6*mm))
     return result
 
+def _parse_smb_shares(output):
+    """Return 'SHARE [access]' strings for shares smb-enum-shares reports as readable/writable."""
+    shares=[]
+    current=None
+    for line in output.splitlines():
+        header=re.match(r'\s*\\\\[^\\]+\\(.+?):\s*$',line)
+        if header:
+            current={'name':header.group(1).strip(),'access':''}
+            shares.append(current)
+            continue
+        if current is not None:
+            access=re.match(r'\s*(?:Anonymous access|Current user access):\s*(.+?)\s*$',line,re.I)
+            if access and re.search(r'READ|WRITE',access.group(1),re.I):
+                current['access']=access.group(1).strip()
+    return [f"{s['name']} [{s['access']}]" for s in shares if s['access']]
+
+
 def read_data(root):
     meta=json.loads((root/'engagement.json').read_text(encoding='utf-8'))
     steps=json.loads((root/'steps.json').read_text(encoding='utf-8')) if (root/'steps.json').exists() else []
@@ -508,7 +526,7 @@ def read_data(root):
                 for port in host.findall('./ports/port'):
                     if port.find('state') is not None and port.find('state').get('state')=='open':
                         service=port.find('service')
-                        ports.append({'port':port.get('portid',''),'protocol':port.get('protocol',''), 'service':service.get('name','') if service is not None else '', 'product':service.get('product','') if service is not None else '', 'version':service.get('version','') if service is not None else ''})
+                        ports.append({'port':port.get('portid',''),'protocol':port.get('protocol',''), 'service':service.get('name','') if service is not None else '', 'product':service.get('product','') if service is not None else '', 'version':service.get('version','') if service is not None else '', 'extrainfo':service.get('extrainfo','') if service is not None else ''})
                 hosts.append({'ip':ip,'ports':ports,'evidence':str(path.relative_to(root))})
         except ET.ParseError:
             steps.append({'step':'parse','status':'error','detail':f'Bozuk Nmap XML: {path.name}'})
@@ -628,6 +646,123 @@ def read_data(root):
                              'impact':'Varsayılan/zayıf kimlik bilgisiyle cihaz veya servis yönetimi ele geçirilebilir.',
                              'recommendation':'Varsayılan hesabı devre dışı bırakın veya güçlü, benzersiz parolayla değiştirin; mümkünse MFA ve yönetim erişim sınırı ekleyin.',
                              'evidence':str(path.relative_to(root))})
+    # --- EOL (kullanım ömrü dolmuş) yazılım: Nmap ürün/sürüm dizelerinden ---
+    for host in hosts:
+        seen_eol=set()
+        for port in host['ports']:
+            hit=eol_data.detect(str(port.get('product','')),str(port.get('version','')),
+                                str(port.get('extrainfo','')))
+            if not hit or hit['name'] in seen_eol:
+                continue
+            seen_eol.add(hit['name'])
+            observations.append({'title':f"{hit['name']} kullanım ömrü (EOL) dolmuş sürüm",
+                'severity':hit['severity'],'asset':f"{host['ip']}:{port['port']}",
+                'description':f"{hit['name']} {hit['matched_version']} sürümü üreticinin desteklediği yaşam döngüsünü doldurmuş görünüyor (EOL tarihi: {hit['eol_date']}). {hit['note']} Sürüm bilgisi Nmap servis tespitinden alınmıştır.",
+                'impact':'Destek dışı yazılım güvenlik yaması alamaz; bilinen açıklıklar kapatılamadan açık kalır.',
+                'recommendation':'Desteklenen bir sürüme yükseltin; mümkün değilse sistemi ağdan yalıtıp telafi edici kontroller uygulayın.',
+                'evidence':host['evidence']})
+    # --- Salt okunur / güvenli NSE betikleri (ftp-anon, telnet, SMB, MSSQL) ---
+    for path in sorted((root/'targets').glob('*/raw/audit_*.xml')) if (root/'targets').exists() else []:
+        try:
+            tree=ET.parse(path)
+        except (ET.ParseError,OSError):
+            continue
+        rel=str(path.relative_to(root))
+        for host in tree.findall('./host'):
+            ip=next((a.get('addr','') for a in host.findall('./address')
+                     if a.get('addrtype') in ('ipv4','ipv6')),path.parent.parent.name)
+            scripts=[]
+            for port in host.findall('./ports/port'):
+                pid=port.get('portid','')
+                for script in port.findall('./script'):
+                    scripts.append((pid,script.get('id',''),script.get('output','')))
+            for script in host.findall('./hostscript/script'):
+                scripts.append(('',script.get('id',''),script.get('output','')))
+            for pid,sid,output in scripts:
+                asset=f"{ip}:{pid}" if pid else ip
+                low=output.lower()
+                if sid=='ftp-anon' and 'anonymous ftp login allowed' in low:
+                    observations.append({'title':'Anonim FTP erişimine izin veriliyor','severity':'medium','asset':asset,
+                        'description':'Nmap ftp-anon betiği anonim (Anonymous) FTP oturumuna izin verildiğini gösterdi. Erişilebilen dizinler ve yazma izni analistçe doğrulanmalıdır.\n'+output.strip()[:600],
+                        'impact':'Kimlik doğrulaması olmadan dosyalara erişim veya yükleme mümkün olabilir; bilgi ifşası ve yetkisiz erişim riski.',
+                        'recommendation':'Anonymous hesabını kaldırın; FTP yerine kimlik doğrulamalı SFTP/FTPS kullanın ve dizin izinlerini sınırlayın.',
+                        'evidence':rel})
+                elif sid=='telnet-encryption' and 'does not support encryption' in low:
+                    observations.append({'title':'Telnet servisi şifreleme desteklemiyor (düz metin)','severity':'medium','asset':asset,
+                        'description':'Nmap telnet-encryption betiği Telnet sunucusunun şifreleme desteklemediğini gösterdi. Telnet oturumu düz metin (plain text) taşır.\n'+output.strip()[:300],
+                        'impact':'Kullanıcı adı, parola ve komutlar ağ trafiği izlenerek (sniffing) elde edilebilir.',
+                        'recommendation':'Telnet servisini kapatıp SSH gibi şifreli bir yönetim kanalına geçin.',
+                        'evidence':rel})
+                elif sid in ('smb-security-mode','smb2-security-mode') and 'message signing' in low and ('disabled' in low or 'not required' in low):
+                    observations.append({'title':'SMB ileti imzalama zorunlu değil','severity':'medium','asset':ip,
+                        'description':'Nmap '+sid+' betiği SMB ileti imzalamanın devre dışı olduğunu veya zorunlu kılınmadığını gösterdi.\n'+output.strip()[:300],
+                        'impact':'İmzalama zorunlu değilse SMB oturumları araya girme (MITM) ve NTLM röle saldırılarına açık olabilir.',
+                        'recommendation':'Sunucu ve istemcilerde SMB imzalamayı grup ilkesiyle zorunlu hale getirin.',
+                        'evidence':rel})
+                elif sid=='smb-enum-shares':
+                    listed=_parse_smb_shares(output)
+                    if listed:
+                        observations.append({'title':'SMB paylaşımlarına erişilebiliyor','severity':'medium','asset':ip,
+                            'description':'Nmap smb-enum-shares betiği erişilebilir paylaşımlar listeledi. Erişim düzeyi (READ/WRITE) ve içerik analistçe doğrulanmalıdır.\nPaylaşımlar: '+('; '.join(listed))[:800],
+                            'impact':'Yetkisiz kullanıcılar hassas dosyalara erişebilir veya yazabilir; bilgi ifşası ve bütünlük riski.',
+                            'recommendation':'Paylaşım ve NTFS izinlerini en az yetki ilkesine göre daraltın; gereksiz paylaşımları kaldırın; anonim/guest erişimini kapatın.',
+                            'evidence':rel})
+                elif sid=='ms-sql-info':
+                    product=re.search(r'(?im)product:\s*(microsoft sql server[^\r\n]*)',output)
+                    number=re.search(r'(?im)version number:\s*([0-9.]+)',output)
+                    if product:
+                        hit=eol_data.detect(product.group(1),number.group(1) if number else '',product.group(1))
+                        if hit:
+                            observations.append({'title':f"{hit['name']} kullanım ömrü (EOL) dolmuş sürüm",
+                                'severity':hit['severity'],'asset':asset,
+                                'description':f"ms-sql-info betiği {product.group(1).strip()} tespit etti; bu sürüm yaşam döngüsünü doldurmuş görünüyor (EOL tarihi: {hit['eol_date']}). {hit['note']}",
+                                'impact':'Destek dışı veritabanı sunucusu güvenlik yaması alamaz.',
+                                'recommendation':'Desteklenen bir MSSQL sürümüne yükseltin; mümkün değilse sunucuyu yalıtın.',
+                                'evidence':rel})
+    # --- Etki alanı politikası bulguları (AD_ASSESSMENT.json'dan) ---
+    ad_json=root/'AD_ASSESSMENT.json'
+    if ad_json.is_file():
+        try:
+            ad=json.loads(ad_json.read_text(encoding='utf-8'))
+        except (ValueError,OSError):
+            ad={}
+        if isinstance(ad,dict) and ad.get('status')=='ok':
+            dom=str(ad.get('domain','etki alanı'))
+            pol=ad.get('password_policy') or {}
+            minlen=pol.get('min_length')
+            if isinstance(minlen,int) and minlen<8:
+                observations.append({'title':'Zayıf etki alanı parola politikası (minimum uzunluk)','severity':'medium','asset':dom,
+                    'description':f"Etki alanı minimum parola uzunluğu {minlen} karakter olarak okundu (LDAP). Önerilen değer en az 12 karakterdir.",
+                    'impact':'Kısa parolalar kaba kuvvet ve tahmin saldırılarına karşı belirgin şekilde zayıftır.',
+                    'recommendation':'Minimum parola uzunluğunu en az 12 karaktere çıkarın ve karmaşıklık ile hesap kilitleme politikalarını birlikte uygulayın.',
+                    'evidence':'AD_ASSESSMENT.json'})
+            if pol.get('complexity_enabled') is False:
+                observations.append({'title':'Etki alanı parola karmaşıklığı zorunlu değil','severity':'medium','asset':dom,
+                    'description':'Etki alanı parola karmaşıklık gereksinimi (pwdProperties) devre dışı okundu.',
+                    'impact':'Karmaşıklık olmadan basit ve tahmin edilebilir parolalar kullanılabilir.',
+                    'recommendation':'Parola karmaşıklık gereksinimini etkinleştirin.',
+                    'evidence':'AD_ASSESSMENT.json'})
+            if pol.get('lockout_threshold')==0:
+                observations.append({'title':'Hesap kilitleme eşiği tanımlı değil','severity':'medium','asset':dom,
+                    'description':'Etki alanı hesap kilitleme eşiği (lockoutThreshold) 0 okundu; başarısız denemelerde hesap kilitlenmez.',
+                    'impact':'Sınırsız parola denemesi kaba kuvvet ve parola püskürtme (password spraying) saldırılarını kolaylaştırır.',
+                    'recommendation':'Makul bir kilitleme eşiği (ör. 5-10 deneme) ve kilit süresi tanımlayın.',
+                    'evidence':'AD_ASSESSMENT.json'})
+            maq=ad.get('machine_account_quota')
+            if isinstance(maq,int) and maq>0:
+                observations.append({'title':'Standart kullanıcı etki alanına makine ekleyebiliyor (MachineAccountQuota)','severity':'medium','asset':dom,
+                    'description':f"ms-DS-MachineAccountQuota değeri {maq} okundu; yetkisiz standart kullanıcılar da etki alanına makine ekleyebilir.",
+                    'impact':'Saldırgan sahte makine hesabı oluşturarak RBCD gibi AD saldırılarına zemin hazırlayabilir.',
+                    'recommendation':'ms-DS-MachineAccountQuota değerini 0 yapın; makine ekleme yetkisini yalnızca yetkili gruplara verin.',
+                    'evidence':'AD_ASSESSMENT.json'})
+            admins=ad.get('domain_admins') or {}
+            count=admins.get('count')
+            if isinstance(count,int) and count>5:
+                observations.append({'title':'Fazla sayıda Domain Admin hesabı','severity':'medium','asset':dom,
+                    'description':f"{admins.get('group','Domain Admins')} grubunda {count} üye görüldü. Ayrıcalıklı hesap sayısının fazla olması saldırı yüzeyini büyütür.",
+                    'impact':'Herhangi bir domain admin hesabının ele geçirilmesi tüm etki alanının ele geçirilmesi anlamına gelir.',
+                    'recommendation':'Domain Admins üyeliğini en aza indirin; ayrıcalıklı erişim için katmanlı model ve JIT/PAM yaklaşımını uygulayın.',
+                    'evidence':'AD_ASSESSMENT.json'})
     deduplicated={}
     for item in observations:
         key=(item['title'],item['asset'],item['severity'])
@@ -876,6 +1011,20 @@ def pdf(root, filename, meta, steps, hosts, findings, review, executive=False):
             story.append(P('MAC görülmedi: hedefler yönlendirici arkasında olabilir; üretici/model bu raporda doğrulanmadı.',st['SmallX']))
         flagged=[item for item in devices['devices'] if item.get('notices') or item.get('review_notes')]
         story.append(P(f'MAC belirsizliği veya hizmet inceleme notu bulunan adres: {len(flagged)}. Bu işaretler doğrulanmış zafiyet değildir.',st['BodyX']))
+        named=[item for item in devices['devices']
+               if item.get('display_name') or item.get('hostnames')]
+        if named:
+            story.append(P('Hostname envanteri',st['SubX']))
+            rows=[[P(x,st['SmallWhiteX']) for x in ('IP adresi','Hostname','Sınıf / MAC')]]
+            for item in named[:60]:
+                name=item.get('display_name') or (item.get('hostnames') or [''])[0] or '—'
+                klass=(item.get('category') or item.get('category_key') or '—')
+                rows.append([P(item.get('ip','—'),st['SmallX'],limit=48),
+                             P(name,st['SmallX'],limit=90),
+                             P(f"{klass}\n{item.get('mac') or 'MAC yok'}",st['SmallX'],limit=90)])
+            story.append(grid_table(rows,[doc.width*.26,doc.width*.42,doc.width*.32]))
+            if len(named)>60:
+                story.append(P(f'... ve {len(named)-60} adres daha; tümü DEVICE_INVENTORY.json içinde.',st['SmallX']))
     if meta.get('auth_probes'):
         story.append(P(auth_summary(meta,steps),st['BodyX']))
     role_note,ai_note,ai_text=advanced_summary(root,meta,steps)
@@ -1201,6 +1350,14 @@ def html_report(root,meta,steps,hosts,findings,review,report_errors=None):
            ' · Ağ geçidi: '+safe(', '.join(gateways) or '—')+'</p>')
     if adp_rows:
         netov+='<table><thead><tr><th>Test makinesi adaptörü</th><th>Durum</th><th>IP sayısı</th><th>Adresler</th></tr></thead><tbody>'+adp_rows+'</tbody></table>'
+    named_rows=''.join('<tr><td><code>'+safe(d.get('ip'))+'</code></td><td>'+
+                       safe(d.get('display_name') or (d.get('hostnames') or [''])[0] or '—')+'</td><td>'+
+                       safe(d.get('category') or d.get('category_key') or '—')+'</td><td><code>'+
+                       safe(d.get('mac') or 'MAC yok')+'</code></td></tr>'
+                       for d in dev_list if d.get('display_name') or d.get('hostnames'))
+    if named_rows:
+        netov+=('<h3>Hostname envanteri</h3><table><thead><tr><th>IP adresi</th><th>Hostname</th>'
+                '<th>Sınıf</th><th>MAC</th></tr></thead><tbody>'+named_rows+'</tbody></table>')
     device_html=('<h2>Cihaz envanteri</h2><p>'+safe(devices.get('limits'))+'</p>'+netov+
                  '<p><a href="DEVICE_INVENTORY.json">Makine tarafından okunabilir envanter (JSON)</a></p>'+
                  group_html) if devices else ''

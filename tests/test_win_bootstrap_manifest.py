@@ -12,8 +12,9 @@ sys.path.insert(0, str(REPO))
 
 WIN_FILES = ["ubden-win.ps1", "windows-bridge.ps1", "webapp.py", "win_scan.py",
              "win_proc.py", "win_tools.py", "report_v2.py", "device_inventory.py",
-             "wizard.py", "service_probes.py", "credential_probes.py", "netbios_probe.py",
-             "ai_operator.py", "web_identify.py", "wifi_scan.py", "requirements.txt"]
+             "wizard.py", "eol_data.py", "service_probes.py", "credential_probes.py",
+             "netbios_probe.py", "ai_operator.py", "web_identify.py", "wifi_scan.py",
+             "requirements.txt"]
 
 
 class WinBootstrapManifestTests(unittest.TestCase):

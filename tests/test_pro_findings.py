@@ -1,0 +1,185 @@
+"""Professional-report finding coverage: EOL, anon-FTP, telnet, SMB, AD policy.
+
+Mirrors the finding types shown in reference Assos-style pentest reports. Each is
+evidence-led: generated as a draft (taslak) observation from recorded evidence.
+"""
+import datetime
+import json
+from pathlib import Path
+import sys
+import tempfile
+import unittest
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
+import eol_data
+import report_v2
+
+
+NMAP_XML = """<?xml version="1.0"?>
+<nmaprun>
+ <host>
+  <address addr="172.16.0.2" addrtype="ipv4"/>
+  <ports>
+   <port protocol="tcp" portid="1433"><state state="open"/>
+    <service name="ms-sql-s" product="Microsoft SQL Server" version="2014" extrainfo="SP3"/></port>
+  </ports>
+ </host>
+ <host>
+  <address addr="10.0.0.20" addrtype="ipv4"/>
+  <ports>
+   <port protocol="tcp" portid="443"><state state="open"/>
+    <service name="https" product="VMware ESXi" version="6.7.0"/></port>
+  </ports>
+ </host>
+</nmaprun>
+"""
+
+AUDIT_XML = ('<?xml version="1.0"?>\n<nmaprun>\n'
+ '<host><address addr="10.0.11.59" addrtype="ipv4"/><ports>'
+ '<port protocol="tcp" portid="21"><state state="open"/>'
+ '<script id="ftp-anon" output="Anonymous FTP login allowed (FTP code 230)"/></port>'
+ '<port protocol="tcp" portid="23"><state state="open"/>'
+ '<script id="telnet-encryption" output="Telnet server does not support encryption"/></port>'
+ '</ports>'
+ '<hostscript>'
+ '<script id="smb2-security-mode" output="Message signing enabled but not required"/>'
+ '<script id="smb-enum-shares" output="  account_used: guest&#10;  \\\\10.0.0.5\\LOGOSQLBACKUP: &#10;    Type: STYPE_DISKTREE&#10;    Anonymous access: READ/WRITE&#10;    Current user access: READ/WRITE"/>'
+ '</hostscript></host>\n</nmaprun>\n')
+
+AD_JSON = {"status": "ok", "domain": "assospharma.local", "dc": "ASSOSPHARMA-DC",
+           "password_policy": {"min_length": 6, "complexity_enabled": True, "lockout_threshold": 0},
+           "machine_account_quota": 10,
+           "domain_admins": {"group": "Domain Admins", "count": 9, "members": ["eset", "Administrator", "tsungur"]}}
+
+
+def _run_dir(with_audit=True, with_ad=True):
+    root = Path(tempfile.mkdtemp())
+    (root / 'engagement.json').write_text(json.dumps({
+        'targets': ['10.0.0.0/16'], 'client': 'Assos', 'project': 'QA',
+        'tester': 'Tester', 'status': 'completed', 'profile': 'network'}), encoding='utf-8')
+    raw = root / 'targets' / 'net' / 'raw'
+    raw.mkdir(parents=True)
+    (raw / 'nmap_net.xml').write_text(NMAP_XML, encoding='utf-8')
+    if with_audit:
+        (raw / 'audit_10.0.11.59.xml').write_text(AUDIT_XML, encoding='utf-8')
+    if with_ad:
+        (root / 'AD_ASSESSMENT.json').write_text(json.dumps(AD_JSON), encoding='utf-8')
+    return root
+
+
+class EolDatasetTests(unittest.TestCase):
+    def test_esxi_and_mssql_past_eol_flagged(self):
+        past = datetime.date(2026, 9, 28)
+        self.assertEqual(eol_data.detect('VMware ESXi', '6.7.0', today=past)['name'], 'VMware ESXi')
+        self.assertEqual(eol_data.detect('Microsoft SQL Server', '2014', today=past)['eol_date'], '2024-07-09')
+
+    def test_supported_release_not_flagged(self):
+        early = datetime.date(2020, 1, 1)
+        self.assertIsNone(eol_data.detect('Microsoft SQL Server', '2019', today=early))
+        self.assertIsNone(eol_data.detect('nginx', '1.24.0', today=early))
+
+    def test_unknown_product_returns_none(self):
+        self.assertIsNone(eol_data.detect('OpenSSH', '8.0'))
+        self.assertIsNone(eol_data.detect('', ''))
+
+
+class ReportFindingTests(unittest.TestCase):
+    def _titles(self, root):
+        *_, findings, _ = report_v2.read_data(root)
+        return [f['title'] for f in findings]
+
+    def test_eol_findings_from_nmap_versions(self):
+        titles = self._titles(_run_dir(with_audit=False, with_ad=False))
+        self.assertTrue(any('VMware ESXi' in t and 'EOL' in t for t in titles))
+        self.assertTrue(any('SQL Server' in t and 'EOL' in t for t in titles))
+
+    def test_nse_findings_ftp_telnet_smb(self):
+        titles = self._titles(_run_dir(with_ad=False))
+        self.assertIn('Anonim FTP erişimine izin veriliyor', titles)
+        self.assertTrue(any('Telnet' in t and 'düz metin' in t for t in titles))
+        self.assertIn('SMB ileti imzalama zorunlu değil', titles)
+        self.assertIn('SMB paylaşımlarına erişilebiliyor', titles)
+
+    def test_smb_share_finding_lists_writable_share(self):
+        *_, findings, _ = report_v2.read_data(_run_dir(with_ad=False))
+        share = next(f for f in findings if f['title'] == 'SMB paylaşımlarına erişilebiliyor')
+        self.assertIn('LOGOSQLBACKUP', share['description'])
+        self.assertIn('READ/WRITE', share['description'])
+
+    def test_ad_policy_findings(self):
+        titles = self._titles(_run_dir())
+        self.assertTrue(any('minimum uzunluk' in t for t in titles))
+        self.assertTrue(any('kilitleme eşiği' in t for t in titles))
+        self.assertTrue(any('MachineAccountQuota' in t for t in titles))
+        self.assertTrue(any('Domain Admin' in t for t in titles))
+
+    def test_all_new_findings_are_drafts(self):
+        _, _, _, findings, _ = report_v2.read_data(_run_dir())
+        drafts = [f for f in findings if f['source'] == 'Otomatik gözlem']
+        self.assertTrue(drafts)
+        self.assertTrue(all(f['status'] == 'taslak' for f in drafts))
+
+
+class SmbShareParserTests(unittest.TestCase):
+    def test_only_readable_or_writable_shares_returned(self):
+        output = ("  \\\\h\\PUBLIC: \n    Anonymous access: READ/WRITE\n"
+                  "  \\\\h\\SECURE: \n    Anonymous access: <none>\n    Current user access: <none>\n")
+        self.assertEqual(report_v2._parse_smb_shares(output), ['PUBLIC [READ/WRITE]'])
+
+
+class AdAssessmentReadsTests(unittest.TestCase):
+    """The read-only LDAP path populates password policy / MAQ / domain admins."""
+    def test_inspect_collects_policy_maq_admins(self):
+        import types
+        from unittest.mock import patch
+        import ad_assessment
+
+        def entry(data):
+            ns = {}
+            for key, value in data.items():
+                ns[key] = types.SimpleNamespace(
+                    value=value, values=value if isinstance(value, list) else [value])
+            holder = types.SimpleNamespace(**{})
+            class E:
+                def __contains__(self, k): return k in data
+                def __getitem__(self, k): return ns[k]
+            return E()
+
+        sequence = [
+            [entry({'rootDomainNamingContext': 'DC=example,DC=test'})],
+            [entry({}), entry({})],          # users
+            [entry({})],                     # groups
+            [entry({}), entry({}), entry({})],  # computers
+            [entry({'minPwdLength': 6, 'pwdProperties': 0, 'lockoutThreshold': 0,
+                    'ms-DS-MachineAccountQuota': 10, 'objectSid': 'S-1-5-21-1-2-3'})],
+            [entry({'member': ['CN=eset,CN=Users,DC=example,DC=test',
+                               'CN=Administrator,CN=Users,DC=example,DC=test'],
+                    'sAMAccountName': 'Domain Admins'})],
+        ]
+
+        class Conn:
+            entries = []
+            def __init__(self, *a, **k): pass
+            def __enter__(self): return self
+            def __exit__(self, *a): return None
+            def search(self, *a, **k):
+                self.entries = sequence.pop(0) if sequence else []
+                return True
+
+        fake = types.SimpleNamespace(BASE=0, NONE=0, Connection=Conn,
+                                     Server=lambda *a, **k: 'srv', Tls=lambda *a, **k: 'tls')
+        with patch.dict(sys.modules, {'ldap3': fake}):
+            result = ad_assessment.inspect('dc.example.test', 'example.test',
+                                           'u@example.test', 'pw', '192.0.2.5')
+        self.assertEqual(result['status'], 'ok')
+        self.assertEqual(result['password_policy']['min_length'], 6)
+        self.assertFalse(result['password_policy']['complexity_enabled'])
+        self.assertEqual(result['password_policy']['lockout_threshold'], 0)
+        self.assertEqual(result['machine_account_quota'], 10)
+        self.assertEqual(result['domain_admins']['count'], 2)
+        self.assertIn('eset', result['domain_admins']['members'])
+
+
+if __name__ == '__main__':
+    unittest.main()

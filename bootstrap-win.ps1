@@ -9,13 +9,13 @@ param(
 
 $ErrorActionPreference = 'Stop'
 $repo = 'ubden/ubden-cyber-wsl'
-$tag = 'v5.0.0-wsl.19'
+$tag = 'v5.0.0-wsl.20'
 $installBase = Join-Path $env:LOCALAPPDATA 'Programs\UBDEN-Cyber'
 $releaseRoot = Join-Path $installBase $tag
 $entryPoint = Join-Path $releaseRoot 'ubden-win.ps1'
 $requiredFiles = @(
     'ubden-win.ps1', 'windows-bridge.ps1', 'webapp.py', 'win_scan.py', 'win_proc.py',
-    'win_tools.py', 'report_v2.py', 'device_inventory.py', 'wizard.py',
+    'win_tools.py', 'report_v2.py', 'device_inventory.py', 'wizard.py', 'eol_data.py',
     'service_probes.py', 'credential_probes.py', 'netbios_probe.py', 'web_identify.py', 'wifi_scan.py', 'ai_operator.py', 'ai_analyst.py', 'requirements.txt'
 )
 

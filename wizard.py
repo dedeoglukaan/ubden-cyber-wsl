@@ -1075,8 +1075,14 @@ def run_probe_suite(target, meta, root, raw, events, assets, discovered_ports,
     """
     profile = meta["profile"]
     if profile in ("network","full"):
-        # Explicit low-impact NSE scripts; never the entire 'vuln' category.
-        scripts='ssl-cert,ssl-enum-ciphers,ssh2-enum-algos,http-security-headers'
+        # Explicit read-only discovery/safe NSE scripts; never the 'vuln' or
+        # brute categories. Each fires only on its own port rule, so listing many
+        # is safe. ftp-anon (anon FTP), telnet-encryption (plaintext), smb-*
+        # (OS/hostname, signing, share ACLs), ms-sql-info, rdp-ntlm-info, vnc-info
+        # cover the professional-report finding set without credential guessing.
+        scripts=('ssl-cert,ssl-enum-ciphers,ssh2-enum-algos,http-security-headers,'
+                 'ftp-anon,telnet-encryption,smb-os-discovery,smb-security-mode,'
+                 'smb2-security-mode,smb-enum-shares,ms-sql-info,rdp-ntlm-info,vnc-info')
         if is_network(target):
             audited=[ip for ip in assets if discovered_ports.get(ip)]
             if audited:
