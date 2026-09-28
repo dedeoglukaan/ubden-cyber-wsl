@@ -114,6 +114,28 @@ class ReportFindingTests(unittest.TestCase):
         self.assertTrue(any('MachineAccountQuota' in t for t in titles))
         self.assertTrue(any('Domain Admin' in t for t in titles))
 
+    def test_same_finding_across_hosts_is_grouped_with_affected_assets(self):
+        # Two hosts each expose Telnet -> ONE grouped finding, not two cards.
+        root = Path(tempfile.mkdtemp())
+        (root / 'engagement.json').write_text(json.dumps({
+            'targets': ['10.0.0.0/24'], 'client': 'C', 'project': 'P', 'tester': 'T',
+            'status': 'completed', 'profile': 'network'}), encoding='utf-8')
+        raw = root / 'targets' / 'net' / 'raw'
+        raw.mkdir(parents=True)
+        (raw / 'nmap_net.xml').write_text(
+            '<nmaprun>'
+            '<host><address addr="10.0.0.5" addrtype="ipv4"/><ports>'
+            '<port protocol="tcp" portid="23"><state state="open"/><service name="telnet"/></port></ports></host>'
+            '<host><address addr="10.0.0.6" addrtype="ipv4"/><ports>'
+            '<port protocol="tcp" portid="23"><state state="open"/><service name="telnet"/></port></ports></host>'
+            '</nmaprun>', encoding='utf-8')
+        *_, findings, _ = report_v2.read_data(root)
+        telnet = [f for f in findings if 'Telnet' in f['title']]
+        self.assertEqual(len(telnet), 1)  # grouped, not one per host
+        assets = {telnet[0]['asset']} | set(telnet[0]['affected_assets'])
+        self.assertEqual(assets, {'10.0.0.5:23', '10.0.0.6:23'})
+        self.assertIn('2 varlıkta görüldü', telnet[0]['description'])
+
     def test_all_new_findings_are_drafts(self):
         _, _, _, findings, _ = report_v2.read_data(_run_dir())
         drafts = [f for f in findings if f['source'] == 'Otomatik gözlem']

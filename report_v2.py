@@ -779,15 +779,36 @@ def read_data(root):
             'impact':'Doğrulanırsa veritabanına yetkisiz erişim, veri ifşası veya değişikliği mümkün olabilir.',
             'recommendation':'Parametreli sorgu/ORM kullanın, girdi doğrulama ve en az yetkili DB hesabı uygulayın; WAF telafi edici olabilir ama kök çözüm değildir.',
             'evidence':str(path.relative_to(root))})
-    deduplicated={}
+    # Group identical observations across hosts into ONE finding with an affected-
+    # assets list (professional "Zafiyeti Barındıran Sistemler" style) instead of an
+    # OBS card per host — otherwise a service seen on 30 hosts yields 30 near-identical
+    # high/medium cards and drowns the real signal.
+    grouped={}
     for item in observations:
-        key=(item['title'],item['asset'],item['severity'])
-        if key not in deduplicated:
-            deduplicated[key]=item
-        elif item['evidence'] not in deduplicated[key]['evidence']:
-            deduplicated[key]['evidence']+='; '+item['evidence']
-    for i, item in enumerate(deduplicated.values(),1):
-        findings.append({'id':f'OBS-{i:03d}','status':'taslak','source':'Otomatik gözlem','reference':'','cvss':'','cwe':infer_cwe(item),**item})
+        key=(item['title'],item['severity'])
+        if key not in grouped:
+            entry=dict(item)
+            entry['_assets']=[item['asset']] if item.get('asset') else []
+            grouped[key]=entry
+        else:
+            entry=grouped[key]
+            if item.get('asset') and item['asset'] not in entry['_assets']:
+                entry['_assets'].append(item['asset'])
+            if item.get('evidence') and item['evidence'] not in entry['evidence']:
+                entry['evidence']+='; '+item['evidence']
+    for i, entry in enumerate(grouped.values(),1):
+        assets=entry.pop('_assets',[])
+        primary=entry.get('asset') or (assets[0] if assets else '')
+        others=[a for a in assets if a!=primary]
+        entry['asset']=primary
+        entry['affected_assets']=others
+        if others:
+            shown=assets[:60]
+            entry['description']=(entry.get('description','')
+                +f"\n\nAynı bulgu {len(assets)} varlıkta görüldü: "+', '.join(shown)
+                +(f" (+{len(assets)-60} daha)" if len(assets)>60 else ''))
+        findings.append({'id':f'OBS-{i:03d}','status':'taslak','source':'Otomatik gözlem',
+                         'reference':'','cvss':'','cwe':infer_cwe(entry),**entry})
     for i,item in enumerate(review.get('findings',[]),1):
         if not isinstance(item,dict): continue
         finding={'id':str(item.get('id') or f'PX-{i:03d}'),'type':str(item.get('type') or '').lower(), 'title':str(item.get('title') or 'Başlıksız bulgu'), 'severity':str(item.get('severity') or 'info').lower(), 'status':str(item.get('status') or 'taslak').lower(), 'asset':str(item.get('asset') or ''), 'affected_assets':[str(x) for x in item.get('affected_assets',[]) if isinstance(x,str)] if isinstance(item.get('affected_assets',[]),list) else [], 'description':str(item.get('description') or ''), 'impact':str(item.get('impact') or ''), 'recommendation':str(item.get('recommendation') or ''), 'evidence':str(item.get('evidence') or ''), 'evidence_sha256':str(item.get('evidence_sha256') or ''), 'evidence_items':item.get('evidence_items',[]) if isinstance(item.get('evidence_items',[]),list) else [], 'reference':str(item.get('reference') or ''), 'cvss':str(item.get('cvss') or ''), 'cwe':str(item.get('cwe') or ''), 'reproduction':str(item.get('reproduction') or ''), 'reviewed_by':str(item.get('reviewed_by') or ''), 'category':str(item.get('category') or ''), 'access_point':str(item.get('access_point') or ''), 'user_profile':str(item.get('user_profile') or ''), 'root_cause':str(item.get('root_cause') or ''), 'remediation_priority':str(item.get('remediation_priority') or ''), 'retest_status':str(item.get('retest_status') or ''), 'disposition_reason':str(item.get('disposition_reason') or ''), 'source':'Analist'}

@@ -25,6 +25,47 @@ class SelectTests(unittest.TestCase):
         self.assertEqual(len(got), len(set(got)))
 
 
+class HttpBasicChallengeTests(unittest.TestCase):
+    """HTTP Basic default-cred must require a real 401 Basic challenge (no false positives)."""
+    def _patch(self, responses):
+        # responses: list of (status, www_auth) returned per urlopen call, in order.
+        import urllib.error, urllib.request
+        from unittest.mock import patch
+        calls = {"n": 0}
+
+        class Resp:
+            def __init__(self, status): self.status = status
+            def __enter__(self): return self
+            def __exit__(self, *a): return False
+
+        def fake_urlopen(request, timeout=None, context=None):
+            status, www = responses[calls["n"]]
+            calls["n"] += 1
+            if status == 401 or status == 403:
+                err = urllib.error.HTTPError(request.full_url, status, "denied",
+                                             {"WWW-Authenticate": www} if www else {}, None)
+                raise err
+            return Resp(status)
+        return patch.object(urllib.request, "urlopen", side_effect=fake_urlopen)
+
+    def test_plain_200_host_is_not_flagged(self):
+        with self._patch([(200, "")]):
+            self.assertFalse(C._http_basic_try("10.0.0.1", 80, "admin", "admin", 3, "http"))
+
+    def test_401_without_basic_challenge_not_flagged(self):
+        with self._patch([(401, 'Bearer realm="api"')]):
+            self.assertFalse(C._http_basic_try("10.0.0.1", 80, "admin", "admin", 3, "http"))
+
+    def test_real_basic_challenge_satisfied_is_flagged(self):
+        # baseline 401 Basic, then creds yield 200.
+        with self._patch([(401, 'Basic realm="Router"'), (200, "")]):
+            self.assertTrue(C._http_basic_try("10.0.0.1", 80, "admin", "admin", 3, "http"))
+
+    def test_real_basic_challenge_still_401_not_flagged(self):
+        with self._patch([(401, 'Basic realm="Router"'), (401, 'Basic realm="Router"')]):
+            self.assertFalse(C._http_basic_try("10.0.0.1", 80, "admin", "admin", 3, "http"))
+
+
 class RunGatingTests(unittest.TestCase):
     def test_disabled_writes_single_skip_no_attempts(self):
         events = []

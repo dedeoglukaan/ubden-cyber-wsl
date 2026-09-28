@@ -28,3 +28,7 @@ parsDedector/
 
 run_real_scan.py
 runs_real/
+
+# Real engagement outputs — never commit client data
+TestRaporlar/
+*/Reports/

@@ -48,7 +48,10 @@ def _parse(ip: str, data: bytes) -> dict | None:
     for _ in range(count):
         if off + 18 > len(data):
             break
-        label = data[off:off + 15].rstrip(b"\x00 ").decode("ascii", "replace").strip()
+        # NetBIOS name bytes are OEM-encoded; cp850 maps every byte (no U+FFFD),
+        # then keep only printable characters so junk/control bytes don't reach the report.
+        label = data[off:off + 15].rstrip(b"\x00 ").decode("cp850", "replace")
+        label = "".join(ch for ch in label if ch.isprintable()).strip()
         suffix = data[off + 15]
         flags = struct.unpack(">H", data[off + 16:off + 18])[0]
         names.append((label, suffix, bool(flags & 0x8000)))

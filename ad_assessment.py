@@ -72,14 +72,23 @@ def _password_policy(connection, base):
 
 
 def _domain_admins(connection, base, domain_sid):
-    """Domain Admins (RID 512) membership; falls back to the group name."""
-    try:
-        filt = f"(objectSid={domain_sid}-512)" if domain_sid else "(sAMAccountName=Domain Admins)"
-        connection.search(base, f"(&(objectClass=group){filt})",
-                          attributes=["member", "sAMAccountName"],
-                          size_limit=1, time_limit=10)
+    """Domain Admins membership. Query by sAMAccountName (constant across locales),
+    then by RID-512 SID as a fallback — but only when the SID is a valid string SID
+    (with get_info=NONE, objectSid can come back as raw bytes, which would make the
+    filter invalid and silently drop the whole finding)."""
+    filters = ["(sAMAccountName=Domain Admins)"]
+    sid = str(domain_sid) if domain_sid else ""
+    if sid.upper().startswith("S-1-"):
+        filters.append(f"(objectSid={sid}-512)")
+    for filt in filters:
+        try:
+            connection.search(base, f"(&(objectClass=group){filt})",
+                              attributes=["member", "sAMAccountName"],
+                              size_limit=1, time_limit=10)
+        except Exception:
+            continue
         if not connection.entries:
-            return None
+            continue
         entry = connection.entries[0]
         members = []
         try:
@@ -89,10 +98,12 @@ def _domain_admins(connection, base, domain_sid):
         for dn in raw:
             cn = str(dn).split(",", 1)[0]
             members.append(cn[3:] if cn.lower().startswith("cn=") else cn)
-        return {"group": str(entry["sAMAccountName"].value) if "sAMAccountName" in entry else "Domain Admins",
-                "count": len(members), "members": sorted(members)[:60]}
-    except Exception:
-        return None
+        try:
+            group = str(entry["sAMAccountName"].value) if "sAMAccountName" in entry else "Domain Admins"
+        except Exception:
+            group = "Domain Admins"
+        return {"group": group, "count": len(members), "members": sorted(members)[:60]}
+    return None
 
 
 # Transport ladder: most secure first. Real DCs very often present a self-signed

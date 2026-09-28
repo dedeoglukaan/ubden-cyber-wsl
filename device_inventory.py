@@ -311,6 +311,13 @@ def role_candidates(ports, vendor, gateway=False):
     return roles
 
 
+def _clean_name(value):
+    """Drop control/replacement/non-printable chars so garbled bytes (e.g. from a
+    NetBIOS/nbtstat name) never reach the report as U+FFFD (�)."""
+    text=''.join(ch for ch in str(value or '') if ch.isprintable() and ch!='�')
+    return text.strip()[:120]
+
+
 def build_inventory(root,meta,neighbours=None,oui_paths=None):
     root=Path(root)
     permitted=allowed_ips(root,meta)
@@ -439,10 +446,11 @@ def build_inventory(root,meta,neighbours=None,oui_paths=None):
         elif web_id.get('server'):
             signals=list(signals)+[f'Web sunucusu: {web_id["server"]}']
         # Display name: NetBIOS computer name > DNS hostname > web title (kısa/anlamlı) > (blank).
-        display_name=netbios.get('name') or (entry['hostnames'][0] if entry['hostnames'] else '')
+        clean_hostnames=[_clean_name(h) for h in entry['hostnames'] if _clean_name(h)]
+        display_name=_clean_name(netbios.get('name')) or (clean_hostnames[0] if clean_hostnames else '')
         if not display_name and web_id.get('title') and 2 <= len(web_id['title']) <= 40 \
                 and web_id['title'].lower() not in ('login', 'sign in', 'home', 'index', 'welcome'):
-            display_name=web_id['title']
+            display_name=_clean_name(web_id['title'])
         notices=[]
         if xml_mac and neighbour_mac and xml_mac!=neighbour_mac:
             notices.append('Nmap MAC ve yerel komşu önbelleği uyuşmuyor; MAC doğrulanmalı')
@@ -462,7 +470,7 @@ def build_inventory(root,meta,neighbours=None,oui_paths=None):
                      'confidence':confidence,'confidence_pct':cls['confidence_pct'],
                      'display_name':display_name,'netbios':netbios,'web_id':web_id,
                      'signals':signals,'ports':ports,'role_candidates':roles,
-                     'hostnames':entry['hostnames'],'os_matches':entry['os_matches'],
+                     'hostnames':clean_hostnames,'os_matches':entry['os_matches'],
                      'review_notes':review,'notices':notices,'snmp_sysdescr':snmp_description,
                      'evidence':'; '.join(entry['evidence'])}
     for path in sorted((root/'targets').glob('*/raw/sql_browser_*.json')) if (root/'targets').exists() else []:

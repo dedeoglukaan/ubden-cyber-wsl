@@ -150,25 +150,42 @@ def _ssh_try(ip, port, username, password, timeout):
 
 
 def _http_basic_try(ip, port, username, password, timeout, scheme="https"):
+    """Validate HTTP Basic default creds — challenge-first to avoid false positives.
+
+    A resource is only a Basic-auth target if it returns 401 with a Basic
+    'WWW-Authenticate' challenge WITHOUT credentials. Only then do supplied creds
+    that turn the 401 into a 2xx/3xx count as valid. Otherwise (a plain 200 page,
+    a form login, a 403, a redirect) HTTP Basic is not in use here and we return
+    False — a normal 200-serving host must never be reported as default-cred.
+    """
     import base64
     import ssl
     import urllib.error
     import urllib.request
     host = f"[{ip}]" if ":" in ip else ip
     url = f"{scheme}://{host}:{port}/"
-    token = base64.b64encode(f"{username}:{password}".encode()).decode()
-    request = urllib.request.Request(url, headers={"Authorization": "Basic " + token,
-                                                   "User-Agent": "UBDEN-Cyber/1.0"})
     ctx = ssl.create_default_context()
     ctx.check_hostname = False
     ctx.verify_mode = ssl.CERT_NONE
-    try:
-        with urllib.request.urlopen(request, timeout=timeout, context=ctx) as resp:
-            return 200 <= resp.status < 400
-    except urllib.error.HTTPError as exc:
-        return exc.code not in (401, 403)  # 401/403 = reddedildi
-    except Exception:
+
+    def probe(headers):
+        request = urllib.request.Request(url, headers=headers)
+        try:
+            with urllib.request.urlopen(request, timeout=timeout, context=ctx) as resp:
+                return resp.status, ""
+        except urllib.error.HTTPError as exc:
+            challenge = exc.headers.get("WWW-Authenticate", "") if exc.headers else ""
+            return exc.code, challenge
+        except Exception:
+            return None, ""
+
+    base_status, challenge = probe({"User-Agent": "UBDEN-Cyber/1.0"})
+    # HTTP Basic must actually be required here (401 + Basic challenge), else N/A.
+    if base_status != 401 or "basic" not in (challenge or "").lower():
         return False
+    token = base64.b64encode(f"{username}:{password}".encode()).decode()
+    auth_status, _ = probe({"Authorization": "Basic " + token, "User-Agent": "UBDEN-Cyber/1.0"})
+    return auth_status is not None and 200 <= auth_status < 400  # challenge satisfied
 
 
 _DEFAULT_CONNECTORS = {"telnet": _telnet_try, "ftp": _ftp_try, "ssh": _ssh_try,
