@@ -32,14 +32,14 @@ arasında **değişmedi** (doğrulandı 2026-09-27); değişirse `attack.py::loa
 - [ ] **Bu klasörün tam yolunu not al** → aşağıda `<RUN>` diye geçecek.
 
 ## 3. Bizim offensive katman (Kali WSL içinde — "daha iyisini yaptığımız yer")
-Kali'yi aç: `wsl -d kali-linux`. parsdx-ext'i makineye getir (repo zaten kurulu; parsdx-ext dizinini kopyala veya git ile çek), sonra:
+Kali'yi aç: `wsl -d kali-linux`. offensive-ext'i makineye getir (repo zaten kurulu; offensive-ext dizinini kopyala veya git ile çek), sonra:
 
-**a) parsdx-ext'i makineye getir + araçları kur (bir kez):**
-`parsdx-ext/` klasörünü Kali'ye taşı (git ile fork'tan çek veya kopyala). Rapor yeniden üretimi
+**a) offensive-ext'i makineye getir + araçları kur (bir kez):**
+`offensive-ext/` klasörünü Kali'ye taşı (git ile fork'tan çek veya kopyala). Rapor yeniden üretimi
 UBDEN'in `/opt/ubden-cyber/`'daki kurulumunu (report_v2 + reportlab'lı venv) otomatik bulur, o yüzden
-parsdx-ext nerede dursa çalışır; ama kolaylık için UBDEN klasörünün içine koy.
+offensive-ext nerede dursa çalışır; ama kolaylık için UBDEN klasörünün içine koy.
 ```bash
-sudo bash parsdx-ext/setup-offensive.sh
+sudo bash offensive-ext/setup-offensive.sh
 source ~/.bashrc     # pipx PATH icin
 ```
 
@@ -54,7 +54,7 @@ her hostname ayrı satıra birebir yazılır; eksiğini `--dry-run`'daki `N in /
 
 **c) HAZIRLIK KONTROLÜ — canlıdan önce GO/NO-GO (yarım yolda eksik çıkmasın):**
 ```bash
-parsdx-ext/.venv/bin/python3 parsdx-ext/doctor.py --scope scope.txt --run-dir "<RUN>" \
+offensive-ext/.venv/bin/python3 offensive-ext/doctor.py --scope scope.txt --run-dir "<RUN>" \
   --dc <DC_FQDN> --domain <DOMAIN> --ip <DC_IP> --user <TEST_KULLANICI> --password '<PAROLA>'
 ```
 → Araçlar kurulu mu, scope geçerli mi, kimlik var mı, DC'ye ağ yolu var mı, **ve SAAT KAYMASI** var mı
@@ -65,7 +65,7 @@ yapmaz, sadece kontrol; scope dışı hedefe prob atmaz.)
 
 **d) Planı gör (hiçbir şey çalıştırmaz):**
 ```bash
-parsdx-ext/.venv/bin/python3 parsdx-ext/pipeline.py --run-dir "<RUN>" --scope scope.txt \
+offensive-ext/.venv/bin/python3 offensive-ext/pipeline.py --run-dir "<RUN>" --scope scope.txt \
   --dc <DC_FQDN> --domain <DOMAIN> --ip <DC_IP> \
   --user <TEST_KULLANICI> --password '<PAROLA>' --dry-run
 ```
@@ -73,7 +73,7 @@ parsdx-ext/.venv/bin/python3 parsdx-ext/pipeline.py --run-dir "<RUN>" --scope sc
 
 **e) Lockout güvenliğini teyit et (kimseyi kilitlemeyelim):**
 ```bash
-parsdx-ext/.venv/bin/python3 parsdx-ext/guard.py --policy --dc <DC_FQDN> --domain <DOMAIN> \
+offensive-ext/.venv/bin/python3 offensive-ext/guard.py --policy --dc <DC_FQDN> --domain <DOMAIN> \
   --ip <DC_IP> --user <TEST_KULLANICI> --password '<PAROLA>'
 ```
 → "SAFE BUDGET" satırını Claude'a göster. (Pipeline zaten canlıda kimlik ön-doğrulaması yapıyor;
@@ -81,21 +81,21 @@ yanlış/eski şifre olursa **fan-out'tan ÖNCE** durur, hesabı kilitlemez.)
 
 **f) Canlı çalıştır (read-only-first zincir; yazma/dump KAPALI):**
 ```bash
-parsdx-ext/.venv/bin/python3 parsdx-ext/pipeline.py --run-dir "<RUN>" --scope scope.txt \
+offensive-ext/.venv/bin/python3 offensive-ext/pipeline.py --run-dir "<RUN>" --scope scope.txt \
   --dc <DC_FQDN> --domain <DOMAIN> --ip <DC_IP> \
   --user <TEST_KULLANICI> --password '<PAROLA>'
 ```
-→ `<RUN>/parsdx/SUMMARY.md` çıkar: bulgular + kill-chain + zincir severity. Claude'a yapıştır.
+→ `<RUN>/offensive-ext/SUMMARY.md` çıkar: bulgular + kill-chain + zincir severity. Claude'a yapıştır.
 Bir şey ters giderse: `touch "<RUN>/STOP"` → çalışan zincir bir sonraki adımdan önce durur (kill-switch).
 
 **f2) (Opsiyonel) Toplanan hash'leri OFFLINE kır — kilitleme riski yok:**
 ```bash
-parsdx-ext/.venv/bin/python3 parsdx-ext/crack.py "<RUN>"   # .hash dosyaları + DOĞRU hashcat komutları
+offensive-ext/.venv/bin/python3 offensive-ext/crack.py "<RUN>"   # .hash dosyaları + DOĞRU hashcat komutları
 # crack.py çıktısındaki komutları çalıştır (mod etype'a göre değişir: RC4→13100, AES→19600/19700):
-hashcat -m <MOD> "<RUN>/parsdx/hashes/<dosya>.hash" /usr/share/wordlists/rockyou.txt
-hashcat -m <MOD> "<RUN>/parsdx/hashes/<dosya>.hash" --show > show.txt
-parsdx-ext/.venv/bin/python3 parsdx-ext/crack.py "<RUN>" --results show.txt  # kırılanları bulguya çevir
-parsdx-ext/.venv/bin/python3 parsdx-ext/pipeline.py --run-dir "<RUN>" --skip-attack --no-report   # rapora işle
+hashcat -m <MOD> "<RUN>/offensive-ext/hashes/<dosya>.hash" /usr/share/wordlists/rockyou.txt
+hashcat -m <MOD> "<RUN>/offensive-ext/hashes/<dosya>.hash" --show > show.txt
+offensive-ext/.venv/bin/python3 offensive-ext/crack.py "<RUN>" --results show.txt  # kırılanları bulguya çevir
+offensive-ext/.venv/bin/python3 offensive-ext/pipeline.py --run-dir "<RUN>" --skip-attack --no-report   # rapora işle
 ```
 
 > ⚠️ **hashcat GPU'suz makinede HİÇBİR ŞEY kırmaz.** `No OpenCL, HIP or CUDA compatible platform
@@ -106,9 +106,9 @@ parsdx-ext/.venv/bin/python3 parsdx-ext/pipeline.py --run-dir "<RUN>" --skip-att
 > - ya da `crack.py`'ın bastığı **john** komutunu kullan — CPU'da çalışır, kurulu gelir.
 >
 > john kullanırsan sonucu `--show` ile değil **potfile** ile geri besle: `john --show` krb5tgs için
-> hesabı `?` diye basıyor. `crack.py`'ın verdiği komutta `--pot=<RUN>/parsdx/hashes/john.pot` zaten var:
+> hesabı `?` diye basıyor. `crack.py`'ın verdiği komutta `--pot=<RUN>/offensive-ext/hashes/john.pot` zaten var:
 > ```
-> parsdx-ext/.venv/bin/python3 parsdx-ext/crack.py "<RUN>" --results "<RUN>/parsdx/hashes/john.pot"
+> offensive-ext/.venv/bin/python3 offensive-ext/crack.py "<RUN>" --results "<RUN>/offensive-ext/hashes/john.pot"
 > ```
 > (john AS-REP hash başlığını yeniden yazıyor; `ingest_cracked` bunu şifre metninden eşleştiriyor.)
 
@@ -116,7 +116,7 @@ Tamamen çevrimdışı (ağa dokunmaz). "Roastable" → "şifresi kırıldı = g
 
 **g) (Yalnız gerekliyse, Claude onaylarsa) yazma/dump adımları:**
 ```bash
-parsdx-ext/.venv/bin/python3 parsdx-ext/pipeline.py --run-dir "<RUN>" --scope scope.txt ... \
+offensive-ext/.venv/bin/python3 offensive-ext/pipeline.py --run-dir "<RUN>" --scope scope.txt ... \
   --enable-writes --allow-dcsync
 ```
 → `YETKILIYIM` yazman istenir (pipeline'da da). DCSync = **sadece kanıt** (`-just-dc-ntlm`), veri
@@ -127,7 +127,7 @@ olmadan tüm domain hash'lerini dökme**). O bayrak yalnızca gerçekten insans�
 işte elle `YETKILIYIM` yaz.
 
 ## 4. Rapor
-- [ ] `<RUN>/parsdx/` altındaki KILL_CHAIN.md, COVERAGE_MATRIX.md, ATTACK_LAYER.json + UBDEN'in `review.json`'a işlenmiş doğrulanmış bulgular hazır.
+- [ ] `<RUN>/offensive-ext/` altındaki KILL_CHAIN.md, COVERAGE_MATRIX.md, ATTACK_LAYER.json + UBDEN'in `review.json`'a işlenmiş doğrulanmış bulgular hazır.
 - [ ] UBDEN raporunu yeniden ürettir (pipeline zaten yapar) veya `python3 report_v2.py "<RUN>"`.
 - [ ] Çıktıyı **AnyDesk dosya transferiyle senin laptobuna** çek → cilalı raporu Claude ile burada bitir → client'ın verdiği güvenli konuma teslim.
 
@@ -135,8 +135,8 @@ işte elle `YETKILIYIM` yaz.
 - [ ] **Zayıf `ubden` kullanıcısı** (şifre `password`) → düzelt: `sudo passwd ubden` (yeni güçlü şifre).
 - [ ] **DCSync hash'lerini laptobuna ÇEKME.** `dcsync_dump.txt` krbtgt dahil tüm hash'leri içerir; rapora
       sadece asgari kanıt girer, ham dosya AnyDesk ile çekilmez.
-- [ ] Kanıt zaten `0600` + `parsdx/` `0700`; iş bitince loot'u sil:
-      `shred -u "<RUN>/parsdx/dcsync_dump.txt" "<RUN>/parsdx/hashes/"*.hash show.txt 2>/dev/null; rm -f "<RUN>/parsdx/"*.txt`
+- [ ] Kanıt zaten `0600` + `offensive-ext/` `0700`; iş bitince loot'u sil:
+      `shred -u "<RUN>/offensive-ext/dcsync_dump.txt" "<RUN>/offensive-ext/hashes/"*.hash show.txt 2>/dev/null; rm -f "<RUN>/offensive-ext/"*.txt`
       (⚠️ `hashes/*.hash` = roastable Kerberos hash'leri, `show.txt` = kırılan açık şifreler — bunlar toksik, mutlaka sil.)
 - [ ] Cracked/elde edilen kimlik bilgileri = toksik; ağ dışında tut, iş bitince imha et.
 - [ ] Client isterse `destroy` ile WSL'i tamamen kaldır (⚠️ TÜM WSL'i siler — önce raporu dışarı al).
@@ -146,7 +146,7 @@ işte elle `YETKILIYIM` yaz.
 ## Elle yedek komutlar (pipeline takılırsa, Claude yönlendirir)
 ```bash
 # Lockout politikasi (HER auth'tan once):
-parsdx-ext/.venv/bin/python3 parsdx-ext/guard.py --policy --dc <DC> --domain <DOM> --ip <IP> --user <U> --password '<P>'
+offensive-ext/.venv/bin/python3 offensive-ext/guard.py --policy --dc <DC> --domain <DOM> --ip <IP> --user <U> --password '<P>'
 # ADCS (en sessiz DA yolu):
 certipy find -u <U>@<DOM> -p '<P>' -dc-ip <IP> -vulnerable -stdout
 # BloodHound (sessiz):

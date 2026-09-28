@@ -273,10 +273,10 @@ _GLOB_PARSERS = {
 
 
 def parse_run(run_dir: str) -> list[dict]:
-    """Read attack.py evidence files under <run_dir>/parsdx and return normalized findings,
+    """Read attack.py evidence files under <run_dir>/offensive-ext and return normalized findings,
     each tagged with the evidence file it came from. Handles per-host (globbed) evidence."""
     import glob
-    pdir = os.path.join(run_dir, "parsdx")
+    pdir = os.path.join(run_dir, "offensive-ext")
     out, seen_paths = [], set()
 
     def _consume(path, fn):
@@ -287,7 +287,7 @@ def parse_run(run_dir: str) -> list[dict]:
             text = open(path, encoding="utf-8", errors="replace").read()
         except OSError:
             return
-        rel = os.path.join("parsdx", os.path.basename(path))
+        rel = os.path.join("offensive-ext", os.path.basename(path))
         for f in fn(text):
             f["evidence"] = rel
             out.append(f)
@@ -391,17 +391,17 @@ def _self_test() -> int:
     # aggregate over a temp run folder — MUST read PER-HOST auth_matrix_<host>.txt (regression guard)
     import tempfile
     with tempfile.TemporaryDirectory() as d:
-        os.makedirs(os.path.join(d, "parsdx"))
-        open(os.path.join(d, "parsdx", "kerberoast.txt"), "w").write(krb)
-        open(os.path.join(d, "parsdx", "auth_matrix_10.0.0.20.txt"), "w").write(nxc)
-        open(os.path.join(d, "parsdx", "auth_matrix_10.0.0.21.txt"), "w").write(
+        os.makedirs(os.path.join(d, "offensive-ext"))
+        open(os.path.join(d, "offensive-ext", "kerberoast.txt"), "w").write(krb)
+        open(os.path.join(d, "offensive-ext", "auth_matrix_10.0.0.20.txt"), "w").write(nxc)
+        open(os.path.join(d, "offensive-ext", "auth_matrix_10.0.0.21.txt"), "w").write(
             "SMB 10.0.0.21 445 SQL01 [+] corp.local\\svc:P (Pwn3d!)")
         allf = parse_run(d)
         types = [f["type"] for f in allf]
         check("parse_run reads per-host auth_matrix files (regression)",
               types.count("local_admin") == 2 and "kerberoast" in types)
         check("parse_run tags each finding with its real evidence file",
-              all("evidence" in f and f["evidence"].startswith("parsdx/") for f in allf))
+              all("evidence" in f and f["evidence"].startswith("offensive-ext/") for f in allf))
 
     total = 19
     print(f"\n{ok}/{total} checks passed")

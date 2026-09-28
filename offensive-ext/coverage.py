@@ -1,8 +1,8 @@
-"""Coverage matrix for the PARSDX report layer.
+"""Coverage matrix for the offensive-ext report layer.
 
 Beats a "wide but shallow" competitor report by declaring, up front, every check a proper
 internal AD/network assessment should cover, then marking each tested / passed / skipped by
-cross-referencing the executed step events (UBDEN steps.json + our parsdx_steps.json).
+cross-referencing the executed step events (UBDEN steps.json + our offensive_steps.json).
 Shows thoroughness explicitly instead of an undocumented pile of scan output.
 """
 from __future__ import annotations
@@ -11,7 +11,7 @@ import json
 import os
 import sys
 
-# id, category, title, step-name prefixes (from UBDEN + parsdx) that satisfy the check.
+# id, category, title, step-name prefixes (from UBDEN + offensive-ext) that satisfy the check.
 CHECKS = [
     ("NET-01", "Network", "Host discovery", ["discover", "nmap_sn", "discovery"]),
     ("NET-02", "Network", "Port & service enumeration", ["nmap", "port_"]),
@@ -37,7 +37,7 @@ _DONE_STATUSES = {"ok", "completed", "success", "attempted"}
 
 def _load_steps(run_dir: str) -> list[dict]:
     steps = []
-    for rel in ("steps.json", os.path.join("parsdx", "parsdx_steps.json")):
+    for rel in ("steps.json", os.path.join("offensive-ext", "offensive_steps.json")):
         path = os.path.join(run_dir, rel)
         data = None
         try:
@@ -54,11 +54,11 @@ def build_matrix(run_dir: str) -> dict:
     steps = _load_steps(run_dir)
     executed = [(str(s.get("step", "")).lower(), str(s.get("status", "")).lower())
                 for s in steps if isinstance(s, dict)]
-    # Corroborate against evidence files too: in --skip-attack mode parsdx_steps.json is not written,
+    # Corroborate against evidence files too: in --skip-attack mode offensive_steps.json is not written,
     # so a check would read "skipped" right next to its own verified finding. Treat each evidence file
     # basename (kerberoast.txt, adcs_find.txt, auth_matrix_<host>.txt, coerce_scan.txt, ...) as a
     # completed signal so the matrix reflects what actually ran.
-    for f in glob.glob(os.path.join(run_dir, "parsdx", "*.txt")):
+    for f in glob.glob(os.path.join(run_dir, "offensive-ext", "*.txt")):
         base = os.path.splitext(os.path.basename(f))[0].lower()
         try:
             nonempty = os.path.getsize(f) > 0
@@ -95,7 +95,7 @@ def render_markdown(matrix: dict) -> str:
 
 def write_matrix(run_dir: str) -> tuple[str, str]:
     matrix = build_matrix(run_dir)
-    pdir = os.path.join(run_dir, "parsdx")
+    pdir = os.path.join(run_dir, "offensive-ext")
     os.makedirs(pdir, exist_ok=True)
     jpath = os.path.join(pdir, "COVERAGE_MATRIX.json")
     mpath = os.path.join(pdir, "COVERAGE_MATRIX.md")
@@ -119,15 +119,15 @@ def _self_test() -> int:
                    {"step": "tls_10.0.0.10", "status": "ok"},
                    {"step": "nuclei_web", "status": "ok"}],
                   open(os.path.join(d, "steps.json"), "w"))
-        os.makedirs(os.path.join(d, "parsdx"))
+        os.makedirs(os.path.join(d, "offensive-ext"))
         json.dump([{"step": "kerberoast", "status": "ok"},
                    {"step": "adcs_find", "status": "ok"},
                    {"step": "coerce_scan", "status": "error"}],
-                  open(os.path.join(d, "parsdx", "parsdx_steps.json"), "w"))
+                  open(os.path.join(d, "offensive-ext", "offensive_steps.json"), "w"))
         m = build_matrix(d)
         byid = {r["id"]: r for r in m["checks"]}
         check("port scan tested", byid["NET-02"]["status"] == "tested")
-        check("kerberoast tested from parsdx", byid["AD-03"]["status"] == "tested")
+        check("kerberoast tested from offensive-ext", byid["AD-03"]["status"] == "tested")
         check("adcs tested", byid["AD-06"]["status"] == "tested")
         check("coercion errored -> attempted", byid["AD-07"]["status"] == "attempted")
         check("snmp not run -> skipped", byid["NET-04"]["status"] == "skipped")
@@ -137,11 +137,11 @@ def _self_test() -> int:
         jp, mp = write_matrix(d)
         check("writes json+md", os.path.exists(jp) and os.path.exists(mp))
 
-    # --skip-attack corroboration: only evidence files, NO parsdx_steps.json -> checks still tested
+    # --skip-attack corroboration: only evidence files, NO offensive_steps.json -> checks still tested
     with tempfile.TemporaryDirectory() as d2:
-        os.makedirs(os.path.join(d2, "parsdx"))
-        open(os.path.join(d2, "parsdx", "kerberoast.txt"), "w").write("$krb5tgs$...")
-        open(os.path.join(d2, "parsdx", "auth_matrix_10.0.0.10.txt"), "w").write("[+] (Pwn3d!)")
+        os.makedirs(os.path.join(d2, "offensive-ext"))
+        open(os.path.join(d2, "offensive-ext", "kerberoast.txt"), "w").write("$krb5tgs$...")
+        open(os.path.join(d2, "offensive-ext", "auth_matrix_10.0.0.10.txt"), "w").write("[+] (Pwn3d!)")
         m2 = {r["id"]: r for r in build_matrix(d2)["checks"]}
         check("kerberoast tested from evidence file alone (skip-attack)", m2["AD-03"]["status"] == "tested")
         check("auth-matrix tested from per-host evidence alone", m2["AD-08"]["status"] == "tested")

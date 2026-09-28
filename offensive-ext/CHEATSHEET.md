@@ -1,4 +1,4 @@
-# PARSDX — Tek Sayfa Komut Kağıdı
+# offensive-ext — Tek Sayfa Komut Kağıdı
 
 Tam anlatım `RUNBOOK.md`'de. Bu sayfa sadece **sırayla yapıştırılacak komutlar**.
 Her komutun çıktısını Claude'a yapıştır. **Tek bir yeri doldur (§0B), gerisi düzeltmesiz yapışır.**
@@ -64,8 +64,9 @@ export DC='<DC_FQDN>'            # ör. dc01.corp.local
 export IP='<DC_IP>'              # ör. 10.0.0.10
 export U='<TEST_KULLANICI>'      # client'ın verdiği read-only hesap
 export P='<PAROLA>'
-export PX="$HOME/parsdx-ext"     # parsdx-ext'in bulunduğu yer
-export PY="$PX/.venv/bin/python3"
+export EXT="$HOME/offensive-ext"     # offensive-ext'in bulunduğu yer
+export PY="$EXT/.venv/bin/python3"
+export UBDEN_REVIEWER='<FIRMA/ANALIST ADI>'   # rapora "Doğrulayan analist" olarak basılır
 printf '%s\n' '<CIDR>' "$IP" "$DC" > "$HOME/scope.txt"   # sözleşmedeki hedefler, satır başına bir tane
 export SCOPE="$HOME/scope.txt"
 cat "$SCOPE"
@@ -82,7 +83,7 @@ bir host'a sessizce yayılmak demek olurdu.)
 ## 1 — Kurulum (makinede bir kez)
 
 ```bash
-sudo bash "$PX/setup-offensive.sh" && source ~/.bashrc
+sudo bash "$EXT/setup-offensive.sh" && source ~/.bashrc
 ```
 
 Bakılacak satırlar: `[OK] nxc -> netexec`, `[OK] hashcat backend -> ...`, `[OK] Offensive toolchain hazir`.
@@ -91,7 +92,7 @@ Bakılacak satırlar: `[OK] nxc -> netexec`, `[OK] hashcat backend -> ...`, `[OK
 ## 2 — GO / NO-GO (canlıdan önce; hiçbir kimlik denemesi yapmaz)
 
 ```bash
-"$PY" "$PX/doctor.py" --scope "$SCOPE" --run-dir "$RUN" \
+"$PY" "$EXT/doctor.py" --scope "$SCOPE" --run-dir "$RUN" \
   --dc "$DC" --domain "$DOM" --ip "$IP" --user "$U" --password "$P"
 ```
 
@@ -100,7 +101,7 @@ Bakılacak satırlar: `[OK] nxc -> netexec`, `[OK] hashcat backend -> ...`, `[OK
 ## 3 — Planı gör (hiçbir şey çalıştırmaz)
 
 ```bash
-"$PY" "$PX/pipeline.py" --run-dir "$RUN" --scope "$SCOPE" \
+"$PY" "$EXT/pipeline.py" --run-dir "$RUN" --scope "$SCOPE" \
   --dc "$DC" --domain "$DOM" --ip "$IP" --user "$U" --password "$P" --dry-run
 ```
 
@@ -110,7 +111,7 @@ UBDEN'in hedef listesi uyuşmuyor, düzelt. Planı Claude'a yapıştır.
 ## 4 — Lockout bütçesi (kimseyi kilitlemeyelim)
 
 ```bash
-"$PY" "$PX/guard.py" --policy --dc "$DC" --domain "$DOM" --ip "$IP" --user "$U" --password "$P"
+"$PY" "$EXT/guard.py" --policy --dc "$DC" --domain "$DOM" --ip "$IP" --user "$U" --password "$P"
 ```
 
 `SAFE BUDGET` satırını Claude'a göster.
@@ -118,14 +119,14 @@ UBDEN'in hedef listesi uyuşmuyor, düzelt. Planı Claude'a yapıştır.
 ## 5 — CANLI (read-only zincir; yazma/dump KAPALI)
 
 ```bash
-"$PY" "$PX/pipeline.py" --run-dir "$RUN" --scope "$SCOPE" \
+"$PY" "$EXT/pipeline.py" --run-dir "$RUN" --scope "$SCOPE" \
   --dc "$DC" --domain "$DOM" --ip "$IP" --user "$U" --password "$P"
 ```
 
 Sonra **iki şeyi birden oku**:
 
 ```bash
-sed -n '1,40p' "$RUN/parsdx/SUMMARY.md"
+sed -n '1,40p' "$RUN/offensive-ext/SUMMARY.md"
 ```
 
 ⚠️ **`!! N step(s) did NOT complete cleanly` uyarısı varsa, `0 bulgu` "hedef temiz" DEMEK DEĞİLDİR.**
@@ -134,15 +135,15 @@ Adı geçen adımları tekrar çalıştır veya elle karşılığını dene (RUN
 ## 6 — Hash'leri OFFLINE kır (ağa dokunmaz, kilitleme riski yok)
 
 ```bash
-"$PY" "$PX/crack.py" "$RUN"          # hash dosyalarını + doğru hashcat/john komutlarını basar
+"$PY" "$EXT/crack.py" "$RUN"          # hash dosyalarını + doğru hashcat/john komutlarını basar
 ```
 
 Bastığı komutu çalıştır, sonra sonucu geri besle:
 
 ```bash
-"$PY" "$PX/crack.py" "$RUN" --results show.txt                        # hashcat kullandıysan
-"$PY" "$PX/crack.py" "$RUN" --results "$RUN/parsdx/hashes/john.pot"   # john kullandıysan
-"$PY" "$PX/pipeline.py" --run-dir "$RUN" --skip-attack --no-report    # bulguya işle
+"$PY" "$EXT/crack.py" "$RUN" --results show.txt                        # hashcat kullandıysan
+"$PY" "$EXT/crack.py" "$RUN" --results "$RUN/offensive-ext/hashes/john.pot"   # john kullandıysan
+"$PY" "$EXT/pipeline.py" --run-dir "$RUN" --skip-attack --no-report    # bulguya işle
 ```
 
 ## 7 — ACİL DURUM
@@ -157,7 +158,7 @@ Bir hesap kilitlendiyse / müşteri şikâyet ettiyse: **durdur, Claude'a söyle
 ## 8 — Yazma/dump (yalnız gerekliyse, Claude onaylarsa)
 
 ```bash
-"$PY" "$PX/pipeline.py" --run-dir "$RUN" --scope "$SCOPE" \
+"$PY" "$EXT/pipeline.py" --run-dir "$RUN" --scope "$SCOPE" \
   --dc "$DC" --domain "$DOM" --ip "$IP" --user "$U" --password "$P" \
   --enable-writes --allow-dcsync
 ```
@@ -167,7 +168,7 @@ Elle `YETKILIYIM` yaz. ⚠️ **`--assume-yes` KULLANMA** — insan onayı olmad
 ## 9 — Temizlik (iş biter bitmez)
 
 ```bash
-shred -u "$RUN/parsdx/dcsync_dump.txt" "$RUN/parsdx/hashes/"*.hash show.txt 2>/dev/null
+shred -u "$RUN/offensive-ext/dcsync_dump.txt" "$RUN/offensive-ext/hashes/"*.hash show.txt 2>/dev/null
 sudo passwd ubden       # UBDEN'in zayıf 'ubden' hesabı (şifre: password)
 ```
 

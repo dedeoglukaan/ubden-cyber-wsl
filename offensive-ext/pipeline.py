@@ -1,4 +1,4 @@
-"""PARSDX A-to-Z pipeline: the one command to run after UBDEN (safety-hardened).
+"""offensive-ext A-to-Z pipeline: the one command to run after UBDEN (safety-hardened).
 
   attack (scoped, guarded, read-only-first)  ->  parse  ->  score (CVSS + chain)  ->  ATT&CK layer
   ->  kill-chain narrative  ->  coverage matrix  ->  emit into UBDEN's report.
@@ -64,7 +64,7 @@ def infer_reached_da(run_dir: str) -> bool:
     Mere existence of dcsync_dump.txt is not enough — run_plan creates the file before secretsdump
     writes, so a failed/empty dump must NOT read as 'Domain Admin achieved'. Require real hash lines
     (impacket ends each with ':::', and krbtgt is the tell-tale)."""
-    p = os.path.join(run_dir, "parsdx", "dcsync_dump.txt")
+    p = os.path.join(run_dir, "offensive-ext", "dcsync_dump.txt")
     if not os.path.isfile(p):
         return False
     try:
@@ -81,7 +81,7 @@ _PROBLEM_STATUSES = {"error", "timeout", "missing_tool", "out_of_scope_skip", "b
 def step_stats(run_dir: str) -> dict:
     """Summarise the executed-step log. Without this, a tool that errored out makes the run print
     '0 findings', which reads as 'the target is clean' — the most dangerous false conclusion here."""
-    p = os.path.join(run_dir, "parsdx", "parsdx_steps.json")
+    p = os.path.join(run_dir, "offensive-ext", "offensive_steps.json")
     try:
         evs = json.load(open(p, encoding="utf-8"))
     except (OSError, ValueError):
@@ -99,8 +99,8 @@ def step_stats(run_dir: str) -> dict:
 
 def run(run_dir, creds, *, nets=None, hosts_allow=None, skip_attack=False, dry_run=False,
         enable_writes=False, allow_dcsync=False, assume_yes=False, no_report=False,
-        reached_da=None, lang="tr") -> dict:
-    pdir = os.path.join(run_dir, "parsdx")
+        reached_da=None, lang="tr", reviewer="") -> dict:
+    pdir = os.path.join(run_dir, "offensive-ext")
     os.umask(0o077)
     os.makedirs(pdir, exist_ok=True)
 
@@ -116,12 +116,12 @@ def run(run_dir, creds, *, nets=None, hosts_allow=None, skip_attack=False, dry_r
                              dry_run=dry_run, assume_yes=assume_yes, out_dir=pdir)
 
     findings = parse.parse_run(run_dir)
-    # fold in any offline-cracked credentials the operator ingested via crack.py (parsdx/cracked.json)
+    # fold in any offline-cracked credentials the operator ingested via crack.py (offensive-ext/cracked.json)
     cj = os.path.join(pdir, "cracked.json")
     if os.path.isfile(cj):
         try:
             for cf in json.load(open(cj, encoding="utf-8")):
-                cf.setdefault("evidence", "parsdx/cracked.json")
+                cf.setdefault("evidence", "offensive-ext/cracked.json")
                 findings.append(cf)
         except (OSError, ValueError):
             pass
@@ -138,7 +138,7 @@ def run(run_dir, creds, *, nets=None, hosts_allow=None, skip_attack=False, dry_r
     cov_json, cov_md = coverage.write_matrix(run_dir)
     rem_path = remediation.write_roadmap(findings, os.path.join(pdir, "REMEDIATION.md"))
 
-    emit_res = emit.emit_findings(run_dir, findings)
+    emit_res = emit.emit_findings(run_dir, findings, reviewer)
     report_rc = None
     if not dry_run and not no_report:
         report_rc = emit.regenerate_report(run_dir)
@@ -172,7 +172,7 @@ def run(run_dir, creds, *, nets=None, hosts_allow=None, skip_attack=False, dry_r
 
 
 def _write_summary_md(run_dir, summary, cs):
-    lines = ["# PARSDX — Özet", "",
+    lines = ["# offensive-ext — Özet", "",
              f"- Bulgu sayısı: **{summary['findings']}** "
              f"(rapora eklenen: {summary['emit']['added']}, "
              f"doğrulanmış: {summary['emit']['verified']}, taslak: {summary['emit']['draft']})",
@@ -189,14 +189,14 @@ def _write_summary_md(run_dir, summary, cs):
                       "'hedef temiz' anlamına GELMEZ.** Bu adımlar tekrar çalıştırılmalı:"]
             lines += [f">   - `{p}`" for p in st["problems"]]
         lines.append("")
-    lines += ["## Üretilen dosyalar (parsdx/)",
+    lines += ["## Üretilen dosyalar (offensive-ext/)",
              f"- Saldırı zinciri anlatısı: `{summary['artifacts']['kill_chain']}`",
              f"- ATT&CK Navigator katmanı: `{summary['artifacts']['attack_layer']}`",
              f"- Kapsam matrisi: `{summary['artifacts']['coverage_md']}`", "",
              "Bulgular UBDEN `review.json`'ına yazıldı; rapor `report_v2.py` ile yeniden üretildi."
              if summary["report_regenerated"] else
              "Bulgular UBDEN `review.json`'ına yazıldı (rapor yeniden üretimi atlandı)."]
-    p = os.path.join(run_dir, "parsdx", "SUMMARY.md")
+    p = os.path.join(run_dir, "offensive-ext", "SUMMARY.md")
     open(p, "w", encoding="utf-8").write("\n".join(lines))
     try:
         os.chmod(p, 0o600)
@@ -215,10 +215,10 @@ def _self_test() -> int:
             ok += 1
 
     # dedupe_findings: the IP/FQDN double-report measured against the live lab DC 2026-09-28
-    dup = [{"type": "local_admin", "asset": "10.0.0.10", "evidence": "parsdx/auth_matrix_10.0.0.10.txt"},
-           {"type": "local_admin", "asset": "10.0.0.10", "evidence": "parsdx/auth_matrix_dc01.txt"},
-           {"type": "local_admin", "asset": "10.0.0.11", "evidence": "parsdx/auth_matrix_10.0.0.11.txt"},
-           {"type": "kerberoast", "asset": "10.0.0.10", "evidence": "parsdx/kerberoast.txt"},
+    dup = [{"type": "local_admin", "asset": "10.0.0.10", "evidence": "offensive-ext/auth_matrix_10.0.0.10.txt"},
+           {"type": "local_admin", "asset": "10.0.0.10", "evidence": "offensive-ext/auth_matrix_dc01.txt"},
+           {"type": "local_admin", "asset": "10.0.0.11", "evidence": "offensive-ext/auth_matrix_10.0.0.11.txt"},
+           {"type": "kerberoast", "asset": "10.0.0.10", "evidence": "offensive-ext/kerberoast.txt"},
            {"type": "", "asset": "x", "evidence": "a"}, {"type": "", "asset": "x", "evidence": "b"}]
     ded = dedupe_findings([dict(f) for f in dup])
     check("dedupe collapses same type+asset", len(ded) == 5)
@@ -226,9 +226,9 @@ def _self_test() -> int:
     check("dedupe keeps a different type on the same asset",
           sum(f["type"] == "kerberoast" for f in ded) == 1)
     check("dedupe keeps the first evidence",
-          ded[0]["evidence"] == "parsdx/auth_matrix_10.0.0.10.txt")
+          ded[0]["evidence"] == "offensive-ext/auth_matrix_10.0.0.10.txt")
     check("dedupe records the dropped evidence",
-          ded[0].get("evidence_also") == ["parsdx/auth_matrix_dc01.txt"])
+          ded[0].get("evidence_also") == ["offensive-ext/auth_matrix_dc01.txt"])
     check("dedupe never merges an empty type", sum(f["type"] == "" for f in ded) == 2)
 
     with tempfile.TemporaryDirectory() as d:
@@ -237,7 +237,7 @@ def _self_test() -> int:
         json.dump({"schema": 1, "devices": [{"ip": "10.0.0.10"}, {"ip": "10.0.0.20"}]},
                   open(os.path.join(d, "DEVICE_INVENTORY.json"), "w"))
         json.dump([{"step": "nmap_10.0.0.10", "status": "ok"}], open(os.path.join(d, "steps.json"), "w"))
-        pdir = os.path.join(d, "parsdx"); os.makedirs(pdir)
+        pdir = os.path.join(d, "offensive-ext"); os.makedirs(pdir)
         open(os.path.join(pdir, "kerberoast.txt"), "w").write("$krb5tgs$23$*svc_sql$CORP.LOCAL$MSSQLSvc*$h")
         # per-host filename (matches real attack.py output; guards the parse regression)
         open(os.path.join(pdir, "auth_matrix_10.0.0.20.txt"), "w").write("SMB 10.0.0.20 445 FILE01 [+] corp.local\\svc:P (Pwn3d!)")
@@ -272,7 +272,7 @@ def _self_test() -> int:
         json.dump([{"step": "kerberoast", "status": "ok"},
                    {"step": "bloodhound_dconly", "status": "error"},
                    {"step": "coerce_scan", "status": "timeout"}],
-                  open(os.path.join(pdir, "parsdx_steps.json"), "w"))
+                  open(os.path.join(pdir, "offensive_steps.json"), "w"))
         stt = step_stats(d)
         check("step_stats flags problem steps",
               stt["total"] == 3 and len(stt["problems"]) == 2
@@ -296,7 +296,7 @@ def _self_test() -> int:
 
 
 def main(argv=None) -> int:
-    ap = argparse.ArgumentParser(description="PARSDX post-UBDEN A-to-Z pipeline (hardened)")
+    ap = argparse.ArgumentParser(description="offensive-ext post-UBDEN A-to-Z pipeline (hardened)")
     ap.add_argument("--self-test", action="store_true")
     ap.add_argument("--run-dir")
     ap.add_argument("--scope", help="allowlist file (IP/CIDR/hostname per line) — required for live runs")
@@ -309,6 +309,10 @@ def main(argv=None) -> int:
     ap.add_argument("--allow-dcsync", action="store_true")
     ap.add_argument("--assume-yes", action="store_true")
     ap.add_argument("--no-report", action="store_true")
+    ap.add_argument("--reviewer", default="",
+                    help="analyst signature written to review.json['findings'][].reviewed_by and "
+                         "printed in the client report as 'Doğrulayan analist' "
+                         f"(default: $UBDEN_REVIEWER or '{emit.DEFAULT_REVIEWER}')")
     ap.add_argument("--reached-da", dest="da", action="store_true", default=None)
     ap.add_argument("--no-da", dest="da", action="store_false")
     ap.add_argument("--lang", default="tr")
@@ -325,7 +329,7 @@ def main(argv=None) -> int:
     try:
         s = run(a.run_dir, creds, nets=nets, hosts_allow=hosts, skip_attack=a.skip_attack,
                 dry_run=a.dry_run, enable_writes=a.enable_writes, allow_dcsync=a.allow_dcsync,
-                assume_yes=a.assume_yes, no_report=a.no_report, reached_da=a.da, lang=a.lang)
+                assume_yes=a.assume_yes, no_report=a.no_report, reached_da=a.da, lang=a.lang, reviewer=a.reviewer)
     except attack.SafetyAbort as e:
         print(f"[SAFETY ABORT] {e}", file=sys.stderr); return 2
     print(json.dumps(s, indent=2, ensure_ascii=False))

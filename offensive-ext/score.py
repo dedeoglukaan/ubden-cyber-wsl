@@ -1,4 +1,4 @@
-"""CVSS 3.1 scoring + chain-aware severity for the PARSDX report layer.
+"""CVSS 3.1 scoring + chain-aware severity for the offensive-ext report layer.
 
 Two jobs the competitor report failed at:
   1. Give every finding a defensible CVSS vector + score (they had none).

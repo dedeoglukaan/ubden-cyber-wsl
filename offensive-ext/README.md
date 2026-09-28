@@ -1,4 +1,4 @@
-# parsdx-ext — post-UBDEN offensive + report layer
+# offensive-ext — post-UBDEN offensive + report layer
 
 UBDEN answers "what is exposed" (read-only). This layer answers "and here is how an attacker
 turns that into Domain Admin", with evidence, then folds our findings back into UBDEN's report.
@@ -11,7 +11,7 @@ shallow competitor report lacks.
 |---|---|
 | `doctor.py` | Pre-engagement readiness check (GO/NO-GO): tools installed, scope valid, credential present, DC reachable (TCP only, no auth). Run this FIRST. |
 | `guard.py` | Lockout-aware auth guard — reads domain policy, budgets attempts, hard-stops on lockout. Wraps all guessing. |
-| `attack.py` | Offensive orchestrator — reads UBDEN JSON, runs a READ-ONLY-FIRST chain (ADCS→BloodHound→AS-REP→kerberoast→auth-matrix→coerce-scan), evidence into `<run>/parsdx`. Writes/dumps gated behind `--enable-writes`+confirm. |
+| `attack.py` | Offensive orchestrator — reads UBDEN JSON, runs a READ-ONLY-FIRST chain (ADCS→BloodHound→AS-REP→kerberoast→auth-matrix→coerce-scan), evidence into `<run>/offensive-ext`. Writes/dumps gated behind `--enable-writes`+confirm. |
 | `parse.py` | Tool output → normalized findings (certipy/kerberoast/asrep/nxc/coercer). |
 | `score.py` | CVSS 3.1 (self-tested vs known vectors) + chain-aware severity (chain→DA = Critical). |
 | `attck.py` | MITRE ATT&CK tagging + Navigator layer JSON. |
@@ -28,15 +28,15 @@ shallow competitor report lacks.
 ## Run (on the Kali box, after UBDEN finishes)
 
 ```bash
-sudo bash parsdx-ext/setup-offensive.sh                    # once
+sudo bash offensive-ext/setup-offensive.sh                    # once
 printf '10.0.0.0/24\n<DC_IP>\n<DOMAIN>\n' > scope.txt      # REQUIRED allowlist (fail-closed)
-python3 parsdx-ext/doctor.py --scope scope.txt --run-dir <UBDEN_run> \
+python3 offensive-ext/doctor.py --scope scope.txt --run-dir <UBDEN_run> \
         --dc dc01.corp.local --domain corp.local --ip <DC_IP> --user <test_acct> --password '***'  # GO/NO-GO first
-python3 parsdx-ext/pipeline.py --run-dir <UBDEN_run> --scope scope.txt \
+python3 offensive-ext/pipeline.py --run-dir <UBDEN_run> --scope scope.txt \
         --dc dc01.corp.local --domain corp.local \
         --user <test_acct> --password '***' --ip <DC_IP> --dry-run   # preview the plan
-python3 parsdx-ext/pipeline.py --run-dir <UBDEN_run> --scope scope.txt ...   # live
-python3 parsdx-ext/pipeline.py --run-dir <run> --skip-attack                 # rebuild report layer only
+python3 offensive-ext/pipeline.py --run-dir <UBDEN_run> --scope scope.txt ...   # live
+python3 offensive-ext/pipeline.py --run-dir <run> --skip-attack                 # rebuild report layer only
 ```
 
 Safety (see SAFETY.md): `--scope` allowlist is mandatory (no allowlist ⇒ zero packets); a guarded
@@ -49,5 +49,5 @@ is denylisted and absent.
 ## Test everything
 ```bash
 for m in doctor guard attack score parse attck narrate coverage emit pipeline remediation crack; do
-  python3 parsdx-ext/$m.py --self-test | tail -1; done
+  python3 offensive-ext/$m.py --self-test | tail -1; done
 ```

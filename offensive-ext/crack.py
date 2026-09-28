@@ -37,7 +37,7 @@ def _etype(hashline: str) -> int:
 
 def extract(run_dir: str) -> dict:
     """Return {'kerberoast': [(account, hashline)], 'asrep': [...]} from collected evidence."""
-    pdir = os.path.join(run_dir, "parsdx")
+    pdir = os.path.join(run_dir, "offensive-ext")
     out = {"kerberoast": [], "asrep": []}
     for kind, fname, rx in (("kerberoast", "kerberoast.txt", TGS_RE),
                             ("asrep", "asrep_roast.txt", ASREP_RE)):
@@ -55,7 +55,7 @@ def extract(run_dir: str) -> dict:
 def prepare(run_dir: str, wordlist: str = "/usr/share/wordlists/rockyou.txt") -> dict:
     """Write ready-to-crack .hash files and return the exact offline crack commands per kind."""
     data = extract(run_dir)
-    hdir = os.path.join(run_dir, "parsdx", "hashes")
+    hdir = os.path.join(run_dir, "offensive-ext", "hashes")
     os.makedirs(hdir, exist_ok=True)
     try:
         os.chmod(hdir, 0o700)
@@ -141,7 +141,7 @@ def ingest_cracked(run_dir: str, show_file: str) -> list[dict]:
             "severity": "high",
             "cracked": True,
         })
-    out = os.path.join(run_dir, "parsdx", "cracked.json")
+    out = os.path.join(run_dir, "offensive-ext", "cracked.json")
     json.dump(findings, open(out, "w", encoding="utf-8"), indent=2, ensure_ascii=False)
     try:
         os.chmod(out, 0o600)
@@ -161,7 +161,7 @@ def _self_test() -> int:
             ok += 1
 
     with tempfile.TemporaryDirectory() as d:
-        pdir = os.path.join(d, "parsdx"); os.makedirs(pdir)
+        pdir = os.path.join(d, "offensive-ext"); os.makedirs(pdir)
         open(os.path.join(pdir, "kerberoast.txt"), "w").write(
             "SPN row\n$krb5tgs$23$*svc_sql$CORP.LOCAL$MSSQLSvc/sql01*$deadbeef00\n"
             "$krb5tgs$18$websvc$CORP.LOCAL$*HTTP/web01*$aa11bb22\n")
@@ -185,7 +185,7 @@ def _self_test() -> int:
         check("cracked finding type + high sev", cracked[0]["type"] == "cracked_credential" and cracked[0]["severity"] == "high")
 
         # john rewrites the AS-REP header, so an exact-string lookup would silently ingest nothing.
-        ad = os.path.join(d, "parsdx"); os.makedirs(ad, exist_ok=True)
+        ad = os.path.join(d, "offensive-ext"); os.makedirs(ad, exist_ok=True)
         open(os.path.join(ad, "asrep_roast.txt"), "w").write(
             "$krb5asrep$23$noauthpre@CORP.LOCAL:aabbccdd$feedface00\n")
         jpot = os.path.join(d, "john.pot")
@@ -211,12 +211,12 @@ def main(argv=None) -> int:
     if "--results" in args:
         sf = args[args.index("--results") + 1]
         c = ingest_cracked(run_dir, sf)
-        print(f"ingested {len(c)} cracked credential(s) -> parsdx/cracked.json")
+        print(f"ingested {len(c)} cracked credential(s) -> offensive-ext/cracked.json")
         return 0
     cmds = prepare(run_dir)
     if not cmds:
         print("no kerberoast/asrep hashes collected yet (run the offensive pass first)."); return 0
-    print("# Ready-to-crack hash files written under parsdx/hashes/. Run OFFLINE with your wordlist:")
+    print("# Ready-to-crack hash files written under offensive-ext/hashes/. Run OFFLINE with your wordlist:")
     for kind, c in cmds.items():
         print(f"\n[{kind}] {c['count']} hash(es) -> {c['file']}")
         print(f"  {c['hashcat']}")

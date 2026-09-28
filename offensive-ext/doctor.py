@@ -120,8 +120,8 @@ def check_report_engine() -> list[tuple]:
                  "reportlab -> report regen WILL fail; findings still land in review.json")]
     if os.path.exists(parent):
         if _imports_reportlab(sys.executable):
-            return [("report engine", OK, "report_v2 next to parsdx-ext, reportlab OK in this venv")]
-        return [("report engine", WARN, "found report_v2 next to parsdx-ext but this interpreter "
+            return [("report engine", OK, "report_v2 next to offensive-ext, reportlab OK in this venv")]
+        return [("report engine", WARN, "found report_v2 next to offensive-ext but this interpreter "
                  "cannot import reportlab -> report regen WILL fail; fix with "
                  "`.venv/bin/pip install reportlab`; findings still land in review.json")]
     return [("report engine", WARN, "report_v2.py not found — findings still written to review.json, "
@@ -396,7 +396,7 @@ def _self_test() -> int:
 
 
 def main(argv=None) -> int:
-    ap = argparse.ArgumentParser(description="PARSDX pre-engagement readiness check (GO/NO-GO)")
+    ap = argparse.ArgumentParser(description="offensive-ext pre-engagement readiness check (GO/NO-GO)")
     ap.add_argument("--self-test", action="store_true")
     ap.add_argument("--scope"); ap.add_argument("--run-dir")
     ap.add_argument("--dc"); ap.add_argument("--domain")

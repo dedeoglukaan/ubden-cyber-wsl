@@ -1,4 +1,4 @@
-# PARSDX post-UBDEN extension — master plan
+# offensive-ext post-UBDEN extension — master plan
 
 Our add-on runs AFTER UBDEN's read-only assessment. UBDEN answers "what is exposed";
 we answer "and here is how an attacker turns that into Domain Admin", with evidence,
@@ -19,7 +19,7 @@ No plugin system exists. We attach at the `report_v2.py <run_dir>` boundary:
 4. Append step events to `steps.json` with coverage-recognized name prefixes.
 5. Re-run `python3 report_v2.py <run_dir>` (or `wizard.py --report-only`).
 
-## Pipeline (modules of parsdx-ext), and what each borrows
+## Pipeline (modules of offensive-ext), and what each borrows
 
 | Module | Job | Borrow from (license posture) |
 |---|---|---|
@@ -59,5 +59,5 @@ No plugin system exists. We attach at the `report_v2.py <run_dir>` boundary:
 6. **`map` + `narrate` + `coverage`** — the report differentiators on top.
 
 ## A live engagement vs. this build project
-- **Tomorrow = manual.** UBDEN scans; we run nxc/bloodhound.py/certipy BY HAND with Claude guiding, `guard` discipline applied manually (read the lockout policy before any auth). No need for parsdx-ext to be finished.
-- **parsdx-ext = the ongoing project** that bakes tomorrow's manual steps into one guarded, logged, report-integrated pipeline for future jobs.
+- **Tomorrow = manual.** UBDEN scans; we run nxc/bloodhound.py/certipy BY HAND with Claude guiding, `guard` discipline applied manually (read the lockout policy before any auth). No need for offensive-ext to be finished.
+- **offensive-ext = the ongoing project** that bakes tomorrow's manual steps into one guarded, logged, report-integrated pipeline for future jobs.

@@ -1,4 +1,4 @@
-"""MITRE ATT&CK mapping + Navigator layer generation for the PARSDX report layer.
+"""MITRE ATT&CK mapping + Navigator layer generation for the offensive-ext report layer.
 
 Findings carry a `technique` (an ATT&CK ID). This builds a Navigator layer JSON the client
 can open in the ATT&CK Navigator, and auto-tags each finding with the technique name/tactic.
@@ -40,7 +40,7 @@ def tag_findings(findings: list[dict]) -> list[dict]:
     return findings
 
 
-def build_layer(findings: list[dict], name: str = "PARSDX Engagement",
+def build_layer(findings: list[dict], name: str = "offensive-ext Engagement",
                 description: str = "Techniques demonstrated during the assessment.") -> dict:
     """Build an ATT&CK Navigator layer (schema 4.5) scored by how many findings hit each technique."""
     counts: dict[str, int] = {}
@@ -109,7 +109,7 @@ def _self_test() -> int:
     p = os.path.join(tempfile.mkdtemp(), "layer.json")
     write_layer(findings, p)
     reloaded = json.load(open(p))
-    check("layer writes valid json", reloaded["name"] == "PARSDX Engagement")
+    check("layer writes valid json", reloaded["name"] == "offensive-ext Engagement")
 
     total = 9
     print(f"\n{ok}/{total} checks passed")

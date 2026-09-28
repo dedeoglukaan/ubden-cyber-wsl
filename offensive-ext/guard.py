@@ -1,4 +1,4 @@
-"""Lockout-aware authentication guard for the PARSDX post-UBDEN offensive chain.
+"""Lockout-aware authentication guard for the offensive-ext post-UBDEN offensive chain.
 
 No offensive tool in our stack (NetExec, kerbrute, Impacket) enforces account-lockout
 safety. This module is that safety layer: it reads the domain lockout policy over LDAP,
@@ -302,7 +302,7 @@ def _self_test() -> int:
 
 
 def main(argv=None) -> int:
-    ap = argparse.ArgumentParser(description="PARSDX lockout-aware auth guard")
+    ap = argparse.ArgumentParser(description="offensive-ext lockout-aware auth guard")
     ap.add_argument("--self-test", action="store_true", help="run offline self-tests")
     ap.add_argument("--policy", action="store_true", help="read live lockout policy over LDAPS")
     ap.add_argument("--dc"); ap.add_argument("--domain")
@@ -322,7 +322,7 @@ def main(argv=None) -> int:
         except LockoutRisk as e:
             print(f"[guard] LDAPS policy read unavailable: {e}")
             print("[guard] This standalone display is OPTIONAL — the pipeline pre-flight validates the "
-                  "credential via an nxc bind instead. (Run with parsdx-ext/.venv/bin/python, which has "
+                  "credential via an nxc bind instead. (Run with offensive-ext/.venv/bin/python, which has "
                   "ldap3, to see the policy here.)")
             return 0
         except Exception as e:  # noqa: BLE001 - self-signed cert / unreachable DC etc.

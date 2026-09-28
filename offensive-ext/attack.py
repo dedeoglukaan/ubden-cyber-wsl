@@ -1,9 +1,9 @@
-"""PARSDX post-UBDEN offensive orchestrator (safety-hardened).
+"""offensive-ext post-UBDEN offensive orchestrator (safety-hardened).
 
 Runs AFTER UBDEN's read-only assessment. Reads the UBDEN run folder, then drives a bounded,
 READ-ONLY-FIRST offensive chain against IN-SCOPE AD only, saving evidence into the run folder.
 
-Safety model (see SAFETY.md / parsdx-safety-audit.md):
+Safety model (see SAFETY.md / offensive-ext-safety-audit.md):
   * Mandatory scope allowlist — no allowlist => zero packets (fail closed).
   * Credential required (password XOR hashes) — never authenticates with an empty password.
   * One guarded pre-flight bind validates the credential BEFORE any multi-host fan-out; a bad
@@ -463,10 +463,10 @@ def run_plan(plan, out_dir, dry_run, ctx, nets, hosts, secrets=None) -> list[dic
                 rec["status"] = "AUTH_FAIL_ABORT"
                 print(f"[{i:02d}] {step.name}: credential rejected — aborting before fan-out")
                 aborted = True; break
-    with open(os.path.join(out_dir, "parsdx_steps.json"), "w", encoding="utf-8") as fh:
+    with open(os.path.join(out_dir, "offensive_steps.json"), "w", encoding="utf-8") as fh:
         json.dump(events, fh, indent=2)
     try:
-        os.chmod(os.path.join(out_dir, "parsdx_steps.json"), 0o600)
+        os.chmod(os.path.join(out_dir, "offensive_steps.json"), 0o600)
     except OSError:
         pass
     if aborted:
@@ -508,7 +508,7 @@ def run_offensive(ctx, *, user, password=None, hashes=None, nets=None, hosts_all
               f"window={getattr(policy,'observation_window_min','?')} -> safe budget {g.budget()}")
 
     plan = build_plan(ctx, in_hosts, user, password, hashes, enable_writes, allow_dcsync)
-    out_dir = out_dir or os.path.join(ctx.run_dir, "parsdx")
+    out_dir = out_dir or os.path.join(ctx.run_dir, "offensive-ext")
     print(f"# scope: {len(in_hosts)} in / {len(dropped)} dropped out-of-scope; DC={dc_target}")
     # A NETWORK in engagement.json is scope, not a host list. We deliberately do not expand it --
     # per-host auth steps against 254 addresses under a 3-attempt lockout budget is exactly the
@@ -703,7 +703,7 @@ def _self_test() -> int:
 
 
 def main(argv=None) -> int:
-    ap = argparse.ArgumentParser(description="PARSDX post-UBDEN offensive orchestrator (hardened)")
+    ap = argparse.ArgumentParser(description="offensive-ext post-UBDEN offensive orchestrator (hardened)")
     ap.add_argument("--self-test", action="store_true")
     ap.add_argument("--run-dir")
     ap.add_argument("--scope", help="REQUIRED for live runs: allowlist file (IP/CIDR/hostname per line)")

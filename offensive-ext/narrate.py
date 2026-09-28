@@ -96,7 +96,7 @@ def _self_test() -> int:
 
     chain = [
         {"type": "asrep_roast", "asset": "CORP\\jdoe", "severity": "high", "cvss_score": 7.5,
-         "evidence": "parsdx/asrep_roast.txt"},
+         "evidence": "offensive-ext/asrep_roast.txt"},
         {"type": "local_admin", "asset": "10.0.0.20", "severity": "high", "cvss_score": 9.8},
         {"type": "adcs_esc", "asset": "UserAuth", "severity": "critical", "cvss_score": 9.9},
     ]
@@ -104,7 +104,7 @@ def _self_test() -> int:
     check("has 3 stages", text.count("Aşama ") == 3)
     check("stage 1 is credential capture", "Aşama 1 — Kimlik elde etme" in text)
     check("fills asset", "CORP\\jdoe" in text and "UserAuth" in text)
-    check("shows evidence path", "parsdx/asrep_roast.txt" in text)
+    check("shows evidence path", "offensive-ext/asrep_roast.txt" in text)
     check("DA conclusion is Critical framing", "KRİTİK" in text and "Domain Admin" in text)
     text2 = narrate(chain, reached_da=False)
     check("non-DA conclusion differs", "ulaşmadı" in text2)

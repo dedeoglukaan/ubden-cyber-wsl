@@ -1,4 +1,4 @@
-"""Fold PARSDX findings back into UBDEN's report.
+"""Fold offensive-ext findings back into UBDEN's report.
 
 Maps our normalized+scored findings to UBDEN's finding schema and writes them into
 `review.json['findings']`. To land as VERIFIED (not draft), UBDEN requires: status
@@ -18,6 +18,11 @@ import sys
 
 _REQUIRED = ("title", "asset", "description", "impact", "recommendation", "reproduction", "reviewed_by")
 
+# UBDEN refuses to mark a finding verified when `reviewed_by` is empty (analyst_review.verified_finding),
+# so this needs a non-empty default -- but it is an ANALYST SIGNATURE that ends up in the client PDF
+# ("Doğrulayan analist"), not a product name. Whoever runs the chain sets their own via --reviewer.
+DEFAULT_REVIEWER = os.environ.get("UBDEN_REVIEWER") or "Analist"
+
 
 def _sha256(path: str) -> str:
     h = hashlib.sha256()
@@ -27,8 +32,8 @@ def _sha256(path: str) -> str:
     return h.hexdigest()
 
 
-def to_ubden_finding(f: dict, run_dir: str, idx: int) -> dict:
-    """Map a normalized PARSDX finding to UBDEN's finding schema."""
+def to_ubden_finding(f: dict, run_dir: str, idx: int, reviewer: str = "") -> dict:
+    """Map a normalized offensive-ext finding to UBDEN's finding schema."""
     evidence_rel = f.get("evidence", "")
     evidence_abs = os.path.join(run_dir, evidence_rel) if evidence_rel else ""
     # Mirror UBDEN's verified_finding/evidence() gate so we never mark 'verified' something report_v2
@@ -59,7 +64,7 @@ def to_ubden_finding(f: dict, run_dir: str, idx: int) -> dict:
         "reference": f.get("reference", ""),
         "cvss": f.get("cvss", ""),
         "reproduction": reproduction,
-        "reviewed_by": "PARSDX",
+        "reviewed_by": reviewer or DEFAULT_REVIEWER,
         "category": f.get("category", "Active Directory"),
         "access_point": f.get("access_point", "İç Ağ"),
         "user_profile": f.get("user_profile", "Kurum Çalışanı / düşük yetkili"),
@@ -85,11 +90,11 @@ def load_review(run_dir: str) -> dict:
             return data
     except (OSError, ValueError):
         pass
-    return {"schema": 3, "analyst_summary": "", "reviewer": "PARSDX",
+    return {"schema": 3, "analyst_summary": "", "reviewer": "",
             "approved_at": "", "cases": [], "findings": []}
 
 
-def emit_findings(run_dir: str, findings: list[dict]) -> dict:
+def emit_findings(run_dir: str, findings: list[dict], reviewer: str = "") -> dict:
     """Write findings into review.json (dedupe by title). Returns counts."""
     review = load_review(run_dir)
     existing = {f.get("title") for f in review.get("findings", []) if isinstance(f, dict)}
@@ -98,7 +103,7 @@ def emit_findings(run_dir: str, findings: list[dict]) -> dict:
     for f in findings:
         if f.get("title") in existing:
             continue
-        uf = to_ubden_finding(f, run_dir, start + added + 1)
+        uf = to_ubden_finding(f, run_dir, start + added + 1, reviewer)
         review["findings"].append(uf)
         existing.add(uf["title"])
         added += 1
@@ -120,7 +125,7 @@ def regenerate_report(run_dir: str) -> int:
     """Re-run UBDEN's report_v2.py to fold our findings into the PDFs/HTML.
 
     report_v2.py needs reportlab, which install.sh puts in /opt/ubden-cyber/.venv — NOT in system
-    python. So prefer the installed copy+venv; fall back to a report_v2.py sitting next to parsdx-ext."""
+    python. So prefer the installed copy+venv; fall back to a report_v2.py sitting next to offensive-ext."""
     installed_report = "/opt/ubden-cyber/report_v2.py"
     installed_py = "/opt/ubden-cyber/.venv/bin/python"
     parent_report = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "report_v2.py")
@@ -130,7 +135,7 @@ def regenerate_report(run_dir: str) -> int:
     if os.path.exists(parent_report):
         tries.append((sys.executable, parent_report))
     if not tries:
-        print("[emit] report_v2.py not found (checked /opt/ubden-cyber and parsdx-ext parent); "
+        print("[emit] report_v2.py not found (checked /opt/ubden-cyber and offensive-ext parent); "
               "findings ARE in review.json — run report_v2.py manually to render.")
         return 1
     py, rep = tries[0]
@@ -151,16 +156,16 @@ def _self_test() -> int:
 
     import tempfile
     with tempfile.TemporaryDirectory() as d:
-        os.makedirs(os.path.join(d, "parsdx"))
-        ev = os.path.join(d, "parsdx", "kerberoast.txt")
+        os.makedirs(os.path.join(d, "offensive-ext"))
+        ev = os.path.join(d, "offensive-ext", "kerberoast.txt")
         open(ev, "w").write("$krb5tgs$23$*svc_sql$CORP.LOCAL$...")
         f_with = {"type": "kerberoast", "title": "Kerberoastable: svc_sql", "asset": "CORP\\svc_sql",
                   "description": "d", "impact": "i", "recommendation": "r", "root_cause": "rc",
                   "severity": "high", "cvss": "CVSS:3.1/AV:N/AC:H/PR:L/UI:N/S:U/C:H/I:H/A:H",
-                  "evidence": "parsdx/kerberoast.txt", "technique": "T1558.003"}
+                  "evidence": "offensive-ext/kerberoast.txt", "technique": "T1558.003"}
         f_noev = {"type": "asrep_roast", "title": "AS-REP: jdoe", "asset": "CORP\\jdoe",
                   "description": "d", "impact": "i", "recommendation": "r", "severity": "high",
-                  "evidence": "parsdx/missing.txt"}
+                  "evidence": "offensive-ext/missing.txt"}
         res = emit_findings(d, [f_with, f_noev])
         check("both findings added", res["added"] == 2)
         check("one verified (has evidence)", res["verified"] == 1)
@@ -171,7 +176,7 @@ def _self_test() -> int:
         v = byid["PX-001"]
         check("verified finding status doğrulandı", v["status"] == "doğrulandı")
         check("evidence_sha256 matches file", v["evidence_sha256"] == _sha256(ev))
-        check("required fields filled + reviewed_by PARSDX", all(v[k] for k in _REQUIRED) and v["reviewed_by"] == "PARSDX")
+        check("required fields filled + reviewed_by defaulted", all(v[k] for k in _REQUIRED) and v["reviewed_by"] == DEFAULT_REVIEWER)
         check("draft finding is taslak", byid["PX-002"]["status"] == "taslak")
 
         # idempotent: re-emit same titles doesn't duplicate

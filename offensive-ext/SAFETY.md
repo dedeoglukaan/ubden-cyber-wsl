@@ -1,6 +1,6 @@
 # SAFETY — "do not wreck the client machine"
 
-How parsdx-ext maps to the engagement contract (PARSDX↔client, Madde 5/8/9), UBDEN's bounded design,
+How offensive-ext maps to the engagement contract (tester↔client, Madde 5/8/9), UBDEN's bounded design,
 and industry standard (PTES / NIST SP 800-115). Sources at bottom.
 
 ## What our DEFAULT chain does — and why none of it can break the box
@@ -67,7 +67,7 @@ first. On the day: dry-run, then step through slowly with Claude watching output
 the worst realistic outcome of the default chain is "a scan showed up in their logs" — not an outage.
 
 ## Audit remediation (2026-09-26)
-A hostile self-audit (`parsdx-safety-audit.md`) found the code did not match this file. All six
+A hostile self-audit (`offensive-ext-safety-audit.md`) found the code did not match this file. All six
 release-blockers are now fixed and self-tested (103/103):
 - **C1 scope** — mandatory `--scope` allowlist; no allowlist ⇒ zero packets (fail closed); out-of-scope
   hosts dropped from context and skipped per-step; junk/option-like host entries rejected.

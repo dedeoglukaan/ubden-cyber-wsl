@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Install the offensive toolchain the PARSDX post-UBDEN chain shells out to.
+# Install the offensive toolchain the offensive-ext post-UBDEN chain shells out to.
 # Run this on the Kali WSL box AFTER UBDEN is installed, BEFORE running pipeline.py.
 # Idempotent; safe to re-run. Kali/Debian only.
 set -euo pipefail
@@ -41,7 +41,7 @@ if ! command -v nxc >/dev/null 2>&1 && ! command -v netexec >/dev/null 2>&1; the
   pipx install git+https://github.com/Pennyw0rth/NetExec 2>/dev/null || FAILED+=("netexec (apt+git)")
 fi
 
-echo "[3/4] PARSDX python kutuphaneleri (izole venv; sistem python'una dokunmaz)"
+echo "[3/4] offensive-ext python kutuphaneleri (izole venv; sistem python'una dokunmaz)"
 # No --break-system-packages: it can break the box's Python. Use a dedicated venv.
 # These libs are OPTIONAL — guard falls back to an nxc bind if ldap3 is absent, score has its own
 # CVSS engine, attck works without mitreattack-python. So this step is best-effort.
@@ -75,7 +75,7 @@ for key in "${!CHECK[@]}"; do
   if [[ -n "$found" ]]; then printf '  [OK]      %-18s -> %s\n' "$key" "$found"
   else printf '  [MISSING] %-18s (%s)\n' "$key" "${CHECK[$key]}"; missing=$((missing+1)); fi
 done
-# These libs live in parsdx-ext/.venv, NOT system python — check the interpreter that actually
+# These libs live in offensive-ext/.venv, NOT system python — check the interpreter that actually
 # runs our tools, or this always reports a false MISSING.
 VENVPY="$HERE/.venv/bin/python"
 [ -x "$VENVPY" ] || VENVPY="$(command -v python3)"
@@ -100,5 +100,5 @@ if [[ ${#FAILED[@]} -gt 0 ]]; then printf '[UYARI] Kurulamayanlar: %s\n' "${FAIL
 if [[ $missing -gt 0 ]]; then
   echo "[UYARI] $missing arac eksik. pipx PATH icin yeni bir shell ac (source ~/.bashrc) ve tekrar dogrula." >&2
 else
-  echo "[OK] Offensive toolchain hazir. Simdi: python3 parsdx-ext/pipeline.py --run-dir <UBDEN_run> ..."
+  echo "[OK] Offensive toolchain hazir. Simdi: python3 offensive-ext/pipeline.py --run-dir <UBDEN_run> ..."
 fi

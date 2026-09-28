@@ -1,6 +1,6 @@
-# FINAL adversarial safety audit — parsdx-ext
+# FINAL adversarial safety audit — offensive-ext
 
-Date: 2026-09-26 · Scope: all `.py` in `parsdx-ext/` read in full, incl. recent additions
+Date: 2026-09-26 · Scope: all `.py` in `offensive-ext/` read in full, incl. recent additions
 (`doctor.py`, `crack.py`, `remediation.py`, `cracked_credential` wiring in `pipeline.py`).
 Method: read every code path, ran all 7 module self-tests (102/102 pass), and wrote bypass
 harnesses for scope / lockout / writes / secrets / denylist.
@@ -119,7 +119,7 @@ smb2-time` (read-only, fixed argv) and hashcat (offline, printed only, never run
 is `find`, coercer verb is `scan` (self-tests assert both).
 
 **6. Secrets at rest / DA claim.** `umask 0o077`; evidence dir 0700; every artifact 0600
-(`parsdx_steps.json`, `SUMMARY.json`, `review.json`, `cracked.json`, `*.hash`, `REMEDIATION.md`
+(`offensive_steps.json`, `SUMMARY.json`, `review.json`, `cracked.json`, `*.hash`, `REMEDIATION.md`
 — each with a `chmod 0600`, grep-confirmed). `_scrub_secrets` strips the echoed cleartext
 credential before hashing (self-test). Pre-flight output is captured to memory, never a file.
 `doctor.py` sends no auth and does not print the password (only "one credential supplied").
