@@ -124,6 +124,11 @@ class OptionalToolsTests(unittest.TestCase):
         self.assertTrue(summary["injectable"])
         self.assertEqual(summary["ip"], "10.0.0.7")
 
+    def test_authorized_rejects_placeholder_references(self):
+        self.assertTrue(optional_tools.authorized({"authorization_reference": "PT-2026-01"}))
+        for placeholder in ("", "Belirtilmedi", "yok", "DEMO-ONLY", "n/a"):
+            self.assertFalse(optional_tools.authorized({"authorization_reference": placeholder}))
+
     def test_catalog_flags_are_declared(self):
         for entry in optional_tools.CATALOG:
             self.assertIn("flag", entry)

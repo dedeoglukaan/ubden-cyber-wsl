@@ -67,9 +67,16 @@ def enabled(meta, flag):
     return flag in (meta.get("enabled_modules", []) or [])
 
 
+_AUTH_PLACEHOLDERS = {"", "belirtilmedi", "yok", "none", "n/a", "na", "demo-only", "test"}
+
+
 def authorized(meta):
-    """Intrusive opt-in modules also require a written authorization reference."""
-    return bool(str(meta.get("authorization_reference", "")).strip())
+    """Intrusive opt-in modules require a real written authorization reference.
+
+    A placeholder (e.g. the win_scan default 'Belirtilmedi') does not count.
+    """
+    ref = str(meta.get("authorization_reference", "")).strip().lower()
+    return bool(ref) and ref not in _AUTH_PLACEHOLDERS
 
 
 # --------------------------------------------------------------------------- #

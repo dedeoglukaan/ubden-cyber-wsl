@@ -44,6 +44,25 @@ class WinScanContractTests(unittest.TestCase):
         self.assertLessEqual(meta["top_ports"], 1000)
         self.assertLessEqual(meta["max_rate"], 500)
 
+    def test_optin_intrusive_flags_gated(self):
+        # sqlmap needs the flag AND a real authorization reference AND network/full.
+        with_auth = win_scan.build_meta(
+            {"targets": ["10.0.0.0/24"], "profile": "full", "authorization_reference": "PT-2026-01",
+             "sql_injection_test": True, "voip_scan": True}, host_snapshot={})
+        self.assertIn("sql_injection_test", with_auth["enabled_modules"])
+        self.assertIn("voip_scan", with_auth["enabled_modules"])
+        # No authorization reference -> sqlmap flag withheld (voip still allowed).
+        no_auth = win_scan.build_meta(
+            {"targets": ["10.0.0.0/24"], "profile": "full",
+             "sql_injection_test": True, "voip_scan": True}, host_snapshot={})
+        self.assertNotIn("sql_injection_test", no_auth["enabled_modules"])
+        self.assertIn("voip_scan", no_auth["enabled_modules"])
+        # Not requested -> absent.
+        off = win_scan.build_meta({"targets": ["10.0.0.0/24"], "profile": "full",
+                                   "authorization_reference": "PT-1"}, host_snapshot={})
+        self.assertNotIn("sql_injection_test", off["enabled_modules"])
+        self.assertNotIn("voip_scan", off["enabled_modules"])
+
     def test_choose_run_base_exists(self):
         base = win_scan.choose_run_base()
         self.assertTrue(base.is_dir())

@@ -340,6 +340,13 @@ def build_meta(form: dict, host_snapshot: dict) -> dict:
         enabled += ["dns-osint"]
     if ad.get("mode") != "disabled":
         enabled += ["ad"]
+    # Opt-in intrusive extras: sqlmap is wired into the network/full probe suite and
+    # also requires a real written authorization reference (not the placeholder).
+    auth_ref = (form.get("authorization_reference") or "").strip()
+    if profile in ("network", "full") and bool(form.get("sql_injection_test")) and auth_ref:
+        enabled += ["sql_injection_test"]
+    if profile in ("network", "full") and bool(form.get("voip_scan")):
+        enabled += ["voip_scan"]
     return {
         "schema": 8, "id": str(uuid.uuid4()),
         "client": (form.get("client") or "").strip() or "Belirtilmedi",

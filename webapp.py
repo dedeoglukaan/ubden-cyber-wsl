@@ -167,6 +167,9 @@ border-left:3px solid var(--teal);border-radius:8px;padding:11px 16px;color:var(
 <div><label>Es zamanli serit</label><input id="lanes" type="number" value="3" min="1" max="6"></div>
 </div>
 <label class="adapters" style="margin-top:12px"><input type="checkbox" id="defcred"> Varsayilan kimlik denemesi (opt-in, sinirli, kilitlenme-farkinda)</label>
+<label class="adapters"><input type="checkbox" id="sqli"> SQL enjeksiyon testi — sqlmap (opt-in, YETKILI; sinirli: veri dokme/OS kabuk yok)</label>
+<label class="adapters"><input type="checkbox" id="voip"> VoIP/SIP cihaz kesfi — sipvicious/svmap (opt-in)</label>
+<div class="hint">sqlmap davetsiz (intrusive) bir testtir: yalnizca <b>Yetki referansi</b> girildiginde ve bu kutu isaretliyken calisir; web portu (80/443/8080/8443) acik kapsam ici adreslerde yururlur.</div>
 <div id="adapters" class="adapters"><label>Ag adaptorleri yukleniyor...</label></div>
 <div class="hint">Adaptor secimi kapsam guvenligi icindir: yalniz secilen adaptorden erisilebilen IP'ler taranir (tek host hedeflerinde). Yonetici yetkisi + Npcap ARP/MAC icin gereklidir.</div>
 <details style="margin-top:14px"><summary style="cursor:pointer;color:var(--teal);font-family:'IBM Plex Mono',monospace">▸ Kimlikli / kurumsal testler (opsiyonel) — AD/LDAP · Web/Swagger · SSH</summary>
@@ -247,6 +250,8 @@ async function start(){
  tester:c("tester"),targets:lines(v("targets")),exclusions:lines(v("exclusions")),
  profile:v("profile"),top_ports:v("top_ports"),max_rate:v("max_rate"),lanes:v("lanes"),
  default_cred_test:document.getElementById("defcred").checked,
+ sql_injection_test:document.getElementById("sqli").checked,
+ voip_scan:document.getElementById("voip").checked,
  ad_domain:c("ad_domain"),ad_dc:c("ad_dc"),ad_user:c("ad_user"),ad_pass:v("ad_pass"),
  web_url:c("web_url"),swagger_url:c("swagger_url"),
  ssh_host:c("ssh_host"),ssh_user:c("ssh_user"),ssh_pass:v("ssh_pass"),
