@@ -165,6 +165,37 @@ Bir hesap kilitlendiyse / müşteri şikâyet ettiyse: **durdur, Claude'a söyle
 
 Elle `YETKILIYIM` yaz. ⚠️ **`--assume-yes` KULLANMA** — insan onayı olmadan tüm domain hash'lerini döker.
 
+## 8B — Rapordan ÖNCE: elle girilecek iki bulgu
+
+UBDEN bu ikisini topluyor ama raporuna basmıyor. `review.json`'a elle gir:
+
+```bash
+python3 -c "import json;d=json.load(open('$RUN/AD_ASSESSMENT.json'));print(d.get('password_policy'),d.get('machine_account_quota'))"
+python3 - "$RUN" <<'EOF'
+import glob,sys,xml.etree.ElementTree as ET
+bad=set()
+for f in glob.glob(sys.argv[1]+'/targets/*/raw/*.xml'):
+    try: root=ET.parse(f).getroot()
+    except Exception: continue
+    for h in root.iter('host'):
+        ip=next((a.get('addr') for a in h.iter('address') if a.get('addrtype')=='ipv4'),'')
+        for s in h.iter('script'):
+            if s.get('id') in ('smb-security-mode','smb2-security-mode'):
+                for el in s.iter('elem'):
+                    if el.get('key')=='message_signing' and (el.text or '').strip()=='disabled':
+                        bad.add(ip)
+print('SMB imzalama KAPALI:', ', '.join(sorted(bad)) or 'yok')
+EOF
+```
+
+1. **Parola/kilitlenme politikası** — `lockout_threshold` 0 ise kilitlenme yok; `machine_account_quota`
+   0 olmalı; `min_length`. Rapor bu bloğu basmaz, "ayrıca kaydedilen kontrollerle değerlendirilmiş
+   sayılır" der.
+2. **SMB imzalama** — `disabled` çıkan host varsa bulgudur. Rapor TCP/445 için "imzalama
+   denetlenmedi" yazar, halbuki nmap denetlemiştir.
+
+⚠️ CVE listesi ve kullanıcı/grup/bilgisayar sayıları rapora **zaten giriyor** — tekrar yazma.
+
 ## 9 — Temizlik (iş biter bitmez)
 
 ```bash

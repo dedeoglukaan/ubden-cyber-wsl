@@ -5,8 +5,8 @@ we answer "and here is how an attacker turns that into Domain Admin", with evide
 then we feed our findings back into UBDEN's report. This is what beats a shallow
 competitor report (attack narrative + CVSS + chain severity + coverage + ATT&CK).
 
-Grounded in: `../` (UBDEN code), `../../research-offensive-ad-tools.md`,
-`../../research-report-automation.md`, `../../ubden-flow-map.md`.
+Grounded in the UBDEN source in `../` plus a tool/technique survey done before the build; the
+survey notes are not part of this repository.
 
 ## Integration seam (from the UBDEN map)
 No plugin system exists. We attach at the `report_v2.py <run_dir>` boundary:
@@ -23,7 +23,7 @@ No plugin system exists. We attach at the `report_v2.py <run_dir>` boundary:
 
 | Module | Job | Borrow from (license posture) |
 |---|---|---|
-| `seed` | UBDEN JSON → NetExec workspace DB (hosts, DC, domain, services) as the shared state store | **NetExec** workspace schema (BSD-2, adapt) |
+| *(context load)* | UBDEN JSON → in-memory run context (hosts, DC, domain, services). Lives in `attack.py::load_context`; the separate NetExec-workspace store was designed and then dropped as unnecessary | **NetExec** workspace schema (BSD-2, design only) |
 | `guard` | Reads lockoutThreshold/observationWindow over LDAP and computes the safe budget (shown at pre-flight); provides the lockout-signal detector used by the kill-switch. Live lockout protection = pre-flight validation bind + per-host single-thread auth + output kill-switch (the `guarded_attempt` budget engine is reserved for a future spray path, not the default chain) | **OURS** — no tool does this; the #1 safety piece |
 | `collect` | BloodHound.py (`-c DCOnly` quiet → `All`) with client test account → ingest to BloodHound CE | **BloodHound.py** (MIT) + **BloodHound CE** (Apache-2) |
 | `plan` | Query CE `shortestPath` to DA; map each edge → a primitive (edge→verb→tool table) | **BloodHound** edge taxonomy + **Adalanche** AQL edge names (AGPL → vocab only) |
@@ -35,13 +35,14 @@ No plugin system exists. We attach at the `report_v2.py <run_dir>` boundary:
 | `emit` | Write verified findings + coverage steps into the run folder; trigger report_v2 | UBDEN seam |
 
 ## License posture (firm)
-- **Shell out** to heavy/GPL tools (nxc, certipy, bloodyAD, coercer, responder, bloodhound.py, mitm6) — license irrelevant when invoked as a subprocess.
+- **Shell out** to heavy/GPL tools (nxc, certipy, bloodyAD, coercer, bloodhound.py) — license irrelevant when invoked as a subprocess.
 - **Vendor code** only from permissive: RedHat `cvss` (LGPL, as lib), `mitreattack-python` (Apache), Ghostwriter/PeTeReport finding-schema ideas (BSD/permissive).
 - GPL/AGPL/OSL (AD-Miner, GoodHound, PlumHound, PingCastle, Adalanche, Snaffler, Responder, mitm6, DonPAPI): **borrow the design/output shape, run as separate tool — never paste their source into our deliverable.**
 
 ## Safety rails baked in (contract: low-rate, lockout-aware, non-destructive)
 - `guard` wraps all auth. No spray without reading the domain policy first.
-- Read-only-first in the automated pass: `certipy find`, `coercer scan`, `responder -A`, BloodHound collection, share crawl. SAFE.
+- Read-only-first in the automated pass: `certipy find`, `coercer scan`, BloodHound collection, share crawl. SAFE.
+- Responder and mitm6 are **not installed and never called** — see SAFETY.md.
 - Behind explicit flag + operator confirm, NEVER unattended: directory writes (bloodyAD), coercion firing, credential dumping (secretsdump/DonPAPI), Responder active / mitm6.
 - Every write logs its inverse (revert log) = the non-destructive audit trail.
 
@@ -50,14 +51,18 @@ No plugin system exists. We attach at the `report_v2.py <run_dir>` boundary:
 > are **planned, not yet implemented** — today only `coercer scan` (read-only) runs. Treat the rows
 > above describing writes as the design target, not current behaviour.
 
-## Build order (MVP first — small, testable, no live target needed until `exec`)
+## Build order (historical — all of it is built; kept for the reasoning)
 1. **`guard`** — the lockout math + LDAP policy read. Foundational, safe, unit-testable offline. Build first.
 2. **`score`** — wrap RedHat cvss + a first chain-severity rule. Pure logic, testable now, immediate report win (MILSAFE had no CVSS).
-3. **`seed` + `emit`** — the UBDEN JSON ↔ our pipeline ↔ review.json glue. Makes anything we produce show up in the report.
+3. **context load + `emit`** — the UBDEN JSON ↔ our pipeline ↔ review.json glue. Makes anything we produce show up in the report.
 4. **`collect` + `plan`** — BloodHound.py + CE shortestPath (needs a lab AD to test).
 5. **`exec`** — the offensive steps, guarded (needs a lab AD).
 6. **`map` + `narrate` + `coverage`** — the report differentiators on top.
 
-## A live engagement vs. this build project
-- **Tomorrow = manual.** UBDEN scans; we run nxc/bloodhound.py/certipy BY HAND with Claude guiding, `guard` discipline applied manually (read the lockout policy before any auth). No need for offensive-ext to be finished.
-- **offensive-ext = the ongoing project** that bakes tomorrow's manual steps into one guarded, logged, report-integrated pipeline for future jobs.
+## Status
+
+The chain is built and exercised: 193 self-tests, a full rehearsal against a live lab DC, and the
+offline half run against a real v5.0.0 engagement folder with `report_regenerated: true`. What is
+still design-only is marked as such above — directory writes via bloodyAD, coercion *firing*, and
+the per-write revert log. Today the automated pass fires `coercer scan` only, and the single write
+action that exists is the gated DCSync proof.

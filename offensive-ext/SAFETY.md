@@ -22,8 +22,9 @@ Hard-excluded from the tool. Not a flag, not a mode — absent by design:
 - **Zerologon (CVE-2020-1472)** — blanks the DC machine password; **breaks the domain** if not
   restored. Never. ([CrowdStrike](https://www.crowdstrike.com/en-us/blog/cve-2020-1472-zerologon-security-advisory/))
 - **noPac, MS17-010/EternalBlue and other memory-corruption/service exploits** — can crash the DC/host.
-- **Responder ACTIVE poisoning / mitm6** — MITMs real users network-wide; disruptive. (Only read-only
-  `responder -A` / IPv6-exposure check is even considered, and not in the automated chain.)
+- **Responder / mitm6** — MITMs real users network-wide; disruptive. `setup-offensive.sh` does not
+  install responder at all and no module calls it: even its read-only `-A` mode is one typo away
+  from poisoning a live network, and nothing here needs it.
 - **DDoS / stress / availability testing** — forbidden (contract Madde 5, 9).
 - **Data deletion, persistence/backdoors, deliberate shutdown, physical** — forbidden (Madde 5).
 
@@ -61,14 +62,24 @@ behind the same choke point.
 - [ ] `--enable-writes` stays OFF unless a finding genuinely needs proof AND it's confirmed.
 - [ ] Go step by step, paste output to Claude, stop on anything unexpected (contract Madde 18 right-to-suspend).
 
-## Honest caveat
-This toolkit is NEW and has not yet run against a live AD. Industry practice is to validate in a lab
-first. On the day: dry-run, then step through slowly with Claude watching output. Read-only-first means
-the worst realistic outcome of the default chain is "a scan showed up in their logs" — not an outage.
+## What has actually been exercised, and what has not
+
+- **Full chain against a live lab DC** (2026-09-28): rehearsed end to end, read-only steps only.
+- **Handoff against a real v5.0.0 run folder** produced by a live engagement (2026-09-28): the
+  offline half (parse, score, chain, coverage, remediation, emit, report regeneration) ran against
+  somebody else's real output, `report_regenerated: true`, and a finding this layer emits passes
+  UBDEN's own `analyst_review.verified_finding()` on `main` at v5.0.0-wsl.25.
+- **193 self-tests** across the 12 modules (`python3 <module>.py --self-test`).
+
+**Not yet exercised: the write/dump path against a live domain.** `--enable-writes --allow-dcsync`
+has never been fired outside a lab. Treat the first live use as a first use.
+
+On the day: dry-run, then step through slowly, watching output. Read-only-first means the worst
+realistic outcome of the default chain is "a scan showed up in their logs" — not an outage.
 
 ## Audit remediation (2026-09-26)
-A hostile self-audit (`offensive-ext-safety-audit.md`) found the code did not match this file. All six
-release-blockers are now fixed and self-tested (103/103):
+A hostile self-audit found the code did not match this file. All six release-blockers are fixed and
+self-tested; a second adversarial pass is recorded in `final5-safety.md`. The blockers were:
 - **C1 scope** — mandatory `--scope` allowlist; no allowlist ⇒ zero packets (fail closed); out-of-scope
   hosts dropped from context and skipped per-step; junk/option-like host entries rejected.
 - **C2/H3/H4 guard bypass** — one guarded credential PRE-FLIGHT bind before any fan-out; a bad/expired
