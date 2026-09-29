@@ -254,9 +254,52 @@ function Ensure-WinPython {
         if ($LASTEXITCODE -ne 0) { throw 'Python ortami (venv) olusturulamadi' }
     }
     Write-Host '  Python bagimliliklari kuruluyor (reportlab, Pillow, ldap3, paramiko, PyYAML)...' -ForegroundColor Cyan
-    & $VenvPython -m pip install --disable-pip-version-check -r (Join-Path $SourceRoot 'requirements.txt')
-    if ($LASTEXITCODE -ne 0) { throw 'Python bagimliliklari kurulamadi' }
-    & $VenvPython -m pip install --disable-pip-version-check 'playwright>=1.54,<2' | Out-Null
+    $req = Join-Path $SourceRoot 'requirements.txt'
+    # Kisitli aglar (guvenlik duvari/proxy/DPI PyPI'yi engelleyebilir) icin dayanikli kurulum:
+    #  (1) cevrimdisi tekerlek klasoru, (2) kurumsal PyPI aynasi (env), (3) uzun timeout + retry,
+    #  (4) TLS-inspection icin trusted-host. Hicbiri tutmazsa net, uygulanabilir yonerge verilir.
+    $wheelDir = @($env:UBDEN_WHEELS, (Join-Path $SourceRoot 'wheels'), (Join-Path $StateRoot 'wheels')) |
+                Where-Object { $_ -and (Test-Path -LiteralPath $_) } | Select-Object -First 1
+    $extra = @()
+    if ($env:UBDEN_PIP_INDEX) { $extra += @('--index-url', $env:UBDEN_PIP_INDEX) }
+    $ok = $false
+    if ($wheelDir) {
+        Write-Host "  Cevrimdisi tekerlekler kullaniliyor: $wheelDir" -ForegroundColor Cyan
+        & $VenvPython -m pip install --disable-pip-version-check --no-index --find-links $wheelDir -r $req
+        if ($LASTEXITCODE -eq 0) { $ok = $true }
+        else { Write-Host '  Cevrimdisi kurulum tamamlanmadi; internet denenecek...' -ForegroundColor DarkYellow }
+    }
+    if (-not $ok) {
+        & $VenvPython -m pip install --disable-pip-version-check --timeout 60 --retries 5 @extra -r $req
+        if ($LASTEXITCODE -eq 0) { $ok = $true }
+    }
+    if (-not $ok) {
+        & $VenvPython -m pip install --disable-pip-version-check --timeout 60 --retries 5 @extra `
+            --trusted-host pypi.org --trusted-host files.pythonhosted.org --trusted-host pypi.python.org -r $req
+        if ($LASTEXITCODE -eq 0) { $ok = $true }
+    }
+    if (-not $ok) {
+        throw @"
+Python bagimliliklari kurulamadi - PyPI'ye (files.pythonhosted.org) ulasilamadi.
+Guvenlik duvari/proxy/DPI PyPI cikisini engelliyor olabilir (winget calisti ama pip baglantisi reset yedi). Secenekler:
+  1) PROXY: yonetici PowerShell'de asagidakileri ayarlayip kurulumu tekrar calistirin:
+       `$env:HTTPS_PROXY = 'http://KULLANICI:PAROLA@PROXY_ADRES:PORT'
+       `$env:HTTP_PROXY  = `$env:HTTPS_PROXY
+  2) KURUMSAL PyPI AYNASI: `$env:UBDEN_PIP_INDEX = 'https://ayna.sirket.local/simple' (gerekiyorsa `$env:PIP_TRUSTED_HOST da ayarlayin)
+  3) CEVRIMDISI TEKERLEK: internete cikan bir makinede
+       py -3.13 -m pip download -r requirements.txt -d wheels
+       py -3.13 -m pip download "playwright>=1.54,<2" -d wheels
+     ile indirip 'wheels' klasorunu su konuma kopyalayin, kurulumu tekrar calistirin (internet gerekmez):
+       $SourceRoot\wheels
+     (requirements.txt burada: $req)
+  4) pypi.org + files.pythonhosted.org cikisina izin veren bir aga (or. telefon hotspot) baglanin.
+"@
+    }
+    if ($wheelDir) {
+        & $VenvPython -m pip install --disable-pip-version-check --no-index --find-links $wheelDir 'playwright>=1.54,<2' 2>$null | Out-Null
+    } else {
+        & $VenvPython -m pip install --disable-pip-version-check --timeout 60 --retries 5 @extra 'playwright>=1.54,<2' 2>$null | Out-Null
+    }
 }
 
 function Install-Winget([string] $Id, [string] $Label) {
