@@ -743,6 +743,9 @@ def run_scan(form: dict, progress=None) -> dict:
         status = "report_error"
         emit(f"Rapor hatasi: {exc}", "warn")
 
+    if _install_webui(root):
+        emit("Rapor gezgini (webui) klasore kopyalandi: webui/start.cmd", "info")
+
     if power_manager is not None and prev_power_scheme:
         try:
             power_manager.restore_scheme(prev_power_scheme)
@@ -769,3 +772,24 @@ def _atomic_json(path: Path, data) -> None:
     tmp = path.with_suffix(path.suffix + ".tmp")
     tmp.write_text(json.dumps(data, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     os.replace(tmp, path)
+
+
+def _install_webui(root: Path) -> bool:
+    """Copy the offline report viewer into the run folder so the report is self-contained.
+
+    Additive and best-effort: a failure here never affects the scan or the report. The
+    viewer's own review state lives in <run>/.webui, not inside <run>/webui, so replacing
+    the app files never discards analyst edits.
+    """
+    source = ROOT / "webui"
+    if not (source / "serve.py").is_file():
+        return False
+    dest = root / "webui"
+    ignore = shutil.ignore_patterns("__pycache__", "*.pyc", "test_webui.py", ".webui")
+    try:
+        if dest.exists():
+            shutil.rmtree(dest, ignore_errors=True)
+        shutil.copytree(source, dest, ignore=ignore)
+        return True
+    except OSError:
+        return False

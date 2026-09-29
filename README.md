@@ -96,16 +96,16 @@ UBDEN Cyber Security Systems test ekibi
 PowerShell:
 
 ```powershell
-irm 'https://raw.githubusercontent.com/ubden/ubden-cyber-wsl/v5.0.0-wsl.31/bootstrap.ps1' | iex
+irm 'https://raw.githubusercontent.com/ubden/ubden-cyber-wsl/v5.0.0-wsl.32/bootstrap.ps1' | iex
 ```
 
 CMD:
 
 ```cmd
-powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "irm 'https://raw.githubusercontent.com/ubden/ubden-cyber-wsl/v5.0.0-wsl.31/bootstrap.ps1' | iex"
+powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "irm 'https://raw.githubusercontent.com/ubden/ubden-cyber-wsl/v5.0.0-wsl.32/bootstrap.ps1' | iex"
 ```
 
-Komut [sürüm etiketli başlangıç betiğini](https://github.com/ubden/ubden-cyber-wsl/blob/v5.0.0-wsl.31/bootstrap.ps1) çalıştırır. Betik kaynak paketini indirir, mevcut Kali WSL kurulumunu kullanır veya eksikse kurar, bağımlılıkları hazırlar ve görev sihirbazını açar. Windows yeniden başlatması gerekirse işlem sonraki oturumda devam eder. Kurulum yönetici izni isteyebilir.
+Komut [sürüm etiketli başlangıç betiğini](https://github.com/ubden/ubden-cyber-wsl/blob/v5.0.0-wsl.32/bootstrap.ps1) çalıştırır. Betik kaynak paketini indirir, mevcut Kali WSL kurulumunu kullanır veya eksikse kurar, bağımlılıkları hazırlar ve görev sihirbazını açar. Windows yeniden başlatması gerekirse işlem sonraki oturumda devam eder. Kurulum yönetici izni isteyebilir.
 
 Kurulum önce mirrored ağı ve DNS tünellemeyi dener. Mirrored yapılandırması bilgisayardaki **tüm WSL 2 dağıtımlarını** etkiler. Mirrored başlatılamazsa Kali IPv4 adresi ve varsayılan rota doğrulanarak NAT ağında devam edilir. IP tabanlı LAN testlerinde Windows adaptör rotası ve Kali rotası her hedef için ayrıca denetlenir; hedefe erişim doğrulanmadan test başarılı sayılmaz. NAT modunda Kali fiziksel Windows ağ kartlarını doğrudan görmez. Ham katman-2, yayın trafiği, pasif fiziksel ağ yakalama ve bazı VPN yolları için ayrı uygunluk denetimi gerekir. Kullanılan ağ modu görev raporuna yazılır.
 
@@ -126,13 +126,13 @@ ve Nmap+Npcap'i kurar.
 İkinci tek satırlık kurulum — PowerShell:
 
 ```powershell
-irm 'https://raw.githubusercontent.com/ubden/ubden-cyber-wsl/v5.0.0-wsl.31/bootstrap-win.ps1' | iex
+irm 'https://raw.githubusercontent.com/ubden/ubden-cyber-wsl/v5.0.0-wsl.32/bootstrap-win.ps1' | iex
 ```
 
 CMD:
 
 ```cmd
-powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "irm 'https://raw.githubusercontent.com/ubden/ubden-cyber-wsl/v5.0.0-wsl.31/bootstrap-win.ps1' | iex"
+powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "irm 'https://raw.githubusercontent.com/ubden/ubden-cyber-wsl/v5.0.0-wsl.32/bootstrap-win.ps1' | iex"
 ```
 
 Kurucu kaynağı indirir, ayrı bir yönetici penceresinde `ubden-win.ps1`'i çalıştırır,
@@ -208,6 +208,16 @@ tek yetkili test hesabını kullanır, sözlük/püskürtme yapmaz — bu yüzde
 Windows kurulumunda `HypervisorPlatform` yeni etkinleştirildiyse **Windows'u yeniden başlatın**. UBDEN yeniden başlatma gerektiğini ağ testine geçmeden bildirir ve kurulumu sonraki oturum için kaydeder. Yeniden başlatmadan WSL dağıtımı açılmayabilir.
 
 Mirrored WSL `0x8007054f` hatası verirse ve Windows'un IPv4/IPv6 TCP dinamik port aralığı tam olarak `1024–65534` ise kurulum önce eski değerleri kaydeder, iki TCP aralığını Windows varsayılanı olan `49152–65535` aralığına alıp ağı yeniden doğrular. Doğrulama başarısızsa eski değerler geri yüklenir ve çalışan NAT ağına geçilir. Daha önce başarısız olduğu kaydedilmiş mirrored onarımı tekrar uygulanmaz. Başarılı onarım `destroy` sırasında geri alınır. UDP aralıklarına dokunulmaz.
+
+**Rapor gezgini (webui):** Her tarama biter bitmez rapor klasörünün içine kendi kendine yeten
+bir çevrimdışı inceleme paneli kopyalanır (`<GOREV>\webui`). `webui\start.cmd` çalıştırılınca yalnız
+`127.0.0.1`'e bağlı, tek kullanımlık jetonlu yerel bir sunucu açılır ve rapor tarayıcıda düzenli
+bir arayüzle görüntülenir: genel bakış, gözlemler, **cihazlar (hostname'ler, ana yönlendirici/ağ
+geçidi vurgusu, sınıflandırma güveni)**, **Active Directory (kullanıcı/grup/bilgisayar adları, test
+hesabımızın üyelikleri, Domain Admins üyeleri, parola politikası)**, teknik yüzeyler, CVE adayları,
+korelasyon, kapsam ve kanıt gezgini. Panelden analist incelemesi girilip **Yayınla** ile REPORT.html,
+üç PDF, görev listesi, yol haritası ve SHA-256 listesi birlikte yeniden üretilir (eski çıktılar
+`.webui\backups` altında saklanır). Dosyalar dışarı gönderilmez; her şey yerel kalır.
 
 ## Bir görev nasıl yürür?
 
@@ -291,10 +301,10 @@ Resmî Kali `wordlists` paketi WSL kurulumuna dahildir. Sözlükler yalnız mü�
 
 ## Kurulum ve ortam yönetimi
 
-Tek satırlık kurulumdan sonra Windows giriş betiği `%LOCALAPPDATA%\Programs\UBDEN-Cyber\v5.0.0-wsl.31\ubden-wsl.ps1` konumundadır:
+Tek satırlık kurulumdan sonra Windows giriş betiği `%LOCALAPPDATA%\Programs\UBDEN-Cyber\v5.0.0-wsl.32\ubden-wsl.ps1` konumundadır:
 
 ```powershell
-$ubden = Join-Path $env:LOCALAPPDATA 'Programs\UBDEN-Cyber\v5.0.0-wsl.31\ubden-wsl.ps1'
+$ubden = Join-Path $env:LOCALAPPDATA 'Programs\UBDEN-Cyber\v5.0.0-wsl.32\ubden-wsl.ps1'
 & $ubden -Action status
 & $ubden -Action run
 ```
@@ -306,6 +316,6 @@ $ubden = Join-Path $env:LOCALAPPDATA 'Programs\UBDEN-Cyber\v5.0.0-wsl.31\ubden-w
 **Windows-native imha (`ubden-win.ps1 -Action destroy`):** Görev bitince Windows tarafını **varsayılana** döndürür (onay için `DESTROY` yazılır; `-Yes` ile sessiz): (1) Windows Defender gerçek-zamanlı korumayı ve Güvenlik Duvarını **geri açar**, eklenen istisnaları kaldırır; (2) güç planını ve ekran koruyucuyu eski haline alır (uyku/hazırda bekleme yeniden etkin); (3) BGInfo masaüstü panelini kaldırıp **önceki duvar kâğıdını** geri getirir; (4) kurduğumuz **venv + araçlar + durum** dosyalarını (`%LOCALAPPDATA%\UBDEN`) siler; (5) isteğe bağlı olarak Kali'deki `offensive-ext` eklentisini ve (ayrı sorup) winget ile Python/Nmap'i kaldırır. **Raporlar korunur** (`%LOCALAPPDATA%\UBDEN-Cyber\Reports`) — teslimattır. Kurulum dizininin kendisi (betik oradan çalıştığı için) elle silinebilir.
 
 ```powershell
-$ubden = Join-Path $env:LOCALAPPDATA 'Programs\UBDEN-Cyber\v5.0.0-wsl.31\ubden-wsl.ps1'
+$ubden = Join-Path $env:LOCALAPPDATA 'Programs\UBDEN-Cyber\v5.0.0-wsl.32\ubden-wsl.ps1'
 & $ubden -Action destroy -ExportTo 'D:\UBDEN-Rapor-Devir'
 ```
