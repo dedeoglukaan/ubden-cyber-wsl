@@ -1,4 +1,4 @@
-param(
+﻿param(
     [ValidateSet('run','setup','status','destroy')]
     [string] $Action = 'run',
     [string] $ExportTo = ''
@@ -27,13 +27,13 @@ function Write-UbdenBanner {
 '@
     Write-Host $art -ForegroundColor Green
     Write-Host '  UBDEN Cyber Security Systems' -ForegroundColor Cyan -NoNewline
-    Write-Host ' · yetkili pentest platformu' -ForegroundColor DarkGray
+    Write-Host ' - yetkili pentest platformu' -ForegroundColor DarkGray
     Write-Host '  https://www.ubden.com | security@ubden.com' -ForegroundColor DarkGray
     Write-Host ''
 }
 
 function Write-UbdenPhase([string] $Text) {
-    Write-Host "`n▸ " -ForegroundColor Green -NoNewline
+    Write-Host "`n> " -ForegroundColor Green -NoNewline
     Write-Host $Text -ForegroundColor Cyan
 }
 

@@ -1,4 +1,4 @@
-param(
+﻿param(
     [ValidateSet('run', 'setup', 'status', 'setup-offensive', 'offensive', 'destroy')]
     [string] $Action = 'run',
     # Only used by the optional 'offensive' action (offensive-ext via Kali/WSL):
@@ -236,7 +236,7 @@ function Get-BasePython {
         [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
         Invoke-WebRequest -Uri $url -OutFile $exe -UseBasicParsing
         Start-Process -FilePath $exe -ArgumentList '/quiet InstallAllUsers=1 PrependPath=1 Include_pip=1 Include_test=0' -Wait
-    } catch { throw "Python otomatik kurulamadi: $($_.Exception.Message) — https://python.org uzerinden elle kurun" }
+    } catch { throw "Python otomatik kurulamadi: $($_.Exception.Message) - https://python.org uzerinden elle kurun" }
     $known = @((Join-Path $env:ProgramFiles 'Python313\python.exe'),
                (Join-Path $env:LOCALAPPDATA 'Programs\Python\Python313\python.exe'),
                (Get-Command python.exe -ErrorAction SilentlyContinue | Where-Object { $_.Source -notmatch 'WindowsApps' } |
@@ -290,14 +290,14 @@ function Ensure-ScanTools {
                 Invoke-WebRequest -Uri $nurl -OutFile $nexe -UseBasicParsing
                 Start-Process -FilePath $nexe -ArgumentList '/S' -Wait   # sessiz; Npcap paketli
             }
-            catch { Write-Host "  Nmap otomatik kurulamadi: $($_.Exception.Message) — nmap.org uzerinden elle kurun." -ForegroundColor DarkYellow }
+            catch { Write-Host "  Nmap otomatik kurulamadi: $($_.Exception.Message) - nmap.org uzerinden elle kurun." -ForegroundColor DarkYellow }
         }
     }
     if (-not (Get-Command whois.exe -ErrorAction SilentlyContinue)) {
         Install-Winget 'Microsoft.Sysinternals.Whois' 'Sysinternals Whois'
     }
     # nuclei + sslscan GitHub-release ikilileri, pip araclari (wafw00f/fierce/
-    # theHarvester/puresnmp) ve nuclei sablonlari — hepsi win_tools install ile.
+    # theHarvester/puresnmp) ve nuclei sablonlari - hepsi win_tools install ile.
     Write-Host '  Araclar kuruluyor: nuclei + sslscan (GitHub) ve pip araclari...' -ForegroundColor Cyan
     try { & $VenvPython (Join-Path $SourceRoot 'win_tools.py') install | Out-Null } catch {}
 }
@@ -474,7 +474,7 @@ function Invoke-SetupOffensive {
     $extWin = Join-Path $SourceRoot 'offensive-ext'
     if (-not (Test-Path -LiteralPath $extWin)) { throw "offensive-ext klasoru bulunamadi: $extWin" }
     $extWsl = (& wsl.exe -d $distro wslpath -a "$extWin").Trim()
-    Write-Host "  Kali: $distro  ·  offensive-ext kopyalaniyor ve kuruluyor..." -ForegroundColor Cyan
+    Write-Host "  Kali: $distro  -  offensive-ext kopyalaniyor ve kuruluyor..." -ForegroundColor Cyan
     Write-Host '  (setup-offensive.sh apt/pipx ile araclari kurar; sudo parolasi sorabilir.)' -ForegroundColor DarkYellow
     $inner = 'set -e; mkdir -p "$HOME/ubden-offensive"; cp -rf "' + $extWsl + '/." "$HOME/ubden-offensive/"; ' +
              'cd "$HOME/ubden-offensive"; sudo bash setup-offensive.sh'
@@ -571,7 +571,7 @@ public class UbdenWallpaper {
     if (Test-Path -LiteralPath $reports) {
         Write-Host "  RAPORLAR KORUNDU: $reports" -ForegroundColor Cyan
     }
-    # 6) Opsiyonel: winget ile Python/Nmap kaldir (varsayilan HAYIR — sistem araclari).
+    # 6) Opsiyonel: winget ile Python/Nmap kaldir (varsayilan HAYIR - sistem araclari).
     if (-not $Yes -and (Get-Command winget.exe -ErrorAction SilentlyContinue)) {
         if ((Read-Host '  Python 3.13 ve Nmap/Npcap paketlerini de kaldir? (baska yazilimlari etkileyebilir) (E/H)') -match '^(e|evet|y|yes)$') {
             foreach ($id in 'Python.Python.3.13', 'Insecure.Nmap') {
