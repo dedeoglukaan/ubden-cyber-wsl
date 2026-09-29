@@ -70,6 +70,16 @@ class AppServer(ThreadingHTTPServer):
 class Handler(BaseHTTPRequestHandler):
     server: AppServer
 
+    def handle_one_request(self) -> None:
+        # A browser closing the tab / reloading tears the socket down mid-request.
+        # Python's BaseHTTPRequestHandler lets ConnectionResetError bubble up and
+        # dumps a traceback to the console even though nothing failed. Swallow the
+        # connection-drop family here; it is benign for a localhost review UI.
+        try:
+            super().handle_one_request()
+        except (ConnectionResetError, ConnectionAbortedError, BrokenPipeError):
+            self.close_connection = True
+
     def log_message(self, format: str, *args) -> None:
         print(f"[{self.log_date_time_string()}] {format % args}")
 
