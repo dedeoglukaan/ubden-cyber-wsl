@@ -89,29 +89,68 @@ def probe(ip: str, timeout: float = 2.0) -> dict | None:
     return _parse(ip, data)
 
 
-def run(assets, opened, raw, events, max_hosts: int = 64) -> None:
-    """Probe hosts with 139/445 open; write netbios_<ip>.json + one summary event."""
+def reverse_dns(ip: str) -> str:
+    """PTR lookup → short host name, or '' (bounded by the global default timeout)."""
+    try:
+        host = socket.gethostbyaddr(ip)[0]
+    except (OSError, socket.herror, socket.gaierror, UnicodeError):
+        return ""
+    host = (host or "").split(".")[0].strip()
+    return host if host and host.lower() != str(ip).lower() else ""
+
+
+def _resolve(ip: str) -> dict | None:
+    """NBSTAT first (rich: name/domain/role/MAC); reverse DNS as a fallback name."""
+    info = probe(ip)
+    if info and info.get("name"):
+        return info
+    name = reverse_dns(ip)
+    if name:
+        return {"target": ip, "name": name, "domain": "", "role": "", "mac": "",
+                "name_source": "rdns", "names": []}
+    return None
+
+
+def run(assets, opened, raw, events, max_hosts: int = 256) -> None:
+    """Resolve a NAME for EVERY live host (not just SMB ones): NBSTAT (UDP/137) with a
+    reverse-DNS fallback, concurrently. Writes netbios_<ip>.json + one summary event."""
+    from concurrent.futures import ThreadPoolExecutor, as_completed
     raw = Path(raw)
-    targets = [str(ip) for ip in assets
-               if ":" not in str(ip) and ({139, 445} & set(opened.get(ip, [])))][:max_hosts]
+    targets = [str(ip) for ip in assets if ":" not in str(ip)][:max_hosts]
     if not targets:
         return
+    prev_timeout = socket.getdefaulttimeout()
+    socket.setdefaulttimeout(3)  # bound reverse-DNS so a slow resolver can't hang the scan
+    resolved = []
+    try:
+        with ThreadPoolExecutor(max_workers=min(32, len(targets))) as pool:
+            futures = {pool.submit(_resolve, ip): ip for ip in targets}
+            for fut in as_completed(futures):
+                try:
+                    info = fut.result()
+                except Exception:
+                    info = None
+                if info and info.get("name"):
+                    resolved.append(info)
+    finally:
+        socket.setdefaulttimeout(prev_timeout)
     found = 0
-    for ip in targets:
-        info = probe(ip)
-        if not info or not info.get("name"):
-            continue
+    rdns = 0
+    for info in resolved:
         found += 1
+        if info.get("name_source") == "rdns":
+            rdns += 1
+        ip = info["target"]
         path = raw / f"netbios_{re.sub(r'[^A-Za-z0-9._-]', '_', ip)[:90]}.json"
         tmp = path.with_suffix(".pending.json")
         tmp.write_text(json.dumps(info, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
         tmp.replace(path)
     summary = raw / "netbios_summary.json"
     tmp = summary.with_suffix(".pending.json")
-    tmp.write_text(json.dumps({"tested": len(targets), "named": found}, ensure_ascii=False) + "\n",
-                   encoding="utf-8")
+    tmp.write_text(json.dumps({"tested": len(targets), "named": found, "via_rdns": rdns},
+                   ensure_ascii=False) + "\n", encoding="utf-8")
     tmp.replace(summary)
-    events.append({"step": "netbios", "tool": "netbios(stdlib)", "status": "ok",
-                   "detail": f"{found}/{len(targets)} host NetBIOS adı verdi",
+    events.append({"step": "netbios", "tool": "netbios(stdlib)+rdns", "status": "ok",
+                   "detail": f"{found}/{len(targets)} host ad verdi (NetBIOS+ters DNS; {rdns} ters DNS)",
                    "output": str(summary.relative_to(raw.parent.parent.parent)),
                    "sha256": hashlib.sha256(summary.read_bytes()).hexdigest()})

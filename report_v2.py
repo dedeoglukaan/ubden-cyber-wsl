@@ -437,12 +437,32 @@ def ad_story(root,st,width):
                 cells.append([P(kind,st['SmallX']),P(item.get('observed_count','?'),st['SmallX']),
                               P(item.get('truncated_at','?'),st['SmallX'])])
         result.append(grid_table(cells,[width*.45,width*.25,width*.30]))
+    # Test hesabının kendi grup üyelikleri (memberOf) — hangi gruplardayız.
+    mem=ad.get('test_account_membership')
+    if isinstance(mem,dict):
+        groups=mem.get('groups',[])
+        result.append(P(f"Test hesabı: {mem.get('account','?')}"+(f" ({mem.get('display_name')})" if mem.get('display_name') else '')
+                        +f" · üye olduğu grup sayısı: {len(groups)}",st['SubX']))
+        if groups:
+            result.append(P('Üye olunan gruplar: '+', '.join(groups),st['SmallX'],limit=1500))
+    # Kullanıcı / grup / bilgisayar adı listeleri (yalnız ad; parola/hash yok).
+    for key,title in (('user_names','Kullanıcı adları'),('group_names','Grup adları'),
+                      ('computer_names','Bilgisayar adları')):
+        names=ad.get(key)
+        if isinstance(names,list) and names:
+            shown=', '.join(str(n) for n in names[:200])
+            more=f" (+{len(names)-200} daha)" if len(names)>200 else ''
+            result.append(P(f"{title} ({len(names)}): "+shown+more,st['SmallX'],limit=4000))
+    if ad.get('domain_admins') and isinstance(ad['domain_admins'],dict):
+        da=ad['domain_admins']
+        result.append(P(f"{da.get('group','Domain Admins')} üyeleri ({da.get('count','?')}): "
+                        +', '.join(da.get('members',[])),st['SmallX'],limit=1500))
     if ad.get('forest') or ad.get('domain_mode'):
         result.append(P(f"Orman: {ad.get('forest','?')} · Orman modu: {ad.get('forest_mode','?')} · Alan modu: {ad.get('domain_mode','?')}",st['SmallX']))
     if ad.get('dc_dns_records'):
         result.append(P('DC DNS kayıtları: '+', '.join(str(x.get('name',''))+':'+str(x.get('port',''))
                      for x in ad['dc_dns_records'] if isinstance(x,dict)),st['SmallX']))
-    result.append(P('Bu bölüm dizin envanteridir. Ayrıcalık, parola ilkesi ve paylaşım izinleri ancak ayrıca kaydedilen kontrollerle değerlendirilmiş sayılır.',st['SmallX']))
+    result.append(P('Bu bölüm dizin envanteridir. Kullanıcı/grup adları ve üyelikler salt-okunur LDAP ile alınmıştır; parola/hash içermez. Ayrıcalık ve paylaşım izinleri ancak ayrıca kaydedilen kontrollerle değerlendirilmiş sayılır.',st['SmallX']))
     return result
 
 def finding_story(root,f,st,width):

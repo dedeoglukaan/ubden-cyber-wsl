@@ -146,9 +146,56 @@ def _open(dc, pinned_ip, username, password, mode):
     return Connection(server, auto_bind=True, **common)
 
 
-def _collect(connection, base, domain, dc):
+def _names(connection, attr="sAMAccountName", cap=300):
+    """Collect an attribute's values from the last search, capped and sorted."""
+    out = []
+    for entry in connection.entries:
+        try:
+            value = entry[attr].value if attr in entry else None
+        except Exception:
+            value = None
+        if value:
+            out.append(str(value))
+    return sorted(set(out))[:cap]
+
+
+def _member_of(connection, base, username):
+    """Groups the supplied test account belongs to (its own memberOf) + displayName."""
+    sam = str(username or "").split("\\")[-1].split("@")[0].strip()
+    if not sam:
+        return None
+    safe = "".join(ch for ch in sam if ch.isalnum() or ch in "._- ")
+    if not safe:
+        return None
+    try:
+        connection.search(base, f"(|(sAMAccountName={safe})(userPrincipalName={safe}@*))",
+                          attributes=["memberOf", "displayName", "sAMAccountName"],
+                          size_limit=1, time_limit=10)  # ldap3 default scope is SUBTREE
+        if not connection.entries:
+            return {"account": sam, "groups": [], "note": "hesap dizinde bulunamadı"}
+        entry = connection.entries[0]
+        groups = []
+        try:
+            raw = entry["memberOf"].values if "memberOf" in entry else []
+        except Exception:
+            raw = []
+        for dn in raw:
+            cn = str(dn).split(",", 1)[0]
+            groups.append(cn[3:] if cn.lower().startswith("cn=") else cn)
+        display = ""
+        try:
+            display = str(entry["displayName"].value) if "displayName" in entry else ""
+        except Exception:
+            display = ""
+        return {"account": sam, "display_name": display, "groups": sorted(set(groups))[:100]}
+    except Exception:
+        return None
+
+
+def _collect(connection, base, domain, dc, username=""):
     from ldap3 import BASE
     outcome = {}
+    samples = {}
     root_data = {}
     connection.search('', '(objectClass=*)', search_scope=BASE,
                       attributes=['rootDomainNamingContext', 'dnsHostName',
@@ -160,24 +207,35 @@ def _collect(connection, base, domain, dc):
                       'domainFunctionality', 'forestFunctionality'):
             value = entry[field].value if field in entry else None
             root_data[field] = str(value) if value is not None else None
-    for label, query in (
-        ("users", "(&(objectCategory=person)(objectClass=user))"),
-        ("groups", "(objectClass=group)"),
-        ("computers", "(objectCategory=computer)"),
+    # Capture NAMES (not just counts): user sAMAccountNames, group names, computer names.
+    for label, query, attr in (
+        ("users", "(&(objectCategory=person)(objectClass=user))", "sAMAccountName"),
+        ("groups", "(objectClass=group)", "sAMAccountName"),
+        ("computers", "(objectCategory=computer)", "dNSHostName"),
     ):
-        connection.search(base, query, attributes=["distinguishedName"],
-                          size_limit=1000, time_limit=10)
+        want = ["sAMAccountName", "dNSHostName"] if label == "computers" else [attr]
+        connection.search(base, query, attributes=want, size_limit=1000, time_limit=10)
         outcome[label] = {"observed_count": len(connection.entries), "truncated_at": 1000}
+        names = _names(connection, attr)
+        if label == "computers" and not names:   # fall back to the flat computer name
+            names = _names(connection, "sAMAccountName")
+            names = [n[:-1] if n.endswith("$") else n for n in names]
+        samples[label] = names
     policy, maq, domain_sid = _password_policy(connection, base)
     admins = _domain_admins(connection, base, domain_sid)
+    membership = _member_of(connection, base, username)
     result = {"status": "ok", "domain": domain, "dc": dc, "root_dse": root_data,
-              "inventory": outcome}
+              "inventory": outcome,
+              "user_names": samples.get("users", []), "group_names": samples.get("groups", []),
+              "computer_names": samples.get("computers", [])}
     if policy:
         result["password_policy"] = policy
     if maq is not None:
         result["machine_account_quota"] = maq
     if admins:
         result["domain_admins"] = admins
+    if membership:
+        result["test_account_membership"] = membership
     return result
 
 
@@ -201,7 +259,7 @@ def inspect(dc: str, domain: str, username: str, password: str,
             last_reason = f"{type(exc).__name__}"
             continue
         try:
-            result = _collect(connection, base, domain, dc)
+            result = _collect(connection, base, domain, dc, username)
         except Exception as exc:
             last_reason = f"{type(exc).__name__}"
             try: connection.unbind()

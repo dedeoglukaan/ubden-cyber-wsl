@@ -47,16 +47,28 @@ VENDOR_RULES = (
     (('ubiquiti', 'ruckus', 'aruba', 'mikrotik', 'tp-link', 'tp link', 'd-link', 'zyxel', 'keenetic', 'netgear', 'tenda', 'totolink'), 'ap', 38),
     (('vantiva', 'technicolor', 'arris', 'sagemcom', 'sercomm', 'huawei technolog', 'zte', 'airties', 'avm', 'fritz'), 'router', 45),
     (('cisco', 'juniper', 'extreme networks', 'h3c', 'ruijie'), 'switch', 32),
+    (('draytek',), 'router', 58),
     (('apc ', 'american power', 'eaton', 'tripp lite', 'cyberpower', 'riello', 'socomec'), 'ups', 60),
     (('raspberry pi', 'arduino'), 'iot', 28),
+    # Laptop/desktop ODMs (build most business PCs) → İstemci PC. These are the OUI
+    # vendors that otherwise leave a Windows endpoint "Bilinmiyor".
+    (('pegatron', 'compal', 'quanta', 'wistron', 'inventec', 'clevo', 'lcfc', 'hefei',
+      'liteon', 'lite-on', 'tongfang', 'mitac', 'elitegroup', 'asustek', 'micro-star',
+      'gigabyte', 'framework computer', 'chongqing fugui', 'hongfujin', 'wingtech'), 'pc', 34),
+    # Industrial / embedded PC makers → İstemci PC.
+    (('jump industrielle', 'advantech', 'kontron', 'beckhoff', 'congatec', 'portwell', 'ibase'), 'pc', 30),
     (('intel corporate',), 'pc', 22),
+    (('realtek',), 'pc', 14),
     (('microsoft',), 'pc', 18),
     (('apple',), 'mobile', 24),
-    (('samsung elect', 'huawei device', 'oneplus', 'oppo mobile', 'vivo mobile', 'honor device'), 'mobile', 35),
+    (('samsung elect', 'huawei device', 'oneplus', 'oppo mobile', 'vivo mobile', 'honor device',
+      'motorola mobility', 'motorola (wuhan)', 'xiaomi comm', 'realme', 'nothing tech'), 'mobile', 35),
 )
 TEXT_RULES = (
     (('fortigate', 'fortios', 'pan-os', 'sonicos', 'sophos xg', 'sophos utm'), 'firewall', 75),
     (('esxi', 'vmware esx', 'vsphere'), 'hypervisor', 78),
+    (('vcenter', 'vmware skyline', 'skyline health', 'photon os', 'vmware vcsa'), 'hypervisor', 60),
+    (('draytek', 'vigor'), 'router', 60),
     (('proxmox',), 'hypervisor', 78),
     (('hyper-v', 'xenserver', 'citrix hypervisor'), 'hypervisor', 55),
     (('diskstation', 'synology', 'qnap', 'qts', 'truenas', 'freenas', 'openmediavault'), 'nas', 72),
@@ -87,9 +99,57 @@ PORT_RULES = (
     ((88, 389, 636), 'server', 35), ((623,), 'server', 40), ((3268,), 'server', 35),
     ((5000, 5001), 'nas', 22), ((873,), 'nas', 20),
     ((1723,), 'router', 20), ((53,), 'router', 12), ((67, 68), 'router', 18), ((161,), 'switch', 10),
+    ((5357,), 'pc', 24), ((5985, 5986), 'server', 26), ((135,), 'pc', 10),  # WSDAPI / WinRM / RPC = Windows
 )
 WINDOWS_PORTS = {135, 139, 445, 3389, 5357}
 REVIEW_PORTS = {21: 'FTP', 23: 'Telnet', 161: 'SNMP', 445: 'SMB', 3389: 'RDP', 5900: 'VNC', 6379: 'Redis', 9200: 'Elasticsearch'}
+
+
+def _load_extra_rules():
+    """Merge the optional, research-built classification library into the in-code rules.
+
+    data/device_classification.json (produced by the web-research workflow) may hold
+    {"rules":[{patterns,category,weight}], "port_rules":[{ports,category,weight}]}.
+    Vendor/text rules are applied against BOTH the OUI vendor and the service/OS/web
+    blob (a vendor name like "draytek" also shows up in banners). Additive + deduped;
+    a missing or malformed file is ignored so classification always works offline."""
+    path = Path(__file__).resolve().parent / 'data' / 'device_classification.json'
+    extra_v, extra_t, extra_p = [], [], []
+    try:
+        lib = json.loads(path.read_text(encoding='utf-8'))
+    except (OSError, ValueError):
+        return extra_v, extra_t, extra_p
+    have_v = {(p, k) for p, k, _ in VENDOR_RULES}
+    have_t = {(p, k) for p, k, _ in TEXT_RULES}
+    for rule in lib.get('rules', []) if isinstance(lib.get('rules'), list) else []:
+        try:
+            pats = tuple(dict.fromkeys(str(x).lower().strip() for x in rule['patterns'] if str(x).strip()))
+            key = str(rule['category'])
+            weight = max(5, min(80, int(rule.get('weight', 30))))
+        except (KeyError, TypeError, ValueError):
+            continue
+        if not pats or key not in CATEGORIES:
+            continue
+        if (pats, key) not in have_v:
+            extra_v.append((pats, key, weight)); have_v.add((pats, key))
+        if (pats, key) not in have_t:
+            extra_t.append((pats, key, weight)); have_t.add((pats, key))
+    for rule in lib.get('port_rules', []) if isinstance(lib.get('port_rules'), list) else []:
+        try:
+            ports = tuple(int(x) for x in rule['ports'])
+            key = str(rule['category'])
+            weight = max(5, min(80, int(rule.get('weight', 30))))
+        except (KeyError, TypeError, ValueError):
+            continue
+        if ports and key in CATEGORIES:
+            extra_p.append((ports, key, weight))
+    return extra_v, extra_t, extra_p
+
+
+_EXTRA_V, _EXTRA_T, _EXTRA_P = _load_extra_rules()
+VENDOR_RULES = VENDOR_RULES + tuple(_EXTRA_V)
+TEXT_RULES = TEXT_RULES + tuple(_EXTRA_T)
+PORT_RULES = PORT_RULES + tuple(_EXTRA_P)
 HEX=re.compile(r'^[0-9A-F]{12}$')
 
 
@@ -241,6 +301,8 @@ def classify_device(facts):
     winhits = WINDOWS_PORTS & numbers
     if len(winhits) >= 2:
         award('pc', 35, f'Windows portları {sorted(winhits)}')
+    elif 5357 in winhits:
+        award('pc', 22, 'WSDAPI (5357) — Windows cihaz servisi')
     if 3389 in numbers:
         award('pc', 12, 'RDP (3389)')
     snmp = facts.get('snmp') or ''
@@ -257,6 +319,10 @@ def classify_device(facts):
             award('server', 12, f'OS: {os_item.get("name", "")[:40]}')
     if facts.get('gateway'):
         award('router', 55, 'Varsayılan ağ geçidi')
+        # A gateway exposing many management/service ports is a router-FIREWALL/UTM
+        # (e.g. DrayTek Vigor with FTP+SSH+SMB+web), not a dumb modem.
+        if len(numbers) >= 5 and ({21, 22, 443, 8443} & numbers):
+            award('firewall', 30, 'Ağ geçidi + çok sayıda yönetim/servis portu (UTM/firewall adayı)')
     if vendor in VIRTUAL.values() or vendor.startswith('Docker'):
         award('hypervisor', 15, 'Sanallaştırma MAC öneki')
     if facts.get('random_mac') and not numbers:

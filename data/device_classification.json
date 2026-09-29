@@ -1,0 +1,5555 @@
+{
+ "schema": 1,
+ "source": "classification-library-research workflow (web-sourced)",
+ "rules": [
+  {
+   "patterns": [
+    "ruckus",
+    "commscope ruckus"
+   ],
+   "category": "ap",
+   "weight": 62,
+   "note": ""
+  },
+  {
+   "patterns": [
+    "aironet",
+    "cisco aironet"
+   ],
+   "category": "ap",
+   "weight": 60,
+   "note": "Cisco Aironet APs"
+  },
+  {
+   "patterns": [
+    "tp-link wap",
+    "wap http config",
+    "wireless access point"
+   ],
+   "category": "ap",
+   "weight": 58,
+   "note": "AP web banner (TP-LINK WAP seen in data)"
+  },
+  {
+   "patterns": [
+    "aruba networks",
+    "arubanetworks",
+    "instant ap",
+    "arubaos"
+   ],
+   "category": "ap",
+   "weight": 58,
+   "note": "Aruba APs (ArubaOS); Aruba also makes switches."
+  },
+  {
+   "patterns": [
+    "aerohive",
+    "extreme wireless",
+    "mist systems",
+    "cambium networks",
+    "engenius"
+   ],
+   "category": "ap",
+   "weight": 56,
+   "note": ""
+  },
+  {
+   "patterns": [
+    "fortiap"
+   ],
+   "category": "ap",
+   "weight": 55,
+   "note": "Fortinet FortiAP wireless"
+  },
+  {
+   "patterns": [
+    "arubaos",
+    "aruba instant",
+    "aruba ap",
+    "instant ap"
+   ],
+   "category": "ap",
+   "weight": 55,
+   "note": "Aruba wireless APs"
+  },
+  {
+   "patterns": [
+    "ruckus",
+    "zoneflex",
+    "unleashed",
+    "smartzone"
+   ],
+   "category": "ap",
+   "weight": 55,
+   "note": "Ruckus wireless APs"
+  },
+  {
+   "patterns": [
+    "mist systems",
+    "juniper mist"
+   ],
+   "category": "ap",
+   "weight": 55,
+   "note": "Juniper Mist APs"
+  },
+  {
+   "patterns": [
+    "engenius",
+    "senao"
+   ],
+   "category": "ap",
+   "weight": 55,
+   "note": "EnGenius/Senao APs"
+  },
+  {
+   "patterns": [
+    "ubiquiti",
+    "ubnt",
+    "unifi",
+    "airos"
+   ],
+   "category": "ap",
+   "weight": 55,
+   "note": "Ubiquiti UniFi/airMAX APs; note EdgeRouter models are routers and UniFi Switch are switches - check model."
+  },
+  {
+   "patterns": [
+    "cambium",
+    "cnpilot"
+   ],
+   "category": "ap",
+   "weight": 52,
+   "note": "Cambium Networks wireless (cnMatrix is a switch)"
+  },
+  {
+   "patterns": [
+    "aerohive",
+    "extreme wireless"
+   ],
+   "category": "ap",
+   "weight": 52,
+   "note": "Aerohive/Extreme wireless APs"
+  },
+  {
+   "patterns": [
+    "nanostation",
+    "airmax",
+    "airfiber",
+    "litebeam",
+    "rocket m5"
+   ],
+   "category": "ap",
+   "weight": 50,
+   "note": "Ubiquiti airMAX wireless bridge/AP"
+  },
+  {
+   "patterns": [
+    "omada",
+    "tp-link eap",
+    "eap-"
+   ],
+   "category": "ap",
+   "weight": 50,
+   "note": "TP-Link Omada business APs"
+  },
+  {
+   "patterns": [
+    "mimosa networks",
+    "ligowave"
+   ],
+   "category": "ap",
+   "weight": 48,
+   "note": "Wireless bridge/AP"
+  },
+  {
+   "patterns": [
+    "eero",
+    "amplifi",
+    "google wifi",
+    "nest wifi",
+    "netgear orbi",
+    "tp-link deco"
+   ],
+   "category": "ap",
+   "weight": 48,
+   "note": "Consumer mesh Wi-Fi systems"
+  },
+  {
+   "patterns": [
+    "ubiquiti",
+    "unifi",
+    "uap-",
+    "ubnt"
+   ],
+   "category": "ap",
+   "weight": 45,
+   "note": "Ubiquiti UniFi/UBNT; mostly APs (line also has switches/gateways)"
+  },
+  {
+   "patterns": [
+    "meraki",
+    "cisco meraki"
+   ],
+   "category": "ap",
+   "weight": 45,
+   "note": "Meraki spans MR (AP), MS (switch), MX (security) - confirm model."
+  },
+  {
+   "patterns": [
+    "aruba networks"
+   ],
+   "category": "ap",
+   "weight": 35,
+   "note": "Aruba OUI; APs and switches"
+  },
+  {
+   "patterns": [
+    "hikvision",
+    "hangzhou hikvision"
+   ],
+   "category": "camera",
+   "weight": 78,
+   "note": ""
+  },
+  {
+   "patterns": [
+    "dahua",
+    "zhejiang dahua"
+   ],
+   "category": "camera",
+   "weight": 78,
+   "note": "Dahua IP cameras/DVRs also expose proprietary TCP 37777 (seen in this report's service list) and 34567 - strong camera/NVR indicator."
+  },
+  {
+   "patterns": [
+    "axis communications"
+   ],
+   "category": "camera",
+   "weight": 72,
+   "note": ""
+  },
+  {
+   "patterns": [
+    "vivotek"
+   ],
+   "category": "camera",
+   "weight": 70,
+   "note": "VIVOTEK — IP cameras"
+  },
+  {
+   "patterns": [
+    "reolink"
+   ],
+   "category": "camera",
+   "weight": 70,
+   "note": "Reolink — IP cameras/NVR"
+  },
+  {
+   "patterns": [
+    "avigilon"
+   ],
+   "category": "camera",
+   "weight": 70,
+   "note": "Avigilon (Motorola) — IP cameras/VMS appliances"
+  },
+  {
+   "patterns": [
+    "mobotix"
+   ],
+   "category": "camera",
+   "weight": 70,
+   "note": "MOBOTIX — IP cameras"
+  },
+  {
+   "patterns": [
+    "verkada"
+   ],
+   "category": "camera",
+   "weight": 70,
+   "note": "Verkada — cloud IP cameras/access control"
+  },
+  {
+   "patterns": [
+    "uniview",
+    "zhejiang uniview"
+   ],
+   "category": "camera",
+   "weight": 66,
+   "note": "Uniview (UNV) — IP cameras/NVR"
+  },
+  {
+   "patterns": [
+    "hikvision"
+   ],
+   "category": "camera",
+   "weight": 65,
+   "note": "Hikvision IP camera/NVR"
+  },
+  {
+   "patterns": [
+    "dahua"
+   ],
+   "category": "camera",
+   "weight": 65,
+   "note": "Dahua IP camera/NVR (seen in data; proprietary port 37777)"
+  },
+  {
+   "patterns": [
+    "foscam",
+    "amcrest"
+   ],
+   "category": "camera",
+   "weight": 64,
+   "note": "Foscam / Amcrest — IP cameras"
+  },
+  {
+   "patterns": [
+    "hanwha",
+    "wisenet",
+    "samsung techwin"
+   ],
+   "category": "camera",
+   "weight": 64,
+   "note": ""
+  },
+  {
+   "patterns": [
+    "hanwha",
+    "techwin",
+    "samsung techwin"
+   ],
+   "category": "camera",
+   "weight": 62,
+   "note": "Hanwha Vision / Samsung Techwin — Wisenet IP cameras"
+  },
+  {
+   "patterns": [
+    "uniview",
+    "vivotek",
+    "mobotix"
+   ],
+   "category": "camera",
+   "weight": 62,
+   "note": ""
+  },
+  {
+   "patterns": [
+    "netsurveillance",
+    "dvr.htm",
+    "xmeye",
+    "sofia"
+   ],
+   "category": "camera",
+   "weight": 60,
+   "note": "XiongMai NetSurveillance web/Sofia protocol — Chinese OEM DVR/NVR/cameras"
+  },
+  {
+   "patterns": [
+    "pelco"
+   ],
+   "category": "camera",
+   "weight": 58,
+   "note": "Pelco (Motorola/Schneider) — IP cameras/PTZ"
+  },
+  {
+   "patterns": [
+    "reolink",
+    "amcrest",
+    "foscam",
+    "ezviz",
+    "lorex",
+    "swann"
+   ],
+   "category": "camera",
+   "weight": 56,
+   "note": "Consumer/prosumer IP cameras."
+  },
+  {
+   "patterns": [
+    "bosch security",
+    "geovision",
+    "milesight",
+    "avtech",
+    "cp plus"
+   ],
+   "category": "camera",
+   "weight": 56,
+   "note": ""
+  },
+  {
+   "patterns": [
+    "axis communications",
+    "axis network camera"
+   ],
+   "category": "camera",
+   "weight": 55,
+   "note": "Axis IP cameras"
+  },
+  {
+   "patterns": [
+    "geovision",
+    "milesight",
+    "tiandy",
+    "sunell",
+    "shenzhen tvt",
+    "cp plus",
+    "digital watchdog",
+    "instar",
+    "y-cam",
+    "provision-isr",
+    "vantage"
+   ],
+   "category": "camera",
+   "weight": 55,
+   "note": "Second-tier / OEM IP camera & NVR brands"
+  },
+  {
+   "patterns": [
+    "lorex",
+    "swann",
+    "wyze",
+    "arlo",
+    "annke"
+   ],
+   "category": "camera",
+   "weight": 55,
+   "note": "Consumer IP camera / DVR-NVR kit brands"
+  },
+  {
+   "patterns": [
+    "onvif"
+   ],
+   "category": "camera",
+   "weight": 55,
+   "note": "ONVIF service — near-exclusive to IP cameras/NVR/video encoders"
+  },
+  {
+   "patterns": [
+    "dvrdvs",
+    "hikvision-webs",
+    "dnvrs"
+   ],
+   "category": "camera",
+   "weight": 54,
+   "note": "Hikvision device/server banner strings"
+  },
+  {
+   "patterns": [
+    "uniview",
+    "hanwha",
+    "wisenet",
+    "samsung techwin",
+    "vivotek",
+    "mobotix",
+    "pelco",
+    "avigilon",
+    "geovision",
+    "milesight"
+   ],
+   "category": "camera",
+   "weight": 52,
+   "note": "Professional IP camera vendors"
+  },
+  {
+   "patterns": [
+    "reolink",
+    "amcrest",
+    "ezviz",
+    "swann",
+    "cp plus",
+    "cp-plus",
+    "annke"
+   ],
+   "category": "camera",
+   "weight": 52,
+   "note": "Consumer/SMB IP cameras & DVRs (Swann DVR seen in data)"
+  },
+  {
+   "patterns": [
+    "bosch security"
+   ],
+   "category": "camera",
+   "weight": 50,
+   "note": "Bosch Security Systems — IP cameras; bare 'bosch' is ambiguous, avoid"
+  },
+  {
+   "patterns": [
+    "flir"
+   ],
+   "category": "camera",
+   "weight": 46,
+   "note": "FLIR — thermal/security cameras (also non-camera thermal gear)"
+  },
+  {
+   "patterns": [
+    "ring llc"
+   ],
+   "category": "camera",
+   "weight": 46,
+   "note": "Ring (Amazon) — doorbell/security cameras; use full 'ring llc', 'ring' alone collides"
+  },
+  {
+   "patterns": [
+    "ip camera",
+    "ipcam",
+    "ipcamera",
+    "network camera",
+    "webcam",
+    "netcam",
+    "dvrip",
+    "web viewer for"
+   ],
+   "category": "camera",
+   "weight": 46,
+   "note": "Self-describing camera banners"
+  },
+  {
+   "patterns": [
+    "onvif",
+    "ip camera",
+    "netcam",
+    "dvr",
+    "nvr",
+    "rtsp"
+   ],
+   "category": "camera",
+   "weight": 45,
+   "note": "Camera/DVR/NVR service or banner text (RTSP/554 & DVR strings seen in data)"
+  },
+  {
+   "patterns": [
+    "wyze",
+    "tapo camera",
+    "kasa cam"
+   ],
+   "category": "camera",
+   "weight": 42,
+   "note": "Consumer smart cameras"
+  },
+  {
+   "patterns": [
+    "rtsp",
+    "rtsp/1.0",
+    "live555"
+   ],
+   "category": "camera",
+   "weight": 42,
+   "note": "RTSP streaming — mostly cameras/encoders (also media servers)"
+  },
+  {
+   "patterns": [
+    "netsurveillance",
+    "dvrdvs",
+    "hikvision-webs",
+    "ipcamera",
+    "rtsp/rtp"
+   ],
+   "category": "camera",
+   "weight": 40,
+   "note": "Camera/DVR web-service banners (ports 554/37777/34567). Bare 'rtsp' is weak (also generic media servers)."
+  },
+  {
+   "patterns": [
+    "nvr",
+    "dvr",
+    "cctv",
+    "surveillance"
+   ],
+   "category": "camera",
+   "weight": 38,
+   "note": "Generic surveillance keywords — low weight, corroborating only"
+  },
+  {
+   "patterns": [
+    "microsoft sql server",
+    "mssql",
+    "sql server"
+   ],
+   "category": "db",
+   "weight": 60,
+   "note": "Microsoft SQL Server (2017/2022 seen in data)"
+  },
+  {
+   "patterns": [
+    "postgresql",
+    "postgres"
+   ],
+   "category": "db",
+   "weight": 58,
+   "note": "PostgreSQL (seen in data)"
+  },
+  {
+   "patterns": [
+    "mysql",
+    "mariadb"
+   ],
+   "category": "db",
+   "weight": 55,
+   "note": "MySQL/MariaDB (seen in data)"
+  },
+  {
+   "patterns": [
+    "oracle database",
+    "tnslsnr",
+    "oracle tns"
+   ],
+   "category": "db",
+   "weight": 55,
+   "note": "Oracle DB / TNS listener"
+  },
+  {
+   "patterns": [
+    "microsoft sql server",
+    "ms-sql",
+    "mssqlserver"
+   ],
+   "category": "db",
+   "weight": 55,
+   "note": "MS SQL (port 1433 / SQL Browser 1434). Seen on 10.11.11.11 and .15."
+  },
+  {
+   "patterns": [
+    "postgresql"
+   ],
+   "category": "db",
+   "weight": 52,
+   "note": "PostgreSQL (port 5432) - seen on 10.11.11.12."
+  },
+  {
+   "patterns": [
+    "mongodb",
+    "redis",
+    "oracle tns",
+    "tnslsnr",
+    "elasticsearch",
+    "memcached",
+    "cassandra",
+    "couchdb",
+    "influxdb"
+   ],
+   "category": "db",
+   "weight": 48,
+   "note": "Data-service banners."
+  },
+  {
+   "patterns": [
+    "mongodb",
+    "cassandra",
+    "couchdb",
+    "influxdb",
+    "clickhouse",
+    "elasticsearch"
+   ],
+   "category": "db",
+   "weight": 45,
+   "note": "NoSQL/analytics databases"
+  },
+  {
+   "patterns": [
+    "redis",
+    "memcached"
+   ],
+   "category": "db",
+   "weight": 42,
+   "note": "In-memory data stores"
+  },
+  {
+   "patterns": [
+    "palo alto",
+    "pan-os"
+   ],
+   "category": "firewall",
+   "weight": 78,
+   "note": "Palo Alto Networks NGFW / PAN-OS"
+  },
+  {
+   "patterns": [
+    "fortinet",
+    "fortigate",
+    "fortios"
+   ],
+   "category": "firewall",
+   "weight": 78,
+   "note": "FortiGate NGFW."
+  },
+  {
+   "patterns": [
+    "fortigate",
+    "fortios",
+    "fortiwifi"
+   ],
+   "category": "firewall",
+   "weight": 75,
+   "note": "FortiGate/FortiOS NGFW OS/banner"
+  },
+  {
+   "patterns": [
+    "sonicwall"
+   ],
+   "category": "firewall",
+   "weight": 75,
+   "note": ""
+  },
+  {
+   "patterns": [
+    "sonicwall",
+    "sonicos",
+    "sonic wall"
+   ],
+   "category": "firewall",
+   "weight": 72,
+   "note": "SonicWall UTM firewall (nmap OUI 'Sonicwall')"
+  },
+  {
+   "patterns": [
+    "watchguard",
+    "fireware",
+    "firebox"
+   ],
+   "category": "firewall",
+   "weight": 72,
+   "note": "WatchGuard Firebox / Fireware"
+  },
+  {
+   "patterns": [
+    "check point",
+    "checkpoint",
+    "check point software",
+    "gaia embedded"
+   ],
+   "category": "firewall",
+   "weight": 72,
+   "note": "Check Point firewall / GAiA"
+  },
+  {
+   "patterns": [
+    "pfsense",
+    "netgate"
+   ],
+   "category": "firewall",
+   "weight": 72,
+   "note": "pfSense (Netgate) firewall"
+  },
+  {
+   "patterns": [
+    "opnsense",
+    "deciso"
+   ],
+   "category": "firewall",
+   "weight": 72,
+   "note": "OPNsense firewall (Deciso hardware)"
+  },
+  {
+   "patterns": [
+    "watchguard",
+    "fireware"
+   ],
+   "category": "firewall",
+   "weight": 72,
+   "note": ""
+  },
+  {
+   "patterns": [
+    "check point",
+    "checkpoint",
+    "gaia embedded"
+   ],
+   "category": "firewall",
+   "weight": 72,
+   "note": ""
+  },
+  {
+   "patterns": [
+    "cisco asa",
+    "adaptive security appliance",
+    "asa55"
+   ],
+   "category": "firewall",
+   "weight": 72,
+   "note": ""
+  },
+  {
+   "patterns": [
+    "stormshield",
+    "netasq"
+   ],
+   "category": "firewall",
+   "weight": 70,
+   "note": "Stormshield / legacy NETASQ UTM"
+  },
+  {
+   "patterns": [
+    "netgate",
+    "pfsense",
+    "opnsense"
+   ],
+   "category": "firewall",
+   "weight": 68,
+   "note": "pfSense/OPNsense/Netgate firewall appliances (FreeBSD-based)."
+  },
+  {
+   "patterns": [
+    "draytek",
+    "vigor"
+   ],
+   "category": "firewall",
+   "weight": 66,
+   "note": "192.168.1.1 in this report. DrayTek Vigor = combined SMB router + UTM firewall (the Vigor line is branded 'Security Firewall'). The FTP banner literally reads '"
+  },
+  {
+   "patterns": [
+    "cisco asa",
+    "adaptive security appliance",
+    "firepower"
+   ],
+   "category": "firewall",
+   "weight": 65,
+   "note": "Cisco ASA / Firepower firewall"
+  },
+  {
+   "patterns": [
+    "stormshield",
+    "hillstone networks"
+   ],
+   "category": "firewall",
+   "weight": 64,
+   "note": ""
+  },
+  {
+   "patterns": [
+    "barracuda"
+   ],
+   "category": "firewall",
+   "weight": 60,
+   "note": "Also WAF/email security appliances."
+  },
+  {
+   "patterns": [
+    "netscreen",
+    "juniper srx",
+    "srx series"
+   ],
+   "category": "firewall",
+   "weight": 60,
+   "note": "Juniper SRX / legacy NetScreen firewall"
+  },
+  {
+   "patterns": [
+    "fortinet"
+   ],
+   "category": "firewall",
+   "weight": 55,
+   "note": "Fortinet OUI; predominantly FortiGate firewalls (also FortiSwitch/FortiAP)"
+  },
+  {
+   "patterns": [
+    "sophos",
+    "cyberoam"
+   ],
+   "category": "firewall",
+   "weight": 55,
+   "note": "Sophos/Cyberoam XG/SG UTM (Sophos also endpoint AV)"
+  },
+  {
+   "patterns": [
+    "zywall",
+    "usg flex",
+    "zyxel usg",
+    "zyxel atp"
+   ],
+   "category": "firewall",
+   "weight": 55,
+   "note": "Zyxel ZyWALL/USG/ATP firewall"
+  },
+  {
+   "patterns": [
+    "hillstone",
+    "sangfor"
+   ],
+   "category": "firewall",
+   "weight": 52,
+   "note": "Hillstone / Sangfor NGFW"
+  },
+  {
+   "patterns": [
+    "smoothwall",
+    "ipfire",
+    "endian",
+    "untangle",
+    "kerio control"
+   ],
+   "category": "firewall",
+   "weight": 52,
+   "note": "Open-source/SMB UTM firewall distros"
+  },
+  {
+   "patterns": [
+    "sophos"
+   ],
+   "category": "firewall",
+   "weight": 52,
+   "note": "'Sophos' OUI/banner is usually an XG/SG firewall, but Sophos is also an endpoint-agent vendor - confirm."
+  },
+  {
+   "patterns": [
+    "meraki mx"
+   ],
+   "category": "firewall",
+   "weight": 50,
+   "note": "Cisco Meraki MX security appliance"
+  },
+  {
+   "patterns": [
+    "ngfw",
+    "next-generation firewall",
+    "unified threat management",
+    "utm appliance"
+   ],
+   "category": "firewall",
+   "weight": 42,
+   "note": "Generic firewall/UTM banner text"
+  },
+  {
+   "patterns": [
+    "vmware esxi",
+    "vmware esx",
+    "esxi",
+    "vmkernel"
+   ],
+   "category": "hypervisor",
+   "weight": 78,
+   "note": "ESXi host. IMPORTANT caveat: a 'VMware, Inc.' OUI on a MAC is just a guest VM's virtual NIC (any OS) and is NOT proof of a hypervisor - classify VMware-OUI host"
+  },
+  {
+   "patterns": [
+    "proxmox",
+    "pve-manager"
+   ],
+   "category": "hypervisor",
+   "weight": 72,
+   "note": ""
+  },
+  {
+   "patterns": [
+    "xenserver",
+    "citrix hypervisor",
+    "xcp-ng"
+   ],
+   "category": "hypervisor",
+   "weight": 70,
+   "note": ""
+  },
+  {
+   "patterns": [
+    "esxi",
+    "vmware esxi",
+    "vmware esx"
+   ],
+   "category": "hypervisor",
+   "weight": 70,
+   "note": "ESXi host OS/management banner or web welcome page (seen live on 10.11.11.101 'VMware ESX Server')"
+  },
+  {
+   "patterns": [
+    "vcenter",
+    "vsphere",
+    "vmware vsphere",
+    "vmware vcenter"
+   ],
+   "category": "hypervisor",
+   "weight": 70,
+   "note": "vCenter / vSphere management UI; live vCenter page contained 'VMware vSphere'"
+  },
+  {
+   "patterns": [
+    "nutanix",
+    "acropolis"
+   ],
+   "category": "hypervisor",
+   "weight": 66,
+   "note": ""
+  },
+  {
+   "patterns": [
+    "vsphere",
+    "vcenter",
+    "id_vc_welcome"
+   ],
+   "category": "hypervisor",
+   "weight": 66,
+   "note": "vCenter management (page title literally renders 'ID_VC_Welcome', as on 10.11.11.101)."
+  },
+  {
+   "patterns": [
+    "vmware esxi",
+    "esxi",
+    "vsphere",
+    "vmware authentication daemon"
+   ],
+   "category": "hypervisor",
+   "weight": 65,
+   "note": "VMware ESXi/vSphere host (ESXi + auth daemon seen in data)"
+  },
+  {
+   "patterns": [
+    "proxmox"
+   ],
+   "category": "hypervisor",
+   "weight": 65,
+   "note": "Proxmox VE web UI / banner ('Proxmox Virtual Environment')"
+  },
+  {
+   "patterns": [
+    "vmware-auth",
+    "vmware authentication daemon"
+   ],
+   "category": "hypervisor",
+   "weight": 65,
+   "note": "TCP 902/912 authd on ESXi/Workstation host (live on 10.11.11.111 port 902)"
+  },
+  {
+   "patterns": [
+    "vmware authentication daemon"
+   ],
+   "category": "hypervisor",
+   "weight": 58,
+   "note": "Port 902/912 auth daemon on ESXi/host (seen on 10.11.11.111)."
+  },
+  {
+   "patterns": [
+    "nutanix"
+   ],
+   "category": "hypervisor",
+   "weight": 55,
+   "note": "Nutanix AHV/appliance"
+  },
+  {
+   "patterns": [
+    "vmware skyline"
+   ],
+   "category": "hypervisor",
+   "weight": 55,
+   "note": "VMware Skyline health appliance"
+  },
+  {
+   "patterns": [
+    "hyper-v",
+    "hyperv",
+    "microsoft hyper-v"
+   ],
+   "category": "hypervisor",
+   "weight": 55,
+   "note": "Windows Hyper-V role; OUI 00:15:5d is Hyper-V pool but its IEEE name is only generic 'Microsoft', so match on banner text"
+  },
+  {
+   "patterns": [
+    "ovirt",
+    "rhev",
+    "red hat virtualization"
+   ],
+   "category": "hypervisor",
+   "weight": 55,
+   "note": "oVirt / Red Hat Virtualization manager"
+  },
+  {
+   "patterns": [
+    "hyper-v",
+    "microsoft hyper-v"
+   ],
+   "category": "hypervisor",
+   "weight": 52,
+   "note": "Microsoft Hyper-V host"
+  },
+  {
+   "patterns": [
+    "vmware photon",
+    "photon os",
+    "vcsa"
+   ],
+   "category": "hypervisor",
+   "weight": 50,
+   "note": "vCenter Server Appliance runs Photon OS; VAMI on 5480"
+  },
+  {
+   "patterns": [
+    "ovirt",
+    "rhev"
+   ],
+   "category": "hypervisor",
+   "weight": 48,
+   "note": "oVirt/RHV; bare 'kvm' also means an IP-KVM console - do not match on 'kvm' alone."
+  },
+  {
+   "patterns": [
+    "qemu"
+   ],
+   "category": "hypervisor",
+   "weight": 45,
+   "note": "QEMU/KVM platform (default guest OUI 52:54:00 is locally administered, not IEEE)"
+  },
+  {
+   "patterns": [
+    "oracle vm server",
+    "virtuozzo",
+    "openvz",
+    "scale computing",
+    "hypercore"
+   ],
+   "category": "hypervisor",
+   "weight": 45,
+   "note": "Other hypervisor/HCI platforms; avoid bare 'ovm'/'xen' substrings"
+  },
+  {
+   "patterns": [
+    "hyper-v"
+   ],
+   "category": "hypervisor",
+   "weight": 38,
+   "note": "Hyper-V role lives on Windows Server; if the host shows confirmed AD/DC ports keep it as server."
+  },
+  {
+   "patterns": [
+    "vmware"
+   ],
+   "category": "hypervisor",
+   "weight": 35,
+   "note": "Generic VMware OUI (00:0c:29/00:50:56/00:05:69/00:1c:14) or banner; usually a GUEST-VM MAC, so keep well below esxi/vcenter so guests running a server OS still "
+  },
+  {
+   "patterns": [
+    "virtualbox",
+    "pcs systemtechnik"
+   ],
+   "category": "hypervisor",
+   "weight": 35,
+   "note": "Oracle VirtualBox (OUI 08:00:27 'PCS Systemtechnik GmbH', older 00:21:f6 Oracle); usually a desktop guest VM"
+  },
+  {
+   "patterns": [
+    "xensource"
+   ],
+   "category": "hypervisor",
+   "weight": 30,
+   "note": "Xen OUI 00:16:3e = 'Xensource, Inc.'; also matches Xen/AWS guest VMs, keep low"
+  },
+  {
+   "patterns": [
+    "parallels"
+   ],
+   "category": "hypervisor",
+   "weight": 30,
+   "note": "Parallels (OUI 00:1c:42 'Parallels, Inc.'); usually a macOS desktop VM guest"
+  },
+  {
+   "patterns": [
+    "tuya",
+    "tuya smart",
+    "shelly",
+    "allterco",
+    "sonoff",
+    "itead",
+    "broadlink",
+    "lifx"
+   ],
+   "category": "iot",
+   "weight": 58,
+   "note": "Smart-home switches/plugs/relays."
+  },
+  {
+   "patterns": [
+    "espressif"
+   ],
+   "category": "iot",
+   "weight": 55,
+   "note": "ESP32/ESP8266 Wi-Fi modules - DIY/embedded IoT."
+  },
+  {
+   "patterns": [
+    "sonos",
+    "roku",
+    "nest labs",
+    "google nest",
+    "ecobee"
+   ],
+   "category": "iot",
+   "weight": 52,
+   "note": "Media/smart-home appliances."
+  },
+  {
+   "patterns": [
+    "espressif",
+    "esp32",
+    "esp8266"
+   ],
+   "category": "iot",
+   "weight": 50,
+   "note": "Espressif IoT/Wi-Fi modules"
+  },
+  {
+   "patterns": [
+    "tuya",
+    "sonoff",
+    "itead",
+    "shelly",
+    "allterco"
+   ],
+   "category": "iot",
+   "weight": 50,
+   "note": "Smart-home IoT devices"
+  },
+  {
+   "patterns": [
+    "signify",
+    "philips lighting",
+    "ring inc"
+   ],
+   "category": "iot",
+   "weight": 50,
+   "note": ""
+  },
+  {
+   "patterns": [
+    "siemens",
+    "allen-bradley",
+    "rockwell",
+    "schneider electric",
+    "modbus",
+    "bacnet",
+    "profinet",
+    "ethernet/ip",
+    "codesys"
+   ],
+   "category": "iot",
+   "weight": 48,
+   "note": "Industrial/OT controllers & protocols"
+  },
+  {
+   "patterns": [
+    "philips hue",
+    "signify",
+    "hue bridge"
+   ],
+   "category": "iot",
+   "weight": 45,
+   "note": "Philips Hue lighting"
+  },
+  {
+   "patterns": [
+    "crestron",
+    "amx",
+    "extron",
+    "biamp",
+    "q-sys"
+   ],
+   "category": "iot",
+   "weight": 45,
+   "note": "AV control systems"
+  },
+  {
+   "patterns": [
+    "solaredge",
+    "fronius",
+    "sma solar",
+    "enphase"
+   ],
+   "category": "iot",
+   "weight": 45,
+   "note": "Solar inverters"
+  },
+  {
+   "patterns": [
+    "nest labs",
+    "google nest",
+    "smartthings"
+   ],
+   "category": "iot",
+   "weight": 42,
+   "note": "Smart-home hubs"
+  },
+  {
+   "patterns": [
+    "sonos",
+    "roku",
+    "chromecast",
+    "apple tv",
+    "android tv",
+    "webos",
+    "tizen",
+    "smart tv"
+   ],
+   "category": "iot",
+   "weight": 40,
+   "note": "Media players / smart TVs"
+  },
+  {
+   "patterns": [
+    "raspberry pi"
+   ],
+   "category": "iot",
+   "weight": 40,
+   "note": "Raspberry Pi SBC (could be server/PC too)"
+  },
+  {
+   "patterns": [
+    "tuya"
+   ],
+   "category": "iot",
+   "weight": 40,
+   "note": "Tuya Smart Inc. smart-home platform (OUI a0:92:08, 10:5a:17, c4:82:e1, ...)"
+  },
+  {
+   "patterns": [
+    "sonoff",
+    "itead"
+   ],
+   "category": "iot",
+   "weight": 40,
+   "note": "ITEAD Sonoff smart switches (ESP-based)"
+  },
+  {
+   "patterns": [
+    "shelly",
+    "allterco"
+   ],
+   "category": "iot",
+   "weight": 40,
+   "note": "Shelly relays/sensors (Allterco Robotics)"
+  },
+  {
+   "patterns": [
+    "sonos"
+   ],
+   "category": "iot",
+   "weight": 40,
+   "note": "Sonos, Inc. networked speakers"
+  },
+  {
+   "patterns": [
+    "nest labs",
+    "google nest"
+   ],
+   "category": "iot",
+   "weight": 40,
+   "note": "Nest thermostat/cam/protect; smart-home => iot per taxonomy. Avoid bare 'nest' (matches 'honest')"
+  },
+  {
+   "patterns": [
+    "ecobee"
+   ],
+   "category": "iot",
+   "weight": 40,
+   "note": "ecobee smart thermostat"
+  },
+  {
+   "patterns": [
+    "signify",
+    "philips lighting"
+   ],
+   "category": "iot",
+   "weight": 40,
+   "note": "Philips Hue lighting (OUI 00:17:88 'Philips Lighting BV', now Signify N.V.)"
+  },
+  {
+   "patterns": [
+    "belkin",
+    "wemo"
+   ],
+   "category": "iot",
+   "weight": 40,
+   "note": "Belkin Wemo smart plugs/switches"
+  },
+  {
+   "patterns": [
+    "lifx",
+    "lifi labs"
+   ],
+   "category": "iot",
+   "weight": 40,
+   "note": "LIFX smart bulbs (LiFi Labs)"
+  },
+  {
+   "patterns": [
+    "wyze"
+   ],
+   "category": "iot",
+   "weight": 40,
+   "note": "Wyze cam/sensors; smart-home consumer device => iot"
+  },
+  {
+   "patterns": [
+    "irobot",
+    "ecovacs",
+    "roborock"
+   ],
+   "category": "iot",
+   "weight": 40,
+   "note": "Robot vacuums"
+  },
+  {
+   "patterns": [
+    "yeelight",
+    "nanoleaf",
+    "govee",
+    "meross"
+   ],
+   "category": "iot",
+   "weight": 40,
+   "note": "Smart lighting / plugs"
+  },
+  {
+   "patterns": [
+    "amazon technologies",
+    "amazon.com"
+   ],
+   "category": "iot",
+   "weight": 40,
+   "note": "Echo/Alexa/Fire TV/Kindle - confirm."
+  },
+  {
+   "patterns": [
+    "arduino",
+    "particle",
+    "seeed",
+    "wiznet",
+    "nordic semiconductor",
+    "u-blox"
+   ],
+   "category": "iot",
+   "weight": 40,
+   "note": "Dev/embedded network modules (Nordic/u-blox weaker)."
+  },
+  {
+   "patterns": [
+    "amazon technologies",
+    "echo dot",
+    "alexa",
+    "kindle",
+    "fire tv"
+   ],
+   "category": "iot",
+   "weight": 38,
+   "note": "Amazon consumer IoT/media"
+  },
+  {
+   "patterns": [
+    "arduino"
+   ],
+   "category": "iot",
+   "weight": 35,
+   "note": "Arduino boards / Ethernet shields"
+  },
+  {
+   "patterns": [
+    "google home",
+    "chromecast"
+   ],
+   "category": "iot",
+   "weight": 35,
+   "note": "Google Home/Chromecast; deliberately NOT bare 'google' (matches fonts.googleapis and other web banners)"
+  },
+  {
+   "patterns": [
+    "smartthings"
+   ],
+   "category": "iot",
+   "weight": 35,
+   "note": "Samsung SmartThings hub"
+  },
+  {
+   "patterns": [
+    "tradfri"
+   ],
+   "category": "iot",
+   "weight": 35,
+   "note": "IKEA TRADFRI smart-home"
+  },
+  {
+   "patterns": [
+    "roku",
+    "harmony hub",
+    "logitech harmony"
+   ],
+   "category": "iot",
+   "weight": 35,
+   "note": "Media streamer / home-control hub"
+  },
+  {
+   "patterns": [
+    "nordic semiconductor"
+   ],
+   "category": "iot",
+   "weight": 30,
+   "note": "Nordic BLE/Thread SoC common in IoT/wearables"
+  },
+  {
+   "patterns": [
+    "silicon lab",
+    "silabs"
+   ],
+   "category": "iot",
+   "weight": 30,
+   "note": "Silicon Laboratories Zigbee/Thread/IoT SoC ('silicon lab' matches both 'Silicon Labs' and 'Silicon Laboratories')"
+  },
+  {
+   "patterns": [
+    "seeed",
+    "adafruit",
+    "pycom",
+    "sparkfun"
+   ],
+   "category": "iot",
+   "weight": 30,
+   "note": "Maker / embedded dev boards"
+  },
+  {
+   "patterns": [
+    "digi international",
+    "lantronix",
+    "moxa"
+   ],
+   "category": "iot",
+   "weight": 30,
+   "note": "Serial-to-Ethernet / embedded gateways (also industrial OT)"
+  },
+  {
+   "patterns": [
+    "kasa"
+   ],
+   "category": "iot",
+   "weight": 30,
+   "note": "TP-Link Kasa smart plug; TP-Link core networking handled by router/AP rules"
+  },
+  {
+   "patterns": [
+    "hisense",
+    "tcl technology",
+    "vizio",
+    "skyworth"
+   ],
+   "category": "iot",
+   "weight": 30,
+   "note": "Smart TVs/displays - weak, confirm."
+  },
+  {
+   "patterns": [
+    "u-blox",
+    "ublox",
+    "texas instruments",
+    "microchip technology",
+    "atmel",
+    "nordic semiconductor"
+   ],
+   "category": "iot",
+   "weight": 28,
+   "note": "Embedded module/MCU OUIs (ambiguous)"
+  },
+  {
+   "patterns": [
+    "ubiquiti mfi"
+   ],
+   "category": "iot",
+   "weight": 25,
+   "note": "Ubiquiti mFi IoT line; bare 'ubiquiti' left to AP/switch classification"
+  },
+  {
+   "patterns": [
+    "texas instruments"
+   ],
+   "category": "iot",
+   "weight": 20,
+   "note": "TI Wi-Fi/BLE chip appears across many device classes; very weak on its own"
+  },
+  {
+   "patterns": [
+    "murata"
+   ],
+   "category": "iot",
+   "weight": 20,
+   "note": "Murata Wi-Fi/BT module also embedded in laptops/phones; weak"
+  },
+  {
+   "patterns": [
+    "amazon technologies"
+   ],
+   "category": "iot",
+   "weight": 20,
+   "note": "OUI 'Amazon Technologies Inc.' spans Echo/Alexa/Ring/eero/Fire; Fire tablets are really mobile, so weak. Avoid bare 'ring' substring"
+  },
+  {
+   "patterns": [
+    "iphone",
+    "ipad",
+    "ipod"
+   ],
+   "category": "mobile",
+   "weight": 60,
+   "note": "Apple iOS devices — never match bare 'ios' (collides with Cisco IOS)"
+  },
+  {
+   "patterns": [
+    "galaxy",
+    "samsung galaxy"
+   ],
+   "category": "mobile",
+   "weight": 55,
+   "note": "Samsung Galaxy phones"
+  },
+  {
+   "patterns": [
+    "motorola mobility",
+    "motorola (wuhan)"
+   ],
+   "category": "mobile",
+   "weight": 52,
+   "note": "Motorola phones (Motorola Wuhan Mobility seen in data)"
+  },
+  {
+   "patterns": [
+    "pixel",
+    "google pixel"
+   ],
+   "category": "mobile",
+   "weight": 52,
+   "note": "Google Pixel phones"
+  },
+  {
+   "patterns": [
+    "oppo",
+    "vivo mobile",
+    "oneplus",
+    "realme",
+    "honor device",
+    "huawei device"
+   ],
+   "category": "mobile",
+   "weight": 50,
+   "note": "Android phone brands"
+  },
+  {
+   "patterns": [
+    "guangdong oppo",
+    "oppo mobile",
+    "oneplus",
+    "realme",
+    "vivo mobile",
+    "vivo communication"
+   ],
+   "category": "mobile",
+   "weight": 48,
+   "note": "Chinese Android phones."
+  },
+  {
+   "patterns": [
+    "ipados"
+   ],
+   "category": "mobile",
+   "weight": 45,
+   "note": "OS banner: iPadOS."
+  },
+  {
+   "patterns": [
+    "nokia mobile",
+    "hmd global",
+    "sony mobile"
+   ],
+   "category": "mobile",
+   "weight": 45,
+   "note": "Other phone makers"
+  },
+  {
+   "patterns": [
+    "motorola (wuhan)",
+    "mobility technologies",
+    "motorola mobility",
+    "moto g",
+    "moto e"
+   ],
+   "category": "mobile",
+   "weight": 45,
+   "note": "192.168.1.4. 'Motorola (Wuhan) Mobility Technologies Communication' is the OUI (48:88:CA and others) for Moto smartphones (Lenovo-owned Motorola Mobility). Clas"
+  },
+  {
+   "patterns": [
+    "android",
+    "iphone os",
+    "ipados"
+   ],
+   "category": "mobile",
+   "weight": 45,
+   "note": "Mobile OS banner."
+  },
+  {
+   "patterns": [
+    "redmi",
+    "poco"
+   ],
+   "category": "mobile",
+   "weight": 42,
+   "note": "Hostname/banner: Xiaomi Redmi/POCO phone model names."
+  },
+  {
+   "patterns": [
+    "android"
+   ],
+   "category": "mobile",
+   "weight": 42,
+   "note": "Android OS string (phones/tablets)"
+  },
+  {
+   "patterns": [
+    "huawei device",
+    "honor device"
+   ],
+   "category": "mobile",
+   "weight": 42,
+   "note": "Huawei/Honor phones and tablets (consumer-device OUI, distinct from Huawei Technologies carrier gear)."
+  },
+  {
+   "patterns": [
+    "harmonyos"
+   ],
+   "category": "mobile",
+   "weight": 40,
+   "note": "OS banner: Huawei HarmonyOS (phones/tablets)."
+  },
+  {
+   "patterns": [
+    "xiaomi",
+    "redmi",
+    "poco"
+   ],
+   "category": "mobile",
+   "weight": 40,
+   "note": "Phones; note Mi/Redmi also brand smart-home IoT - some units are iot."
+  },
+  {
+   "patterns": [
+    "fairphone"
+   ],
+   "category": "mobile",
+   "weight": 36,
+   "note": "Fairphone — smartphones only."
+  },
+  {
+   "patterns": [
+    "lineageos"
+   ],
+   "category": "mobile",
+   "weight": 36,
+   "note": "OS banner: LineageOS custom Android — a phone/tablet."
+  },
+  {
+   "patterns": [
+    "motorola mobility",
+    "mobility technologies communication"
+   ],
+   "category": "mobile",
+   "weight": 34,
+   "note": "Motorola Mobility (Lenovo) phones. Second pattern catches 'Motorola (Wuhan) Mobility Technologies Communication' (report string, was Bilinmiyor). Deliberately N"
+  },
+  {
+   "patterns": [
+    "oppo mobile",
+    "guangdong oppo"
+   ],
+   "category": "mobile",
+   "weight": 34,
+   "note": "OPPO phones ('Guangdong Oppo Mobile Telecommunications'). Anchored to avoid 'Koppo' (contains 'oppo')."
+  },
+  {
+   "patterns": [
+    "vivo mobile"
+   ],
+   "category": "mobile",
+   "weight": 34,
+   "note": "vivo Mobile Communication — phones. Anchored to 'vivo mobile' (bare 'vivo' too generic)."
+  },
+  {
+   "patterns": [
+    "oneplus"
+   ],
+   "category": "mobile",
+   "weight": 34,
+   "note": "OnePlus Technology/Electronics (Shenzhen) — phones."
+  },
+  {
+   "patterns": [
+    "realme"
+   ],
+   "category": "mobile",
+   "weight": 34,
+   "note": "Realme Chongqing Mobile Telecommunications — phones."
+  },
+  {
+   "patterns": [
+    "honor device"
+   ],
+   "category": "mobile",
+   "weight": 34,
+   "note": "Honor Device — phones (former Huawei sub-brand)."
+  },
+  {
+   "patterns": [
+    "nothing technology"
+   ],
+   "category": "mobile",
+   "weight": 34,
+   "note": "Nothing Technology Limited — phones (Nothing Phone)."
+  },
+  {
+   "patterns": [
+    "hmd global"
+   ],
+   "category": "mobile",
+   "weight": 34,
+   "note": "HMD Global Oy — Nokia-branded phones."
+  },
+  {
+   "patterns": [
+    "huawei device"
+   ],
+   "category": "mobile",
+   "weight": 32,
+   "note": "Huawei Device — phones/tablets. Distinct from 'Huawei Technologies' (network/router gear)."
+  },
+  {
+   "patterns": [
+    "meizu"
+   ],
+   "category": "mobile",
+   "weight": 32,
+   "note": "Meizu Technology — phones."
+  },
+  {
+   "patterns": [
+    "nubia"
+   ],
+   "category": "mobile",
+   "weight": 32,
+   "note": "Nubia Technology — phones (ZTE sub-brand)."
+  },
+  {
+   "patterns": [
+    "tecno mobile"
+   ],
+   "category": "mobile",
+   "weight": 32,
+   "note": "Tecno Mobile Limited — phones (Transsion group)."
+  },
+  {
+   "patterns": [
+    "infinix"
+   ],
+   "category": "mobile",
+   "weight": 32,
+   "note": "Infinix mobility limited — phones (Transsion group)."
+  },
+  {
+   "patterns": [
+    "transsion"
+   ],
+   "category": "mobile",
+   "weight": 32,
+   "note": "Shenzhen Transsion — phone maker (Tecno/Infinix/itel)."
+  },
+  {
+   "patterns": [
+    "galaxy"
+   ],
+   "category": "mobile",
+   "weight": 32,
+   "note": "Hostname/banner: Samsung Galaxy phone/tablet model name."
+  },
+  {
+   "patterns": [
+    "samsung elect"
+   ],
+   "category": "mobile",
+   "weight": 30,
+   "note": "Samsung Electronics — phones/tablets dominant, but also printers, TVs, SSDs; model/banner can redirect."
+  },
+  {
+   "patterns": [
+    "microsoft mobile"
+   ],
+   "category": "mobile",
+   "weight": 30,
+   "note": "'Microsoft Mobile Oy' — Lumia phones. Distinct from bare 'microsoft' (Surface=pc / Xbox)."
+  },
+  {
+   "patterns": [
+    "xiaomi"
+   ],
+   "category": "mobile",
+   "weight": 28,
+   "note": "Xiaomi Communications / Beijing Xiaomi Mobile — phones; note dual use (Mi/Redmi phones and Mi IoT ecosystem), so IoT banners can redirect."
+  },
+  {
+   "patterns": [
+    "apple"
+   ],
+   "category": "mobile",
+   "weight": 25,
+   "note": "Apple OUI ambiguous (iPhone/iPad vs Mac); Macs handled by pc rule"
+  },
+  {
+   "patterns": [
+    "wingtech"
+   ],
+   "category": "mobile",
+   "weight": 24,
+   "note": "Wingtech Group — smartphone ODM (builds phones for Xiaomi/Huawei/etc.); device is usually a phone."
+  },
+  {
+   "patterns": [
+    "huaqin"
+   ],
+   "category": "mobile",
+   "weight": 24,
+   "note": "Huaqin Technology/Telecom — smartphone & tablet ODM; device usually a phone/tablet."
+  },
+  {
+   "patterns": [
+    "longcheer"
+   ],
+   "category": "mobile",
+   "weight": 24,
+   "note": "Longcheer Technology/Telecommunication — smartphone ODM."
+  },
+  {
+   "patterns": [
+    "samsung electronics"
+   ],
+   "category": "mobile",
+   "weight": 24,
+   "note": "Samsung OUI ambiguous (phones/TVs/appliances/SSD)"
+  },
+  {
+   "patterns": [
+    "sichuan ai-link"
+   ],
+   "category": "mobile",
+   "weight": 22,
+   "note": "Sichuan AI-Link Technology — phone/tablet ODM; weak mobile lean."
+  },
+  {
+   "patterns": [
+    "google"
+   ],
+   "category": "mobile",
+   "weight": 18,
+   "note": "Google OUI — weak; Pixel phone (mobile) but also Nest/Chromecast/Home (iot). Low weight so IoT service banners can redirect."
+  },
+  {
+   "patterns": [
+    "qnap"
+   ],
+   "category": "nas",
+   "weight": 75,
+   "note": "QNAP Systems — NAS"
+  },
+  {
+   "patterns": [
+    "synology"
+   ],
+   "category": "nas",
+   "weight": 75,
+   "note": "Synology — DiskStation/RackStation NAS"
+  },
+  {
+   "patterns": [
+    "synology",
+    "diskstation",
+    "rackstation"
+   ],
+   "category": "nas",
+   "weight": 72,
+   "note": "Also: the '/index' page with hidden inputs http=5000 / https=5001 redirecting to :5000/:5001 is the Synology DSM login pattern - that is why 10.11.11.99 'NICLOU"
+  },
+  {
+   "patterns": [
+    "asustor"
+   ],
+   "category": "nas",
+   "weight": 70,
+   "note": "ASUSTOR — NAS"
+  },
+  {
+   "patterns": [
+    "terramaster"
+   ],
+   "category": "nas",
+   "weight": 70,
+   "note": "TerraMaster — NAS"
+  },
+  {
+   "patterns": [
+    "drobo"
+   ],
+   "category": "nas",
+   "weight": 68,
+   "note": "Drobo — NAS/DAS"
+  },
+  {
+   "patterns": [
+    "diskstation",
+    "rackstation"
+   ],
+   "category": "nas",
+   "weight": 66,
+   "note": "Synology DSM model banners"
+  },
+  {
+   "patterns": [
+    "ixsystems",
+    "truenas"
+   ],
+   "category": "nas",
+   "weight": 64,
+   "note": "iXsystems TrueNAS/FreeNAS appliances"
+  },
+  {
+   "patterns": [
+    "qts",
+    "turbonas"
+   ],
+   "category": "nas",
+   "weight": 64,
+   "note": "QNAP QTS OS banners"
+  },
+  {
+   "patterns": [
+    "thecus"
+   ],
+   "category": "nas",
+   "weight": 62,
+   "note": "Thecus — NAS"
+  },
+  {
+   "patterns": [
+    "truenas",
+    "freenas",
+    "openmediavault",
+    "xigmanas",
+    "nas4free",
+    "unraid"
+   ],
+   "category": "nas",
+   "weight": 62,
+   "note": "DIY/appliance NAS operating systems"
+  },
+  {
+   "patterns": [
+    "truenas",
+    "freenas",
+    "openmediavault",
+    "diskstation manager"
+   ],
+   "category": "nas",
+   "weight": 62,
+   "note": "NAS OS/banner."
+  },
+  {
+   "patterns": [
+    "asustor",
+    "terramaster",
+    "drobo"
+   ],
+   "category": "nas",
+   "weight": 60,
+   "note": ""
+  },
+  {
+   "patterns": [
+    "readynas"
+   ],
+   "category": "nas",
+   "weight": 58,
+   "note": "Netgear ReadyNAS appliance"
+  },
+  {
+   "patterns": [
+    "netapp",
+    "ontap",
+    "isilon",
+    "powerscale",
+    "dell emc unity",
+    "emc celerra"
+   ],
+   "category": "nas",
+   "weight": 58,
+   "note": "Enterprise storage arrays."
+  },
+  {
+   "patterns": [
+    "netapp",
+    "promise technology",
+    "qsan",
+    "infortrend"
+   ],
+   "category": "nas",
+   "weight": 56,
+   "note": "Enterprise/SMB storage arrays"
+  },
+  {
+   "patterns": [
+    "truenas",
+    "freenas",
+    "ixsystems"
+   ],
+   "category": "nas",
+   "weight": 55,
+   "note": "TrueNAS/FreeNAS"
+  },
+  {
+   "patterns": [
+    "western digital",
+    "wd my cloud",
+    "mycloud",
+    "readynas"
+   ],
+   "category": "nas",
+   "weight": 54,
+   "note": ""
+  },
+  {
+   "patterns": [
+    "netapp",
+    "ontap"
+   ],
+   "category": "nas",
+   "weight": 52,
+   "note": "NetApp ONTAP storage"
+  },
+  {
+   "patterns": [
+    "thecus",
+    "asustor",
+    "drobo",
+    "openmediavault"
+   ],
+   "category": "nas",
+   "weight": 50,
+   "note": "Other NAS platforms (Thecus NAS OS-fingerprint seen in data)"
+  },
+  {
+   "patterns": [
+    "my cloud",
+    "mycloud",
+    "western digital"
+   ],
+   "category": "nas",
+   "weight": 48,
+   "note": "WD My Cloud NAS"
+  },
+  {
+   "patterns": [
+    "terastation",
+    "linkstation",
+    "buffalo"
+   ],
+   "category": "nas",
+   "weight": 48,
+   "note": "Buffalo NAS"
+  },
+  {
+   "patterns": [
+    "western digital"
+   ],
+   "category": "nas",
+   "weight": 48,
+   "note": "Western Digital — My Cloud NAS (also bare drives)"
+  },
+  {
+   "patterns": [
+    "my cloud",
+    "mycloud"
+   ],
+   "category": "nas",
+   "weight": 48,
+   "note": "WD My Cloud NAS"
+  },
+  {
+   "patterns": [
+    "buffalo"
+   ],
+   "category": "nas",
+   "weight": 46,
+   "note": "Buffalo — LinkStation/TeraStation NAS (also makes switches/routers)"
+  },
+  {
+   "patterns": [
+    "isilon",
+    "dell emc",
+    "unity storage"
+   ],
+   "category": "nas",
+   "weight": 45,
+   "note": "Enterprise storage arrays"
+  },
+  {
+   "patterns": [
+    "seagate",
+    "lacie"
+   ],
+   "category": "nas",
+   "weight": 45,
+   "note": "Seagate/LaCie — NAS/network storage (also drives)"
+  },
+  {
+   "patterns": [
+    "netatalk",
+    "afpovertcp"
+   ],
+   "category": "nas",
+   "weight": 40,
+   "note": "AFP file service — common on NAS/Mac"
+  },
+  {
+   "patterns": [
+    "framework computer"
+   ],
+   "category": "pc",
+   "weight": 55,
+   "note": ""
+  },
+  {
+   "patterns": [
+    "optiplex",
+    "latitude",
+    "precision workstation",
+    "inspiron",
+    "xps"
+   ],
+   "category": "pc",
+   "weight": 50,
+   "note": "Dell client PCs (PowerEdge handled as server)"
+  },
+  {
+   "patterns": [
+    "thinkpad",
+    "thinkcentre",
+    "ideapad",
+    "ideacentre"
+   ],
+   "category": "pc",
+   "weight": 50,
+   "note": "Lenovo client PCs"
+  },
+  {
+   "patterns": [
+    "macbook",
+    "imac",
+    "mac mini",
+    "mac pro",
+    "mac os x",
+    "macos"
+   ],
+   "category": "pc",
+   "weight": 50,
+   "note": "Apple Mac computers"
+  },
+  {
+   "patterns": [
+    "clevo",
+    "tongfang",
+    "system76"
+   ],
+   "category": "pc",
+   "weight": 50,
+   "note": "Whitebook/gaming-laptop ODMs."
+  },
+  {
+   "patterns": [
+    "lcfc",
+    "lcfc(hefei)",
+    "lianbao"
+   ],
+   "category": "pc",
+   "weight": 46,
+   "note": "192.168.1.33 & .46. LCFC (Hefei) Electronics is Lenovo's wholly-owned PC manufacturing subsidiary (ThinkPad/IdeaPad/desktops). LCFC NIC + 5357 + 7070 = a Lenovo"
+  },
+  {
+   "patterns": [
+    "chrome os",
+    "chromebook"
+   ],
+   "category": "pc",
+   "weight": 45,
+   "note": "OS/banner: ChromeOS device (Chromebook)."
+  },
+  {
+   "patterns": [
+    "micro-star",
+    "msi"
+   ],
+   "category": "pc",
+   "weight": 45,
+   "note": "MSI motherboards/laptops (seen in data)"
+  },
+  {
+   "patterns": [
+    "windows 10",
+    "windows 11",
+    "windows 7",
+    "windows 8.1",
+    "windows xp",
+    "windows vista"
+   ],
+   "category": "pc",
+   "weight": 45,
+   "note": "Client Windows OS. If AD or DB ports are also present, prefer server/db."
+  },
+  {
+   "patterns": [
+    "macbook",
+    "imac",
+    "mac mini",
+    "mac pro",
+    "mac os x"
+   ],
+   "category": "pc",
+   "weight": 45,
+   "note": "Apple desktop/laptop."
+  },
+  {
+   "patterns": [
+    "micro-star",
+    "micro star",
+    "msi",
+    "asrock",
+    "biostar",
+    "elitegroup",
+    "gigabyte",
+    "giga-byte"
+   ],
+   "category": "pc",
+   "weight": 43,
+   "note": "Consumer motherboard/laptop makers (MSI/ASRock/Biostar/ECS/Gigabyte) - desktop/workstation PCs. Gigabyte/MSI also sell some servers/GPUs."
+  },
+  {
+   "patterns": [
+    "thinkpad",
+    "thinkcentre",
+    "ideapad"
+   ],
+   "category": "pc",
+   "weight": 42,
+   "note": "OS/hostname/DHCP banner: Lenovo PC model families."
+  },
+  {
+   "patterns": [
+    "elitebook",
+    "probook",
+    "zbook"
+   ],
+   "category": "pc",
+   "weight": 42,
+   "note": "Banner/hostname: HP business PC model families."
+  },
+  {
+   "patterns": [
+    "macbook",
+    "mac mini"
+   ],
+   "category": "pc",
+   "weight": 42,
+   "note": "Banner/hostname: Apple desktop/laptop models. ('imac' deliberately omitted — substring of 'primacy'.)"
+  },
+  {
+   "patterns": [
+    "surface pro",
+    "surface laptop",
+    "surface book"
+   ],
+   "category": "pc",
+   "weight": 42,
+   "note": "Banner/hostname: Microsoft Surface PC families."
+  },
+  {
+   "patterns": [
+    "toughbook"
+   ],
+   "category": "pc",
+   "weight": 42,
+   "note": "Banner/hostname: Panasonic Toughbook rugged laptop (bare 'panasonic' too broad → TVs/phones/appliances)."
+  },
+  {
+   "patterns": [
+    "lcfc"
+   ],
+   "category": "pc",
+   "weight": 42,
+   "note": "LCFC (Hefei) = Lenovo laptop ODM (seen in data)"
+  },
+  {
+   "patterns": [
+    "gigabyte",
+    "giga-byte",
+    "asrock",
+    "biostar",
+    "shuttle",
+    "zotac"
+   ],
+   "category": "pc",
+   "weight": 42,
+   "note": "Desktop motherboard/barebone vendors"
+  },
+  {
+   "patterns": [
+    "lenovo"
+   ],
+   "category": "pc",
+   "weight": 40,
+   "note": "Lenovo-branded OUI = laptops/desktops mostly (ThinkSystem servers exist but are rarer and usually show iDRAC-like BMC/idrac equivalents). See LCFC for Lenovo's "
+  },
+  {
+   "patterns": [
+    "optiplex",
+    "latitude"
+   ],
+   "category": "pc",
+   "weight": 40,
+   "note": "Banner/hostname: Dell OptiPlex desktops / Latitude laptops."
+  },
+  {
+   "patterns": [
+    "compal information",
+    "compal electronics"
+   ],
+   "category": "pc",
+   "weight": 40,
+   "note": "Compal laptop ODM (seen in data)"
+  },
+  {
+   "patterns": [
+    "asustek computer"
+   ],
+   "category": "pc",
+   "weight": 40,
+   "note": "ASUSTeK PC arm (ASUS routers handled separately)"
+  },
+  {
+   "patterns": [
+    "windows 7",
+    "windows 8",
+    "windows 10",
+    "windows 11",
+    "windows xp"
+   ],
+   "category": "pc",
+   "weight": 40,
+   "note": "Client Windows OS strings (weak vs Windows Server)"
+  },
+  {
+   "patterns": [
+    "compal",
+    "compal information",
+    "compal electronics"
+   ],
+   "category": "pc",
+   "weight": 40,
+   "note": "192.168.1.75. Compal is one of the world's largest notebook ODMs (builds for Dell/HP/Lenovo/Acer). 'Compal Information (Kunshan)' NIC on a LAN = a laptop/PC."
+  },
+  {
+   "patterns": [
+    "pegatron"
+   ],
+   "category": "pc",
+   "weight": 38,
+   "note": "192.168.1.15. Pegatron is a large Taiwanese ODM (motherboards, laptops, desktops, consumer-electronics assembly). Pegatron NIC + 5357 (Windows WSDAPI) + 7070 (A"
+  },
+  {
+   "patterns": [
+    "liteon",
+    "lite-on"
+   ],
+   "category": "pc",
+   "weight": 35,
+   "note": "Liteon PC components/laptops (seen in data)"
+  },
+  {
+   "patterns": [
+    "quanta computer",
+    "wistron",
+    "inventec",
+    "clevo",
+    "tongfang"
+   ],
+   "category": "pc",
+   "weight": 35,
+   "note": "Notebook/PC ODMs (Quanta also QCT servers)"
+  },
+  {
+   "patterns": [
+    "liteon",
+    "lite-on",
+    "liteon technology"
+   ],
+   "category": "pc",
+   "weight": 34,
+   "note": "192.168.1.18. Lite-On makes the Wi-Fi/NIC modules embedded in laptops/desktops (also PSUs/optical drives). On a LAN a Lite-On MAC is almost always a laptop/PC o"
+  },
+  {
+   "patterns": [
+    "jump industrielle",
+    "computertechnik",
+    "jumptec"
+   ],
+   "category": "pc",
+   "weight": 34,
+   "note": "192.168.1.57 & .78. JUMP/JUMPtec Industrielle Computertechnik GmbH (Deggendorf, DE; acquired by Kontron in 2002) makes embedded/industrial computer-on-modules ("
+  },
+  {
+   "patterns": [
+    "clevo"
+   ],
+   "category": "pc",
+   "weight": 32,
+   "note": "Clevo — barebones gaming/business laptop maker; almost always a laptop."
+  },
+  {
+   "patterns": [
+    "lcfc",
+    "lcfc(hefei)"
+   ],
+   "category": "pc",
+   "weight": 32,
+   "note": "LCFC (Hefei) Electronics Technology — Lenovo's in-house ODM (LianBao). Report string was Bilinmiyor; strong Lenovo laptop/desktop signal."
+  },
+  {
+   "patterns": [
+    "razer"
+   ],
+   "category": "pc",
+   "weight": 32,
+   "note": "Razer — gaming laptops & peripherals."
+  },
+  {
+   "patterns": [
+    "getac"
+   ],
+   "category": "pc",
+   "weight": 32,
+   "note": "Getac Technology — rugged laptops/tablets."
+  },
+  {
+   "patterns": [
+    "jump industrielle"
+   ],
+   "category": "pc",
+   "weight": 32,
+   "note": "JUMP Industrielle Computertechnik GmbH — industrial/embedded PCs. Report string was Bilinmiyor."
+  },
+  {
+   "patterns": [
+    "jump industrielle",
+    "advantech"
+   ],
+   "category": "pc",
+   "weight": 32,
+   "note": "Industrial PCs (could also be IoT/OT gateways; both seen in data)"
+  },
+  {
+   "patterns": [
+    "compal"
+   ],
+   "category": "pc",
+   "weight": 30,
+   "note": "Compal Electronics / Compal Information (Kunshan) / Compal Communications — 2nd-largest notebook ODM. Report string 'COMPAL INFORMATION (KUNSHAN)' was unknown."
+  },
+  {
+   "patterns": [
+    "quanta"
+   ],
+   "category": "pc",
+   "weight": 30,
+   "note": "Quanta Computer/Microsystems/Network Systems — world's largest notebook ODM. Note: Quanta/QCT also builds servers & switches, so server/switch text signals can "
+  },
+  {
+   "patterns": [
+    "wistron"
+   ],
+   "category": "pc",
+   "weight": 30,
+   "note": "Wistron — laptop/desktop ODM (also servers). 'Wistron NeWeb' is a WiFi-module arm (still endpoint-ish)."
+  },
+  {
+   "patterns": [
+    "inventec"
+   ],
+   "category": "pc",
+   "weight": 30,
+   "note": "Inventec / Inventec Appliance / Inventec Besta — notebook & server ODM; notebook dominant on LANs."
+  },
+  {
+   "patterns": [
+    "asustek"
+   ],
+   "category": "pc",
+   "weight": 30,
+   "note": "ASUSTek Computer — laptops/desktops/motherboards. Use 'asustek' not 'asus' to avoid unrelated substrings."
+  },
+  {
+   "patterns": [
+    "micro-star"
+   ],
+   "category": "pc",
+   "weight": 30,
+   "note": "Micro-Star International (MSI) — laptops/motherboards/GPUs. Registry spellings vary (INT'L, Intl) but all contain 'micro-star'."
+  },
+  {
+   "patterns": [
+    "vaio"
+   ],
+   "category": "pc",
+   "weight": 30,
+   "note": "VAIO Corp — laptops only."
+  },
+  {
+   "patterns": [
+    "dell"
+   ],
+   "category": "pc",
+   "weight": 30,
+   "note": "Dell / Dell EMC / Dell Technologies — laptops/desktops dominant on LANs (also PowerEdge servers; server banners like idrac/poweredge can override). Rare FP: 'De"
+  },
+  {
+   "patterns": [
+    "fujitsu client"
+   ],
+   "category": "pc",
+   "weight": 30,
+   "note": "Fujitsu Client Computing Limited — Lifebook/Esprimo endpoints. Bare 'fujitsu' avoided (also servers/comms/microelectronics)."
+  },
+  {
+   "patterns": [
+    "toshiba client",
+    "dynabook"
+   ],
+   "category": "pc",
+   "weight": 30,
+   "note": "Toshiba Client Solutions / Dynabook — laptops. Bare 'toshiba' avoided (TEC POS, storage, meters, cameras)."
+  },
+  {
+   "patterns": [
+    "kontron"
+   ],
+   "category": "pc",
+   "weight": 30,
+   "note": "Kontron — embedded/industrial computing (IPC, COM modules)."
+  },
+  {
+   "patterns": [
+    "axiomtek"
+   ],
+   "category": "pc",
+   "weight": 30,
+   "note": "Axiomtek — industrial/embedded PCs."
+  },
+  {
+   "patterns": [
+    "portwell"
+   ],
+   "category": "pc",
+   "weight": 30,
+   "note": "Portwell — industrial/embedded PCs & network appliances."
+  },
+  {
+   "patterns": [
+    "aaeon"
+   ],
+   "category": "pc",
+   "weight": 30,
+   "note": "AAEON Technology — industrial/embedded PCs (ASUS group)."
+  },
+  {
+   "patterns": [
+    "wsdapi",
+    "web services on devices"
+   ],
+   "category": "pc",
+   "weight": 30,
+   "note": "Port 5357 = Microsoft WSDAPI, present on Windows endpoints (11 hosts here). Weak alone but a solid Windows-endpoint indicator when paired with a client OUI."
+  },
+  {
+   "patterns": [
+    "asustek",
+    "asus"
+   ],
+   "category": "pc",
+   "weight": 30,
+   "note": "Mostly motherboards/laptops (PC); ASUS also makes RT-/ZenWiFi routers and some IoT - if it is the gateway, reclassify as router."
+  },
+  {
+   "patterns": [
+    "tongfang"
+   ],
+   "category": "pc",
+   "weight": 28,
+   "note": "Tsinghua/Shenzhen/Shenyang Tongfang — laptop ODM (also multimedia). White-label laptops."
+  },
+  {
+   "patterns": [
+    "medion"
+   ],
+   "category": "pc",
+   "weight": 28,
+   "note": "Medion AG — consumer PCs/laptops (Lenovo-owned)."
+  },
+  {
+   "patterns": [
+    "giga-byte"
+   ],
+   "category": "pc",
+   "weight": 28,
+   "note": "GIGA-BYTE Technology — motherboards/laptops/mini-PCs. Use hyphenated 'giga-byte' to avoid matching the data-size word 'gigabyte' in RAM/disk banners."
+  },
+  {
+   "patterns": [
+    "acer"
+   ],
+   "category": "pc",
+   "weight": 28,
+   "note": "Acer Incorporated/Computer — laptops/desktops. OUI-vendor pattern (avoid matching banner words like 'spacer'/'tracer' if applied to free text)."
+  },
+  {
+   "patterns": [
+    "positivo tecnologia"
+   ],
+   "category": "pc",
+   "weight": 28,
+   "note": "Positivo Tecnologia — Brazilian PC OEM. Use full 'positivo tecnologia' to avoid matching Portuguese/Spanish 'dispositivos'."
+  },
+  {
+   "patterns": [
+    "advantech"
+   ],
+   "category": "pc",
+   "weight": 28,
+   "note": "Advantech — industrial PCs & IoT gateways; PC primary, IoT-gateway banners may redirect to iot."
+  },
+  {
+   "patterns": [
+    "iei integration"
+   ],
+   "category": "pc",
+   "weight": 28,
+   "note": "IEI Integration — industrial PCs/panel PCs."
+  },
+  {
+   "patterns": [
+    "congatec"
+   ],
+   "category": "pc",
+   "weight": 28,
+   "note": "congatec — embedded computer-on-module maker; endpoint compute."
+  },
+  {
+   "patterns": [
+    "adlink"
+   ],
+   "category": "pc",
+   "weight": 28,
+   "note": "ADLINK Technology — industrial/embedded PCs & edge computers."
+  },
+  {
+   "patterns": [
+    "nexcom international"
+   ],
+   "category": "pc",
+   "weight": 28,
+   "note": "NEXCOM International — industrial PCs. Use full 'nexcom international' to avoid 'Nexcomm Systems' (unrelated)."
+  },
+  {
+   "patterns": [
+    "dell inc"
+   ],
+   "category": "pc",
+   "weight": 28,
+   "note": "Dell OUI spans laptops/desktops (PC) AND PowerEdge servers - prefer a 'poweredge'/iDRAC banner for server; otherwise weak PC."
+  },
+  {
+   "patterns": [
+    "wistron",
+    "inventec",
+    "quanta computer",
+    "mitac"
+   ],
+   "category": "pc",
+   "weight": 26,
+   "note": "Notebook ODMs; Quanta/Wistron/Inventec also build datacenter servers - weak, confirm by services."
+  },
+  {
+   "patterns": [
+    "lenovo",
+    "acer",
+    "dell inc",
+    "hewlett-packard company"
+   ],
+   "category": "pc",
+   "weight": 25,
+   "note": "Client-PC OUIs that also ship servers/other (ambiguous; pin with banner)"
+  },
+  {
+   "patterns": [
+    "beckhoff"
+   ],
+   "category": "pc",
+   "weight": 24,
+   "note": "Beckhoff Automation — industrial PCs (IPC) and PLC controllers; mapped to pc per industrial-PC scope, but could be iot/OT."
+  },
+  {
+   "patterns": [
+    "hon hai",
+    "foxconn"
+   ],
+   "category": "pc",
+   "weight": 24,
+   "note": "Hon Hai/Foxconn is a giant contract manufacturer - NIC could be in a PC, TV, console or IoT. Weak; confirm."
+  },
+  {
+   "patterns": [
+    "intel corporate",
+    "intel corp"
+   ],
+   "category": "pc",
+   "weight": 24,
+   "note": "Intel wired/Wi-Fi adapters in laptops/desktops/NUCs (also servers). Weak; combine with OS."
+  },
+  {
+   "patterns": [
+    "hon hai",
+    "foxconn",
+    "intel corporate",
+    "realtek"
+   ],
+   "category": "pc",
+   "weight": 22,
+   "note": "Huge ODM/NIC OUIs; weak PC lean, highly ambiguous"
+  },
+  {
+   "patterns": [
+    "azurewave",
+    "chicony",
+    "realtek semiconductor"
+   ],
+   "category": "pc",
+   "weight": 22,
+   "note": "Wi-Fi/webcam/NIC module makers embedded mostly in laptops (Realtek NICs also appear in cheap IoT) - weak."
+  },
+  {
+   "patterns": [
+    "realserver",
+    "anydesk"
+   ],
+   "category": "pc",
+   "weight": 20,
+   "note": "10.11.11.21 (7070-only, no vendor). nmap labels TCP 7070 'realserver' BY DEFAULT, but across this fleet 7070 co-occurs with Windows WSDAPI (5357)/RDP and a UDP "
+  },
+  {
+   "patterns": [
+    "realtek"
+   ],
+   "category": "pc",
+   "weight": 18,
+   "note": "Realtek Semiconductor — ubiquitous NIC/audio chips; a Realtek OUI usually fronts a desktop/generic PC. Weak NIC-vendor signal."
+  },
+  {
+   "patterns": [
+    "intel corporate"
+   ],
+   "category": "pc",
+   "weight": 18,
+   "note": "Intel NIC/adapter OUI ('Intel Corporate'). MUST anchor to 'intel corporate' — bare 'intel' falsely hits Intelbras (cameras/networking), Intellian, Intelligent*,"
+  },
+  {
+   "patterns": [
+    "intel wireless"
+   ],
+   "category": "pc",
+   "weight": 18,
+   "note": "'Intel Wireless Network Group' OUI — laptop WiFi adapters. Weak NIC signal."
+  },
+  {
+   "patterns": [
+    "chicony"
+   ],
+   "category": "pc",
+   "weight": 18,
+   "note": "Chicony Electronics — laptop webcams/keyboards/NIC modules; weak PC signal."
+  },
+  {
+   "patterns": [
+    "workstation"
+   ],
+   "category": "pc",
+   "weight": 18,
+   "note": "Weak generic banner/OS token indicating an endpoint workstation."
+  },
+  {
+   "patterns": [
+    "apple, inc",
+    "apple inc"
+   ],
+   "category": "pc",
+   "weight": 18,
+   "note": "Apple OUI is ambiguous - Mac (PC), iPhone/iPad (mobile) or Apple TV (IoT). Very weak; confirm by hostname/banner."
+  },
+  {
+   "patterns": [
+    "azurewave"
+   ],
+   "category": "pc",
+   "weight": 16,
+   "note": "AzureWave Technology — WiFi/BT modules embedded in laptops (also some IoT); weak PC signal."
+  },
+  {
+   "patterns": [
+    "foxconn",
+    "hon hai precision"
+   ],
+   "category": "pc",
+   "weight": 15,
+   "note": "Hon Hai / Foxconn — the giant contract assembler; very ambiguous (Apple devices, consoles, routers, PCs). Weak PC lean only."
+  },
+  {
+   "patterns": [
+    "lexmark"
+   ],
+   "category": "printer",
+   "weight": 72,
+   "note": "Lexmark International — network laser printers/MFP only, no other product line"
+  },
+  {
+   "patterns": [
+    "jetdirect",
+    "hp jetdirect"
+   ],
+   "category": "printer",
+   "weight": 72,
+   "note": "HP print server (port 9100)."
+  },
+  {
+   "patterns": [
+    "konica minolta",
+    "konica",
+    "minolta"
+   ],
+   "category": "printer",
+   "weight": 66,
+   "note": "Konica Minolta — bizhub MFP/printers"
+  },
+  {
+   "patterns": [
+    "jetdirect",
+    "laserjet",
+    "officejet",
+    "deskjet",
+    "designjet",
+    "hp-print",
+    "hp jetdirect",
+    "pagewide"
+   ],
+   "category": "printer",
+   "weight": 66,
+   "note": "HP printer banners/models — OUI 'hewlett/hp inc' alone is ambiguous (PC/server), so classify HP by these strings"
+  },
+  {
+   "patterns": [
+    "bizhub"
+   ],
+   "category": "printer",
+   "weight": 66,
+   "note": "Konica Minolta bizhub model banner"
+  },
+  {
+   "patterns": [
+    "laserjet",
+    "officejet",
+    "designjet",
+    "deskjet",
+    "pagewide"
+   ],
+   "category": "printer",
+   "weight": 66,
+   "note": "HP printer model families."
+  },
+  {
+   "patterns": [
+    "lexmark",
+    "xerox",
+    "fuji xerox",
+    "konica minolta"
+   ],
+   "category": "printer",
+   "weight": 64,
+   "note": ""
+  },
+  {
+   "patterns": [
+    "epson",
+    "seiko epson"
+   ],
+   "category": "printer",
+   "weight": 62,
+   "note": "Seiko Epson — network devices are inkjet/laser printers and scanners"
+  },
+  {
+   "patterns": [
+    "ricoh"
+   ],
+   "category": "printer",
+   "weight": 62,
+   "note": "Ricoh (Aficio/IM) — office MFP/printers"
+  },
+  {
+   "patterns": [
+    "xerox",
+    "fuji xerox"
+   ],
+   "category": "printer",
+   "weight": 62,
+   "note": "Xerox / Fuji Xerox — WorkCentre/VersaLink MFP/printers"
+  },
+  {
+   "patterns": [
+    "konica minolta",
+    "bizhub",
+    "pagescope"
+   ],
+   "category": "printer",
+   "weight": 60,
+   "note": "Konica Minolta bizhub MFP (seen in data)"
+  },
+  {
+   "patterns": [
+    "brother industries",
+    "brother"
+   ],
+   "category": "printer",
+   "weight": 60,
+   "note": "Brother Industries — MFC/DCP/HL printers and MFPs"
+  },
+  {
+   "patterns": [
+    "ecosys",
+    "prescribe",
+    "taskalfa"
+   ],
+   "category": "printer",
+   "weight": 60,
+   "note": "Kyocera model/PDL banners"
+  },
+  {
+   "patterns": [
+    "workcentre",
+    "phaser",
+    "versalink",
+    "altalink",
+    "docuprint",
+    "colorqube"
+   ],
+   "category": "printer",
+   "weight": 60,
+   "note": "Xerox printer model families"
+  },
+  {
+   "patterns": [
+    "aficio"
+   ],
+   "category": "printer",
+   "weight": 60,
+   "note": "Ricoh Aficio model banner"
+  },
+  {
+   "patterns": [
+    "jetdirect",
+    "hp laserjet",
+    "hp officejet",
+    "hp deskjet",
+    "designjet"
+   ],
+   "category": "printer",
+   "weight": 58,
+   "note": "HP printers / JetDirect (jetdirect seen in data)"
+  },
+  {
+   "patterns": [
+    "imagerunner",
+    "imageclass",
+    "pixma",
+    "maxify",
+    "i-sensys",
+    "lbp"
+   ],
+   "category": "printer",
+   "weight": 58,
+   "note": "Canon printer model families"
+  },
+  {
+   "patterns": [
+    "kyocera",
+    "ricoh",
+    "oki data",
+    "okidata",
+    "toshiba tec",
+    "pantum",
+    "sindoh"
+   ],
+   "category": "printer",
+   "weight": 58,
+   "note": ""
+  },
+  {
+   "patterns": [
+    "oki electric",
+    "oki data",
+    "okidata"
+   ],
+   "category": "printer",
+   "weight": 56,
+   "note": "OKI Data — printers; avoid bare 'oki' (too short)"
+  },
+  {
+   "patterns": [
+    "pantum"
+   ],
+   "category": "printer",
+   "weight": 56,
+   "note": "Pantum — laser printers"
+  },
+  {
+   "patterns": [
+    "xerox",
+    "phaser",
+    "workcentre",
+    "versalink",
+    "altalink"
+   ],
+   "category": "printer",
+   "weight": 55,
+   "note": "Xerox printers"
+  },
+  {
+   "patterns": [
+    "ricoh",
+    "aficio"
+   ],
+   "category": "printer",
+   "weight": 55,
+   "note": "Ricoh printers"
+  },
+  {
+   "patterns": [
+    "kyocera",
+    "ecosys",
+    "taskalfa"
+   ],
+   "category": "printer",
+   "weight": 55,
+   "note": "Kyocera printers"
+  },
+  {
+   "patterns": [
+    "zebra technologies"
+   ],
+   "category": "printer",
+   "weight": 55,
+   "note": "Zebra — thermal label/barcode printers (some handheld scanners → could be mobile/iot)"
+  },
+  {
+   "patterns": [
+    "brother"
+   ],
+   "category": "printer",
+   "weight": 54,
+   "note": "Mostly printers and label makers."
+  },
+  {
+   "patterns": [
+    "kyocera"
+   ],
+   "category": "printer",
+   "weight": 54,
+   "note": "Kyocera Document Solutions — ECOSYS/TASKalfa printers (bare vendor can also be handsets, rare on LAN)"
+  },
+  {
+   "patterns": [
+    "seiko epson",
+    "epson stylus",
+    "epson workforce",
+    "epson ecotank"
+   ],
+   "category": "printer",
+   "weight": 52,
+   "note": "Epson printers (seen in data)"
+  },
+  {
+   "patterns": [
+    "toshiba tec"
+   ],
+   "category": "printer",
+   "weight": 52,
+   "note": "Toshiba TEC — MFP/POS/label printers; bare 'toshiba' is laptops, do not use"
+  },
+  {
+   "patterns": [
+    "mfc-",
+    "dcp-",
+    "hl-l"
+   ],
+   "category": "printer",
+   "weight": 52,
+   "note": "Brother printer model prefixes"
+  },
+  {
+   "patterns": [
+    "star micronics",
+    "bixolon",
+    "citizen systems",
+    "tsc auto",
+    "godex",
+    "printronix",
+    "datamax",
+    "primera technology",
+    "dascom",
+    "sindoh",
+    "sewoo"
+   ],
+   "category": "printer",
+   "weight": 50,
+   "note": "Receipt/label/thermal printer makers"
+  },
+  {
+   "patterns": [
+    "zebra technologies",
+    "zebra label"
+   ],
+   "category": "printer",
+   "weight": 48,
+   "note": "Zebra label printers"
+  },
+  {
+   "patterns": [
+    "oki data",
+    "okidata",
+    "toshiba tec",
+    "sindoh",
+    "develop ineo"
+   ],
+   "category": "printer",
+   "weight": 48,
+   "note": "Other MFP/printer vendors"
+  },
+  {
+   "patterns": [
+    "canon"
+   ],
+   "category": "printer",
+   "weight": 46,
+   "note": "Canon — networked Canon devices are overwhelmingly printers/MFP (occasionally a network camera)"
+  },
+  {
+   "patterns": [
+    "sato corporation"
+   ],
+   "category": "printer",
+   "weight": 46,
+   "note": "SATO — thermal label printers; use full name, 'sato' alone is too short"
+  },
+  {
+   "patterns": [
+    "print server",
+    "printer ipp",
+    "internet printing"
+   ],
+   "category": "printer",
+   "weight": 45,
+   "note": "Generic print-service banner (Epson print server seen in data)"
+  },
+  {
+   "patterns": [
+    "print server",
+    "laserwriter",
+    "printer",
+    "mfp",
+    "cups/"
+   ],
+   "category": "printer",
+   "weight": 44,
+   "note": "Generic print-service banners"
+  },
+  {
+   "patterns": [
+    "canon",
+    "imagerunner",
+    "pixma",
+    "maxify"
+   ],
+   "category": "printer",
+   "weight": 42,
+   "note": "Canon printers (Canon also makes cameras)"
+  },
+  {
+   "patterns": [
+    "ipp",
+    "internet printing",
+    "airprint",
+    "ippusb",
+    "printer-uri"
+   ],
+   "category": "printer",
+   "weight": 40,
+   "note": "IPP/AirPrint service — 'ipp' is short, keep moderate"
+  },
+  {
+   "patterns": [
+    "pcl",
+    "postscript printer",
+    "pjl",
+    "raw print",
+    "appsocket"
+   ],
+   "category": "printer",
+   "weight": 40,
+   "note": "Print job languages / port-9100 raw printing"
+  },
+  {
+   "patterns": [
+    "internet printing protocol",
+    "printer/pjl",
+    "jetdirect",
+    "appsocket"
+   ],
+   "category": "printer",
+   "weight": 40,
+   "note": "Printing banners (ports 515/631/9100)."
+  },
+  {
+   "patterns": [
+    "sharp corporation"
+   ],
+   "category": "printer",
+   "weight": 36,
+   "note": "MFPs (also displays/appliances) - weak."
+  },
+  {
+   "patterns": [
+    "mikrotik",
+    "routerboard",
+    "routeros"
+   ],
+   "category": "router",
+   "weight": 70,
+   "note": "MikroTik; 'routeros' is also the OS/banner string (seen on 10.11.11.19 via SSH banner + OS match)."
+  },
+  {
+   "patterns": [
+    "routeros",
+    "routerboard",
+    "mikrotikls"
+   ],
+   "category": "router",
+   "weight": 62,
+   "note": "MikroTik RouterOS/RouterBOARD (seen in data)"
+  },
+  {
+   "patterns": [
+    "openwrt",
+    "dd-wrt",
+    "lede project",
+    "tomato firmware",
+    "gargoyle",
+    "vyos",
+    "vyatta"
+   ],
+   "category": "router",
+   "weight": 60,
+   "note": "Router firmware/OS (OpenWrt & DD-WRT seen in data)"
+  },
+  {
+   "patterns": [
+    "edgerouter",
+    "edgeos"
+   ],
+   "category": "router",
+   "weight": 60,
+   "note": "Ubiquiti EdgeRouter/EdgeOS"
+  },
+  {
+   "patterns": [
+    "fritz!box",
+    "fritzbox",
+    "fritz box",
+    "avm gmbh"
+   ],
+   "category": "router",
+   "weight": 58,
+   "note": "AVM FRITZ!Box home gateway"
+  },
+  {
+   "patterns": [
+    "fritz!box",
+    "fritzbox",
+    "avm gmbh",
+    "avm audiovisuelles"
+   ],
+   "category": "router",
+   "weight": 58,
+   "note": "AVM FRITZ!Box routers."
+  },
+  {
+   "patterns": [
+    "keenetic"
+   ],
+   "category": "router",
+   "weight": 55,
+   "note": "Keenetic routers"
+  },
+  {
+   "patterns": [
+    "asuswrt",
+    "rt-ac",
+    "rt-ax",
+    "asus router"
+   ],
+   "category": "router",
+   "weight": 55,
+   "note": "ASUS home routers (ASUSWRT)"
+  },
+  {
+   "patterns": [
+    "peplink",
+    "pepwave"
+   ],
+   "category": "router",
+   "weight": 55,
+   "note": "Peplink/Pepwave SD-WAN routers"
+  },
+  {
+   "patterns": [
+    "dd-wrt",
+    "tomato firmware",
+    "vyos",
+    "edgeos",
+    "edgerouter"
+   ],
+   "category": "router",
+   "weight": 55,
+   "note": ""
+  },
+  {
+   "patterns": [
+    "technicolor",
+    "sagemcom",
+    "zhone",
+    "calix",
+    "adtran"
+   ],
+   "category": "router",
+   "weight": 54,
+   "note": "ISP/carrier CPE gateways and modems."
+  },
+  {
+   "patterns": [
+    "sagemcom",
+    "sagem"
+   ],
+   "category": "router",
+   "weight": 52,
+   "note": "Sagemcom ISP CPE/gateway"
+  },
+  {
+   "patterns": [
+    "cradlepoint",
+    "teltonika",
+    "sierra wireless",
+    "digi international"
+   ],
+   "category": "router",
+   "weight": 52,
+   "note": "Cellular/industrial routers"
+  },
+  {
+   "patterns": [
+    "mikrotik"
+   ],
+   "category": "router",
+   "weight": 50,
+   "note": "MikroTik OUI"
+  },
+  {
+   "patterns": [
+    "technicolor",
+    "vantiva",
+    "thomson telecom"
+   ],
+   "category": "router",
+   "weight": 50,
+   "note": "Technicolor/Vantiva ISP gateway"
+  },
+  {
+   "patterns": [
+    "cisco rv0",
+    "cisco rv3",
+    "rv340",
+    "rv160",
+    "rv260"
+   ],
+   "category": "router",
+   "weight": 50,
+   "note": "Cisco RV small-business routers"
+  },
+  {
+   "patterns": [
+    "draytek",
+    "vigor"
+   ],
+   "category": "router",
+   "weight": 48,
+   "note": "DrayTek Vigor SOHO router-firewall (paired with firewall rule)"
+  },
+  {
+   "patterns": [
+    "arris",
+    "commscope"
+   ],
+   "category": "router",
+   "weight": 48,
+   "note": "ARRIS/CommScope cable modem/gateway (CommScope also owns Ruckus APs)"
+  },
+  {
+   "patterns": [
+    "arris",
+    "arris group",
+    "commscope"
+   ],
+   "category": "router",
+   "weight": 46,
+   "note": "Cable modems/gateways (some retailed under the Motorola brand); also set-top boxes - confirm."
+  },
+  {
+   "patterns": [
+    "tenda",
+    "totolink",
+    "netis",
+    "wavlink",
+    "cudy",
+    "gl.inet",
+    "gl-inet",
+    "glinet"
+   ],
+   "category": "router",
+   "weight": 45,
+   "note": "SOHO router brands"
+  },
+  {
+   "patterns": [
+    "linksys",
+    "belkin"
+   ],
+   "category": "router",
+   "weight": 45,
+   "note": "Linksys/Belkin home routers"
+  },
+  {
+   "patterns": [
+    "zyxel",
+    "keenetic"
+   ],
+   "category": "router",
+   "weight": 44,
+   "note": "Zyxel also makes firewalls/switches/APs - confirm role."
+  },
+  {
+   "patterns": [
+    "adtran",
+    "calix",
+    "zhone",
+    "dasan",
+    "actiontec",
+    "2wire",
+    "nokia isam"
+   ],
+   "category": "router",
+   "weight": 42,
+   "note": "Telco access/CPE routers"
+  },
+  {
+   "patterns": [
+    "netgear"
+   ],
+   "category": "router",
+   "weight": 40,
+   "note": "Netgear OUI; mostly routers (also switches/NAS)"
+  },
+  {
+   "patterns": [
+    "cisco ios",
+    "ios-xe",
+    "ios software"
+   ],
+   "category": "router",
+   "weight": 40,
+   "note": "Cisco IOS runs on both routers and switches; a 'catalyst'/'nexus' banner means switch."
+  },
+  {
+   "patterns": [
+    "tenda",
+    "d-link",
+    "dlink"
+   ],
+   "category": "router",
+   "weight": 38,
+   "note": "D-Link also makes cameras/switches/NAS - confirm."
+  },
+  {
+   "patterns": [
+    "tp-link",
+    "tplink"
+   ],
+   "category": "router",
+   "weight": 35,
+   "note": "TP-Link SOHO OUI; also makes APs/switches (both OUI spellings seen in data)"
+  },
+  {
+   "patterns": [
+    "d-link",
+    "dlink"
+   ],
+   "category": "router",
+   "weight": 32,
+   "note": "D-Link OUI; routers/switches/cameras"
+  },
+  {
+   "patterns": [
+    "tp-link",
+    "tp link",
+    "tplink"
+   ],
+   "category": "router",
+   "weight": 32,
+   "note": "Very broad brand: routers, APs, switches, Tapo cameras, Kasa smart plugs. Low weight; disambiguate by banner."
+  },
+  {
+   "patterns": [
+    "zyxel"
+   ],
+   "category": "router",
+   "weight": 30,
+   "note": "Zyxel OUI; makes routers/firewalls/switches"
+  },
+  {
+   "patterns": [
+    "zte corporation",
+    "zte"
+   ],
+   "category": "router",
+   "weight": 30,
+   "note": "ZTE CPE/router (also phones)"
+  },
+  {
+   "patterns": [
+    "openwrt"
+   ],
+   "category": "router",
+   "weight": 30,
+   "note": "Real routers run OpenWrt, BUT nmap frequently emits a FALSE 'OpenWrt' OS guess for generic Linux appliances - in this very report it mislabeled the vCenter host"
+  },
+  {
+   "patterns": [
+    "dnsmasq"
+   ],
+   "category": "router",
+   "weight": 28,
+   "note": "dnsmasq commonly runs on routers/gateways (also on servers)"
+  },
+  {
+   "patterns": [
+    "huawei technologies"
+   ],
+   "category": "router",
+   "weight": 24,
+   "note": "Ambiguous: Huawei CPE/routers/switches AND phones. Confirm; 'huawei device' OUI is the phone/tablet arm (see mobile rule)."
+  },
+  {
+   "patterns": [
+    "huawei"
+   ],
+   "category": "router",
+   "weight": 22,
+   "note": "Huawei OUI highly ambiguous (routers/switches/phones/CPE); pin with banner"
+  },
+  {
+   "patterns": [
+    "idrac",
+    "integrated dell remote access",
+    "poweredge",
+    "cimc",
+    "ucs"
+   ],
+   "category": "server",
+   "weight": 66,
+   "note": "Dell iDRAC / PowerEdge and Cisco UCS/CIMC = physical server / server BMC."
+  },
+  {
+   "patterns": [
+    "ilo",
+    "integrated lights-out",
+    "ilo-vm",
+    "ilo-console",
+    "proliant"
+   ],
+   "category": "server",
+   "weight": 66,
+   "note": "HPE iLO / ProLiant server BMC - ports 17988/17990 (ilo-vm/ilo-console) appear in this report."
+  },
+  {
+   "patterns": [
+    "domain controller"
+   ],
+   "category": "server",
+   "weight": 60,
+   "note": "Active Directory domain controller"
+  },
+  {
+   "patterns": [
+    "idrac",
+    "dell remote access controller"
+   ],
+   "category": "server",
+   "weight": 60,
+   "note": "Dell iDRAC BMC => a physical server chassis"
+  },
+  {
+   "patterns": [
+    "integrated lights-out",
+    "hp ilo",
+    "hpe ilo",
+    "ilo-vm",
+    "ilo-console",
+    "iloweb"
+   ],
+   "category": "server",
+   "weight": 60,
+   "note": "HPE iLO BMC => physical server; nmap services ilo-vm(17988)/ilo-console(17990) present in this run. Avoid bare 'ilo' (matches 'silo','kilo','pilot')"
+  },
+  {
+   "patterns": [
+    "primergy",
+    "thinksystem",
+    "thinkserver"
+   ],
+   "category": "server",
+   "weight": 60,
+   "note": "Fujitsu/Lenovo enterprise server model lines."
+  },
+  {
+   "patterns": [
+    "skyline health diagnostics",
+    "vmware skyline"
+   ],
+   "category": "server",
+   "weight": 58,
+   "note": "10.11.11.202. VMware Skyline Health Diagnostics is a vSphere DIAGNOSTIC APPLIANCE (Photon OS + nginx 1.22.0, ports 22/443/8443) - a management server VM, NOT an"
+  },
+  {
+   "patterns": [
+    "active directory",
+    "kerberos",
+    "kdc",
+    "simple dns plus"
+   ],
+   "category": "server",
+   "weight": 56,
+   "note": "Domain Controller signature (Kerberos+LDAP/LDAPS+GC). 'Simple DNS Plus' is the Windows DNS product seen on the DCs 10.11.11.10 / .100."
+  },
+  {
+   "patterns": [
+    "integrated lights-out",
+    "idrac",
+    "supermicro",
+    "ipmi",
+    "baseboard management",
+    "redfish",
+    "cisco cimc",
+    "cimc"
+   ],
+   "category": "server",
+   "weight": 55,
+   "note": "BMC/out-of-band mgmt controller ⇒ physical server (fixes the HP iLO→printer bug seen in data)"
+  },
+  {
+   "patterns": [
+    "proliant",
+    "poweredge",
+    "primergy",
+    "thinksystem",
+    "fujitsu server",
+    "cisco ucs"
+   ],
+   "category": "server",
+   "weight": 55,
+   "note": "Enterprise server hardware lines"
+  },
+  {
+   "patterns": [
+    "active directory"
+   ],
+   "category": "server",
+   "weight": 55,
+   "note": "Matches LDAP banner 'Microsoft Windows Active Directory LDAP' (seen live on DCs .10/.100/.112)"
+  },
+  {
+   "patterns": [
+    "windows server"
+   ],
+   "category": "server",
+   "weight": 55,
+   "note": "Client Windows and Server often both appear in nmap OS guesses; break the tie with ports (AD 88/389/636/3268, or server services) - see DC/db rules."
+  },
+  {
+   "patterns": [
+    "red hat",
+    "rhel",
+    "red hat enterprise"
+   ],
+   "category": "server",
+   "weight": 55,
+   "note": "RHEL server OS"
+  },
+  {
+   "patterns": [
+    "microsoft exchange"
+   ],
+   "category": "server",
+   "weight": 55,
+   "note": "Exchange mail server"
+  },
+  {
+   "patterns": [
+    "poweredge",
+    "proliant",
+    "primergy",
+    "thinksystem",
+    "cimc",
+    "ucs manager"
+   ],
+   "category": "server",
+   "weight": 55,
+   "note": "Distinctive server product lines / mgmt controllers in SNMP sysDescr or web titles (Dell PowerEdge, HPE ProLiant, Fujitsu PRIMERGY, Lenovo ThinkSystem, Cisco UC"
+  },
+  {
+   "patterns": [
+    "supermicro",
+    "super micro",
+    "megarac",
+    "aspeed",
+    "american megatrends",
+    "ipmi"
+   ],
+   "category": "server",
+   "weight": 54,
+   "note": "Server board / BMC (AMI MegaRAC, ASPEED, IPMI)."
+  },
+  {
+   "patterns": [
+    "windows server",
+    "microsoft iis",
+    "active directory",
+    "microsoft windows kerberos",
+    "global catalog",
+    "domain controller"
+   ],
+   "category": "server",
+   "weight": 50,
+   "note": "Windows Server / AD-DC signals (Kerberos+AD LDAP seen in data)"
+  },
+  {
+   "patterns": [
+    "microsoft sharepoint"
+   ],
+   "category": "server",
+   "weight": 50,
+   "note": "SharePoint server"
+  },
+  {
+   "patterns": [
+    "supermicro",
+    "super micro"
+   ],
+   "category": "server",
+   "weight": 50,
+   "note": "Supermicro server board vendor"
+  },
+  {
+   "patterns": [
+    "hewlett packard enterprise"
+   ],
+   "category": "server",
+   "weight": 50,
+   "note": "HPE server line; distinct from 'Hewlett Packard' / 'HP Inc.' (PCs & printers) which stays ambiguous"
+  },
+  {
+   "patterns": [
+    "photon os",
+    "vmware photon"
+   ],
+   "category": "server",
+   "weight": 48,
+   "note": "VMware appliance base OS (many vSphere appliances run Photon + nginx)."
+  },
+  {
+   "patterns": [
+    "vcenter"
+   ],
+   "category": "server",
+   "weight": 45,
+   "note": "VMware vCenter management server"
+  },
+  {
+   "patterns": [
+    "centos",
+    "rocky linux",
+    "almalinux",
+    "oracle linux"
+   ],
+   "category": "server",
+   "weight": 45,
+   "note": "Enterprise Linux server distributions"
+  },
+  {
+   "patterns": [
+    "ipmi",
+    "baseboard management",
+    "aspeed"
+   ],
+   "category": "server",
+   "weight": 45,
+   "note": "Generic BMC/IPMI (ASPEED BMC SoC) => physical server"
+  },
+  {
+   "patterns": [
+    "inspur",
+    "quanta cloud"
+   ],
+   "category": "server",
+   "weight": 45,
+   "note": "Server ODM/OEM vendors; avoid bare 'quanta' (also laptops)"
+  },
+  {
+   "patterns": [
+    "hewlett packard enterprise",
+    "hpe"
+   ],
+   "category": "server",
+   "weight": 44,
+   "note": "HPE = servers/networking. Distinct from consumer 'Hewlett-Packard'/'HP Inc' OUI (PCs/printers)."
+  },
+  {
+   "patterns": [
+    "ubuntu server"
+   ],
+   "category": "server",
+   "weight": 40,
+   "note": "Explicit 'Ubuntu Server' string; bare 'ubuntu' is left ambiguous (desktop vs server)"
+  },
+  {
+   "patterns": [
+    "suse",
+    "opensuse"
+   ],
+   "category": "server",
+   "weight": 40,
+   "note": "SUSE server OS; avoid 'sles' substring (matches 'classless')"
+  },
+  {
+   "patterns": [
+    "nagios",
+    "icinga",
+    "zabbix",
+    "prometheus",
+    "grafana"
+   ],
+   "category": "server",
+   "weight": 40,
+   "note": "Monitoring/observability server (Nagios NSCA seen live on 10.11.11.12:8000)"
+  },
+  {
+   "patterns": [
+    "simple dns plus"
+   ],
+   "category": "server",
+   "weight": 35,
+   "note": "Simple DNS Plus runs on Windows servers (seen in data)"
+  },
+  {
+   "patterns": [
+    "kerberos"
+   ],
+   "category": "server",
+   "weight": 35,
+   "note": "Kerberos KDC banner ('Microsoft Windows Kerberos') strongly implies a DC/server"
+  },
+  {
+   "patterns": [
+    "apache httpd",
+    "nginx",
+    "openresty",
+    "tomcat",
+    "node.js",
+    "express framework",
+    "gunicorn"
+   ],
+   "category": "server",
+   "weight": 30,
+   "note": "Web/app server banners (weak; many device types can host these)"
+  },
+  {
+   "patterns": [
+    "debian"
+   ],
+   "category": "server",
+   "weight": 30,
+   "note": "Ambiguous desktop/server; modest weight"
+  },
+  {
+   "patterns": [
+    "openresty"
+   ],
+   "category": "server",
+   "weight": 30,
+   "note": "nginx-based app/API server (seen live on 10.11.11.12)"
+  },
+  {
+   "patterns": [
+    "openresty",
+    "tomcat",
+    "tomee",
+    "jetty",
+    "gunicorn",
+    "node.js express"
+   ],
+   "category": "server",
+   "weight": 26,
+   "note": "App-server banners - weak on their own; a host can also be a PC running a dev stack. Combine with other signals."
+  },
+  {
+   "patterns": [
+    "microsoft-iis",
+    "microsoft iis"
+   ],
+   "category": "server",
+   "weight": 25,
+   "note": "IIS commonly on Windows Server but can run on client Windows; weak"
+  },
+  {
+   "patterns": [
+    "ubuntu",
+    "debian",
+    "centos",
+    "red hat",
+    "rhel",
+    "rocky linux",
+    "almalinux",
+    "suse linux"
+   ],
+   "category": "server",
+   "weight": 24,
+   "note": "Generic Linux distro strings are weak - a Linux host can be server/NAS/appliance/PC. Use with services (e.g. 10.11.11.12 = Ubuntu + PostgreSQL = db/server)."
+  },
+  {
+   "patterns": [
+    "arista networks",
+    "arista"
+   ],
+   "category": "switch",
+   "weight": 62,
+   "note": ""
+  },
+  {
+   "patterns": [
+    "catalyst",
+    "nexus",
+    "nx-os",
+    "meraki ms",
+    "sg300",
+    "sg350",
+    "sg250",
+    "cbs350"
+   ],
+   "category": "switch",
+   "weight": 60,
+   "note": "Cisco Catalyst/Nexus/SMB switches"
+  },
+  {
+   "patterns": [
+    "cisco catalyst",
+    "catalyst",
+    "nexus"
+   ],
+   "category": "switch",
+   "weight": 60,
+   "note": "Cisco Catalyst/Nexus switches."
+  },
+  {
+   "patterns": [
+    "arista"
+   ],
+   "category": "switch",
+   "weight": 58,
+   "note": "Arista datacenter switches"
+  },
+  {
+   "patterns": [
+    "extreme networks",
+    "extremexos",
+    "enterasys"
+   ],
+   "category": "switch",
+   "weight": 58,
+   "note": ""
+  },
+  {
+   "patterns": [
+    "procurve",
+    "aruba-cx",
+    "arubaos-switch",
+    "comware",
+    "hpe networking"
+   ],
+   "category": "switch",
+   "weight": 55,
+   "note": "HPE/Aruba/H3C ProCurve/Comware switches"
+  },
+  {
+   "patterns": [
+    "extreme networks",
+    "extremexos",
+    "summit x"
+   ],
+   "category": "switch",
+   "weight": 55,
+   "note": "Extreme Networks switches"
+  },
+  {
+   "patterns": [
+    "brocade",
+    "foundry networks"
+   ],
+   "category": "switch",
+   "weight": 55,
+   "note": "Brocade/Foundry switches"
+  },
+  {
+   "patterns": [
+    "force10",
+    "powerconnect",
+    "dell networking",
+    "dell os10"
+   ],
+   "category": "switch",
+   "weight": 55,
+   "note": "Dell networking switches"
+  },
+  {
+   "patterns": [
+    "edgeswitch"
+   ],
+   "category": "switch",
+   "weight": 55,
+   "note": "Ubiquiti EdgeSwitch"
+  },
+  {
+   "patterns": [
+    "h3c",
+    "hangzhou h3c",
+    "new h3c",
+    "ruijie"
+   ],
+   "category": "switch",
+   "weight": 55,
+   "note": ""
+  },
+  {
+   "patterns": [
+    "brocade",
+    "foundry networks",
+    "allied telesis"
+   ],
+   "category": "switch",
+   "weight": 55,
+   "note": ""
+  },
+  {
+   "patterns": [
+    "h3c",
+    "new h3c"
+   ],
+   "category": "switch",
+   "weight": 52,
+   "note": "H3C switches"
+  },
+  {
+   "patterns": [
+    "allied telesis",
+    "alliedware",
+    "enterasys",
+    "edge-core",
+    "edgecore",
+    "accton"
+   ],
+   "category": "switch",
+   "weight": 52,
+   "note": "Additional switch vendors"
+  },
+  {
+   "patterns": [
+    "dell networking",
+    "force10"
+   ],
+   "category": "switch",
+   "weight": 52,
+   "note": ""
+  },
+  {
+   "patterns": [
+    "procurve",
+    "hpe networking"
+   ],
+   "category": "switch",
+   "weight": 52,
+   "note": "HPE ProCurve/Aruba switching."
+  },
+  {
+   "patterns": [
+    "fortiswitch"
+   ],
+   "category": "switch",
+   "weight": 50,
+   "note": "Fortinet FortiSwitch"
+  },
+  {
+   "patterns": [
+    "mellanox",
+    "cumulus linux",
+    "nvidia networking"
+   ],
+   "category": "switch",
+   "weight": 50,
+   "note": "Datacenter/whitebox switches"
+  },
+  {
+   "patterns": [
+    "prosafe"
+   ],
+   "category": "switch",
+   "weight": 50,
+   "note": "Netgear ProSAFE switches"
+  },
+  {
+   "patterns": [
+    "ruijie",
+    "reyee"
+   ],
+   "category": "switch",
+   "weight": 48,
+   "note": "Ruijie/Reyee switches & APs (Ruijie switch seen in data; give strong weight so switch wins over generic router text like dd-wrt)"
+  },
+  {
+   "patterns": [
+    "juniper networks",
+    "junos"
+   ],
+   "category": "switch",
+   "weight": 42,
+   "note": "Juniper EX=switch, MX=router, SRX=firewall - disambiguate by model/banner."
+  },
+  {
+   "patterns": [
+    "junos",
+    "juniper networks",
+    "qfx",
+    "juniper ex"
+   ],
+   "category": "switch",
+   "weight": 40,
+   "note": "Juniper JUNOS/EX/QFX (also routers)"
+  },
+  {
+   "patterns": [
+    "cisco ios",
+    "ios-xe",
+    "cisco systems"
+   ],
+   "category": "switch",
+   "weight": 28,
+   "note": "Cisco IOS OUI/OS — router or switch; slight switch lean"
+  },
+  {
+   "patterns": [
+    "american power conversion"
+   ],
+   "category": "ups",
+   "weight": 70,
+   "note": "APC by Schneider — UPS/PDU (full IEEE OUI vendor name)"
+  },
+  {
+   "patterns": [
+    "american power conversion",
+    "apc web",
+    "apc"
+   ],
+   "category": "ups",
+   "weight": 68,
+   "note": "APC UPS / 'APC Web/SNMP Management Card' (SNMP sysDescr commonly 'APC ...')."
+  },
+  {
+   "patterns": [
+    "tripp lite",
+    "tripplite"
+   ],
+   "category": "ups",
+   "weight": 65,
+   "note": "Tripp Lite (Eaton) — UPS/PDU"
+  },
+  {
+   "patterns": [
+    "cyberpower",
+    "cyber power"
+   ],
+   "category": "ups",
+   "weight": 65,
+   "note": "CyberPower Systems — UPS"
+  },
+  {
+   "patterns": [
+    "smart-ups",
+    "apc smart",
+    "american power conversion"
+   ],
+   "category": "ups",
+   "weight": 60,
+   "note": "APC Smart-UPS (seen in data)"
+  },
+  {
+   "patterns": [
+    "vertiv",
+    "liebert",
+    "emerson network power"
+   ],
+   "category": "ups",
+   "weight": 60,
+   "note": "Vertiv/Liebert — UPS/power/cooling"
+  },
+  {
+   "patterns": [
+    "riello"
+   ],
+   "category": "ups",
+   "weight": 60,
+   "note": "Riello UPS"
+  },
+  {
+   "patterns": [
+    "socomec"
+   ],
+   "category": "ups",
+   "weight": 60,
+   "note": "Socomec — UPS"
+  },
+  {
+   "patterns": [
+    "smart-ups",
+    "smartups",
+    "back-ups",
+    "symmetra",
+    "matrix-ups",
+    "galaxy vs"
+   ],
+   "category": "ups",
+   "weight": 60,
+   "note": "APC UPS model banners"
+  },
+  {
+   "patterns": [
+    "cyberpower",
+    "tripp lite",
+    "tripplite",
+    "minuteman"
+   ],
+   "category": "ups",
+   "weight": 60,
+   "note": ""
+  },
+  {
+   "patterns": [
+    "vertiv",
+    "liebert"
+   ],
+   "category": "ups",
+   "weight": 60,
+   "note": "UPS/PDU/environmental (Liebert)."
+  },
+  {
+   "patterns": [
+    "cyberpower",
+    "tripp lite",
+    "tripplite"
+   ],
+   "category": "ups",
+   "weight": 55,
+   "note": "CyberPower/Tripp Lite UPS"
+  },
+  {
+   "patterns": [
+    "network management card",
+    "ap9630",
+    "ap9631",
+    "ap9640",
+    "ap9641",
+    "ap9617",
+    "powernet",
+    "powerchute"
+   ],
+   "category": "ups",
+   "weight": 55,
+   "note": "APC Network Management Card / PowerNet SNMP agent"
+  },
+  {
+   "patterns": [
+    "eaton"
+   ],
+   "category": "ups",
+   "weight": 54,
+   "note": "Eaton UPS/PDU (broader electrical vendor)."
+  },
+  {
+   "patterns": [
+    "riello",
+    "socomec"
+   ],
+   "category": "ups",
+   "weight": 54,
+   "note": ""
+  },
+  {
+   "patterns": [
+    "raritan"
+   ],
+   "category": "ups",
+   "weight": 52,
+   "note": "Raritan (Legrand) — intelligent PDU/KVM"
+  },
+  {
+   "patterns": [
+    "eaton",
+    "powerware"
+   ],
+   "category": "ups",
+   "weight": 50,
+   "note": "Eaton/Powerware UPS (Eaton also electrical/industrial)"
+  },
+  {
+   "patterns": [
+    "minuteman",
+    "powerwalker",
+    "salicru",
+    "chloride",
+    "aros solar",
+    "delta electronics"
+   ],
+   "category": "ups",
+   "weight": 50,
+   "note": "Additional UPS brands"
+  },
+  {
+   "patterns": [
+    "apc"
+   ],
+   "category": "ups",
+   "weight": 45,
+   "note": "APC OUI/label (also PDUs / network mgmt cards)"
+  },
+  {
+   "patterns": [
+    "riello",
+    "socomec",
+    "delta ups"
+   ],
+   "category": "ups",
+   "weight": 45,
+   "note": "Other UPS vendors"
+  },
+  {
+   "patterns": [
+    "ups-mib",
+    "rfc1628",
+    "megatec",
+    "voltronic"
+   ],
+   "category": "ups",
+   "weight": 45,
+   "note": "Generic UPS SNMP/serial protocol fingerprints"
+  },
+  {
+   "patterns": [
+    "legrand",
+    "geist"
+   ],
+   "category": "ups",
+   "weight": 44,
+   "note": "Legrand/Geist — PDU/power (also structured cabling)"
+  },
+  {
+   "patterns": [
+    "network management card",
+    "upsilon",
+    "netagent",
+    "ups agent"
+   ],
+   "category": "ups",
+   "weight": 42,
+   "note": "UPS network-management-card banner"
+  },
+  {
+   "patterns": [
+    "schneider electric"
+   ],
+   "category": "ups",
+   "weight": 42,
+   "note": "Schneider Electric — owns APC UPS/PDU (also PLCs → could be iot)"
+  },
+  {
+   "patterns": [
+    "rpdu",
+    "rackpdu",
+    "power distribution unit",
+    "metered pdu",
+    "switched pdu"
+   ],
+   "category": "ups",
+   "weight": 42,
+   "note": "PDU banners (bare 'ups'/'pdu' avoided — too collision-prone)"
+  },
+  {
+   "patterns": [
+    "raritan",
+    "server technology",
+    "servertech",
+    "apc pdu",
+    "pdu"
+   ],
+   "category": "ups",
+   "weight": 38,
+   "note": "Rack PDU (grouped under power/ups)"
+  },
+  {
+   "patterns": [
+    "legrand"
+   ],
+   "category": "ups",
+   "weight": 34,
+   "note": "PDUs/UPS (also KVM/AV) - weak."
+  },
+  {
+   "patterns": [
+    "yealink"
+   ],
+   "category": "voip",
+   "weight": 75,
+   "note": "Yealink — SIP desk phones"
+  },
+  {
+   "patterns": [
+    "grandstream"
+   ],
+   "category": "voip",
+   "weight": 70,
+   "note": "Grandstream — IP phones/ATA/gateways (some cameras/access, but VoIP dominates)"
+  },
+  {
+   "patterns": [
+    "fanvil"
+   ],
+   "category": "voip",
+   "weight": 70,
+   "note": "Fanvil — SIP phones/intercoms"
+  },
+  {
+   "patterns": [
+    "polycom"
+   ],
+   "category": "voip",
+   "weight": 65,
+   "note": "Polycom/Poly — IP phones/conferencing; use 'polycom', 'poly' alone collides"
+  },
+  {
+   "patterns": [
+    "snom"
+   ],
+   "category": "voip",
+   "weight": 65,
+   "note": "Snom — SIP desk phones"
+  },
+  {
+   "patterns": [
+    "mitel",
+    "aastra"
+   ],
+   "category": "voip",
+   "weight": 64,
+   "note": "Mitel/Aastra — IP phones/PBX"
+  },
+  {
+   "patterns": [
+    "snom",
+    "fanvil",
+    "htek",
+    "akuvox"
+   ],
+   "category": "voip",
+   "weight": 64,
+   "note": ""
+  },
+  {
+   "patterns": [
+    "polycom",
+    "poly",
+    "plantronics"
+   ],
+   "category": "voip",
+   "weight": 62,
+   "note": ""
+  },
+  {
+   "patterns": [
+    "sangoma",
+    "digium"
+   ],
+   "category": "voip",
+   "weight": 60,
+   "note": "Sangoma/Digium — Asterisk/FreePBX appliances & gateways"
+  },
+  {
+   "patterns": [
+    "audiocodes"
+   ],
+   "category": "voip",
+   "weight": 60,
+   "note": "AudioCodes — VoIP gateways/SBC"
+  },
+  {
+   "patterns": [
+    "asterisk"
+   ],
+   "category": "voip",
+   "weight": 60,
+   "note": "Asterisk PBX banner"
+  },
+  {
+   "patterns": [
+    "freepbx",
+    "elastix",
+    "issabel",
+    "fusionpbx",
+    "voipnow",
+    "3cx"
+   ],
+   "category": "voip",
+   "weight": 60,
+   "note": "PBX distributions/platforms"
+  },
+  {
+   "patterns": [
+    "avaya"
+   ],
+   "category": "voip",
+   "weight": 58,
+   "note": "Avaya — IP phones/PBX (some legacy Nortel switching)"
+  },
+  {
+   "patterns": [
+    "karel"
+   ],
+   "category": "voip",
+   "weight": 56,
+   "note": "Karel Elektronik (Turkey) — IP-PBX and IP phones; common on Turkish LANs"
+  },
+  {
+   "patterns": [
+    "cisco ip phone",
+    "spa50",
+    "spa51",
+    "spa52"
+   ],
+   "category": "voip",
+   "weight": 56,
+   "note": ""
+  },
+  {
+   "patterns": [
+    "avaya",
+    "mitel",
+    "aastra",
+    "audiocodes",
+    "alcatel-lucent enterprise"
+   ],
+   "category": "voip",
+   "weight": 56,
+   "note": ""
+  },
+  {
+   "patterns": [
+    "polycom",
+    "poly vvx",
+    "vvx",
+    "soundpoint",
+    "soundstation"
+   ],
+   "category": "voip",
+   "weight": 55,
+   "note": "Polycom/Poly IP phones"
+  },
+  {
+   "patterns": [
+    "gigaset"
+   ],
+   "category": "voip",
+   "weight": 55,
+   "note": "Gigaset — DECT/VoIP phones"
+  },
+  {
+   "patterns": [
+    "kamailio",
+    "opensips",
+    "resiprocate",
+    "repro"
+   ],
+   "category": "voip",
+   "weight": 55,
+   "note": "SIP proxy/registrar servers"
+  },
+  {
+   "patterns": [
+    "call manager",
+    "callmanager",
+    "cucm",
+    "cisco unified communications"
+   ],
+   "category": "voip",
+   "weight": 55,
+   "note": "Cisco Unified Communications Manager"
+  },
+  {
+   "patterns": [
+    "snom",
+    "mitel",
+    "aastra",
+    "fanvil",
+    "gigaset",
+    "htek",
+    "dinstar"
+   ],
+   "category": "voip",
+   "weight": 52,
+   "note": "IP phone vendors"
+  },
+  {
+   "patterns": [
+    "cisco ip phone",
+    "cp-79",
+    "spa504",
+    "spa525"
+   ],
+   "category": "voip",
+   "weight": 52,
+   "note": "Cisco IP phones"
+  },
+  {
+   "patterns": [
+    "escene",
+    "htek",
+    "akuvox",
+    "flyingvoice",
+    "dinstar",
+    "newrock",
+    "cortelco",
+    "alcatel-lucent enterprise"
+   ],
+   "category": "voip",
+   "weight": 52,
+   "note": "Additional IP-phone / VoIP-gateway / SIP-intercom brands"
+  },
+  {
+   "patterns": [
+    "sip/2.0",
+    "sip-ua",
+    "sip proxy",
+    "sip server"
+   ],
+   "category": "voip",
+   "weight": 50,
+   "note": "SIP protocol banners (avoid bare 'sip' — collides with 'gossip' etc.)"
+  },
+  {
+   "patterns": [
+    "asterisk",
+    "freepbx",
+    "sangoma",
+    "audiocodes",
+    "patton",
+    "3cx",
+    "cucm",
+    "callmanager",
+    "sipura"
+   ],
+   "category": "voip",
+   "weight": 48,
+   "note": "PBX/SBC/VoIP gateway"
+  },
+  {
+   "patterns": [
+    "patton",
+    "2n telekomunikace"
+   ],
+   "category": "voip",
+   "weight": 48,
+   "note": "Patton gateways / 2N SIP intercoms"
+  },
+  {
+   "patterns": [
+    "asterisk",
+    "freepbx",
+    "3cx",
+    "sangoma"
+   ],
+   "category": "voip",
+   "weight": 48,
+   "note": "IP-PBX banners (SIP/port 5060). Bare 'sip' alone is weak."
+  },
+  {
+   "patterns": [
+    "plantronics"
+   ],
+   "category": "voip",
+   "weight": 46,
+   "note": "Plantronics/Poly — headsets/audio endpoints"
+  },
+  {
+   "patterns": [
+    "sccp",
+    "skinny client",
+    "cisco ip phone"
+   ],
+   "category": "voip",
+   "weight": 46,
+   "note": "Cisco SCCP/Skinny phones (bare 'cisco' is too ambiguous to classify)"
+  },
+  {
+   "patterns": [
+    "voip",
+    "sip phone",
+    "sip gateway",
+    "ip telephony"
+   ],
+   "category": "voip",
+   "weight": 44,
+   "note": "Self-describing VoIP banners"
+  }
+ ],
+ "port_rules": [
+  {
+   "ports": [
+    5357
+   ],
+   "category": "pc",
+   "weight": 5,
+   "service": "WSDAPI (Windows Web Services for Devices / WS-Discovery host",
+   "note": "Present on Windows 7+ and Windows Server; strong Windows-OS signal (pc or Windows server)."
+  },
+  {
+   "ports": [
+    3389
+   ],
+   "category": "pc",
+   "weight": 5,
+   "service": "RDP (Remote Desktop Protocol)",
+   "note": "Windows workstation or server; frequently enabled on admin PCs and servers."
+  },
+  {
+   "ports": [
+    135,
+    139,
+    445
+   ],
+   "category": "pc",
+   "weight": 5,
+   "service": "SMB / MS-RPC (Windows file sharing & RPC endpoint mapper)",
+   "note": "Any Windows host (pc or server); 445 also on NAS and Samba/Linux."
+  },
+  {
+   "ports": [
+    137,
+    138
+   ],
+   "category": "pc",
+   "weight": 5,
+   "service": "NetBIOS name/datagram service",
+   "note": "Legacy Windows networking; pc or server."
+  },
+  {
+   "ports": [
+    5985,
+    5986
+   ],
+   "category": "server",
+   "weight": 5,
+   "service": "WinRM (Windows Remote Management / PowerShell remoting)",
+   "note": "Management endpoint; more common on servers but present on managed PCs."
+  },
+  {
+   "ports": [
+    7070
+   ],
+   "category": "pc",
+   "weight": 5,
+   "service": "AnyDesk remote-access agent (default direct/listening port)",
+   "note": "AnyDesk on a Windows endpoint; legacy RealServer/RTSP also used 7070 - weak signal, corroborate."
+  },
+  {
+   "ports": [
+    5900
+   ],
+   "category": "pc",
+   "weight": 5,
+   "service": "VNC remote access",
+   "note": "Also on servers, Linux hosts and hypervisor consoles."
+  },
+  {
+   "ports": [
+    3283
+   ],
+   "category": "pc",
+   "weight": 5,
+   "service": "Apple Remote Desktop (ARD)",
+   "note": "macOS endpoint."
+  },
+  {
+   "ports": [
+    62078
+   ],
+   "category": "mobile",
+   "weight": 7,
+   "service": "Apple lockdownd (iPhone/iPad over Wi-Fi)",
+   "note": "iOS device."
+  },
+  {
+   "ports": [
+    5555
+   ],
+   "category": "mobile",
+   "weight": 5,
+   "service": "Android Debug Bridge (ADB)",
+   "note": "Android phone/tablet/TV; sometimes IoT."
+  },
+  {
+   "ports": [
+    9100
+   ],
+   "category": "printer",
+   "weight": 6,
+   "service": "RAW / HP JetDirect printing",
+   "note": ""
+  },
+  {
+   "ports": [
+    9101,
+    9102,
+    9103
+   ],
+   "category": "printer",
+   "weight": 5,
+   "service": "HP JetDirect multi-port RAW printing",
+   "note": ""
+  },
+  {
+   "ports": [
+    515
+   ],
+   "category": "printer",
+   "weight": 5,
+   "service": "LPD/LPR print service",
+   "note": ""
+  },
+  {
+   "ports": [
+    631
+   ],
+   "category": "printer",
+   "weight": 5,
+   "service": "IPP (Internet Printing Protocol)",
+   "note": "Also CUPS on macOS/Linux print servers."
+  },
+  {
+   "ports": [
+    554
+   ],
+   "category": "camera",
+   "weight": 5,
+   "service": "RTSP (IP camera / NVR video stream)",
+   "note": ""
+  },
+  {
+   "ports": [
+    37777
+   ],
+   "category": "camera",
+   "weight": 8,
+   "service": "Dahua proprietary DVR/NVR/camera port",
+   "note": "Dahua and X-Security/OEM rebrands; unencrypted proprietary protocol."
+  },
+  {
+   "ports": [
+    34567
+   ],
+   "category": "camera",
+   "weight": 8,
+   "service": "XiongMai 'Sofia' DVRIP (OEM DVR/NVR)",
+   "note": "White-label Chinese DVR/NVR platform (J-Tech, Vantech, Questek, etc.)."
+  },
+  {
+   "ports": [
+    8000
+   ],
+   "category": "camera",
+   "weight": 5,
+   "service": "Hikvision SDK service port",
+   "note": "Hikvision cameras/NVRs; 8000 is also a generic HTTP-alt - corroborate with 554."
+  },
+  {
+   "ports": [
+    5060,
+    5061
+   ],
+   "category": "voip",
+   "weight": 6,
+   "service": "SIP / SIP-TLS (VoIP signaling)",
+   "note": "IP phones, PBX, VoIP gateways."
+  },
+  {
+   "ports": [
+    2000
+   ],
+   "category": "voip",
+   "weight": 5,
+   "service": "Cisco SCCP (Skinny) IP phone",
+   "note": ""
+  },
+  {
+   "ports": [
+    1720
+   ],
+   "category": "voip",
+   "weight": 5,
+   "service": "H.323 call signaling",
+   "note": ""
+  },
+  {
+   "ports": [
+    4569
+   ],
+   "category": "voip",
+   "weight": 5,
+   "service": "IAX2 (Asterisk inter-exchange)",
+   "note": ""
+  },
+  {
+   "ports": [
+    5038
+   ],
+   "category": "voip",
+   "weight": 5,
+   "service": "Asterisk Manager Interface (AMI)",
+   "note": "Asterisk/FreePBX server."
+  },
+  {
+   "ports": [
+    902,
+    903
+   ],
+   "category": "hypervisor",
+   "weight": 7,
+   "service": "VMware ESXi (authd / remote console MKS)",
+   "note": "ESXi host."
+  },
+  {
+   "ports": [
+    8006
+   ],
+   "category": "hypervisor",
+   "weight": 8,
+   "service": "Proxmox VE web interface",
+   "note": ""
+  },
+  {
+   "ports": [
+    5480
+   ],
+   "category": "hypervisor",
+   "weight": 6,
+   "service": "VMware appliance management (VAMI)",
+   "note": "vCenter/vSphere appliance."
+  },
+  {
+   "ports": [
+    2179
+   ],
+   "category": "hypervisor",
+   "weight": 6,
+   "service": "Hyper-V VMConnect (VMBus)",
+   "note": "Windows Hyper-V host."
+  },
+  {
+   "ports": [
+    5988,
+    5989
+   ],
+   "category": "hypervisor",
+   "weight": 5,
+   "service": "CIM / WBEM hardware management",
+   "note": "ESXi and server BMCs."
+  },
+  {
+   "ports": [
+    1433,
+    1434
+   ],
+   "category": "db",
+   "weight": 7,
+   "service": "Microsoft SQL Server",
+   "note": ""
+  },
+  {
+   "ports": [
+    3306
+   ],
+   "category": "db",
+   "weight": 6,
+   "service": "MySQL / MariaDB",
+   "note": ""
+  },
+  {
+   "ports": [
+    5432
+   ],
+   "category": "db",
+   "weight": 6,
+   "service": "PostgreSQL",
+   "note": ""
+  },
+  {
+   "ports": [
+    1521
+   ],
+   "category": "db",
+   "weight": 7,
+   "service": "Oracle TNS listener",
+   "note": ""
+  },
+  {
+   "ports": [
+    27017
+   ],
+   "category": "db",
+   "weight": 6,
+   "service": "MongoDB",
+   "note": ""
+  },
+  {
+   "ports": [
+    6379
+   ],
+   "category": "db",
+   "weight": 6,
+   "service": "Redis",
+   "note": ""
+  },
+  {
+   "ports": [
+    9200
+   ],
+   "category": "db",
+   "weight": 5,
+   "service": "Elasticsearch HTTP",
+   "note": ""
+  },
+  {
+   "ports": [
+    5984
+   ],
+   "category": "db",
+   "weight": 5,
+   "service": "CouchDB",
+   "note": ""
+  },
+  {
+   "ports": [
+    11211
+   ],
+   "category": "db",
+   "weight": 5,
+   "service": "memcached",
+   "note": ""
+  },
+  {
+   "ports": [
+    9042
+   ],
+   "category": "db",
+   "weight": 5,
+   "service": "Apache Cassandra (CQL)",
+   "note": ""
+  },
+  {
+   "ports": [
+    3268,
+    3269
+   ],
+   "category": "server",
+   "weight": 8,
+   "service": "AD Global Catalog (Domain Controller)",
+   "note": "Definitive Active Directory domain-controller signal."
+  },
+  {
+   "ports": [
+    88,
+    464,
+    389,
+    636
+   ],
+   "category": "server",
+   "weight": 5,
+   "service": "Active Directory core (Kerberos / LDAP / LDAPS / kpasswd)",
+   "note": "Domain controller; 389/636 alone can be a generic LDAP directory."
+  },
+  {
+   "ports": [
+    53
+   ],
+   "category": "server",
+   "weight": 5,
+   "service": "DNS service",
+   "note": "On a Windows LAN usually the DC; a gateway/firewall (e.g. DrayTek) often also serves DNS - weigh alongside routing/VPN ports before calling it a plain host."
+  },
+  {
+   "ports": [
+    8530,
+    8531
+   ],
+   "category": "server",
+   "weight": 5,
+   "service": "WSUS (Windows Server Update Services)",
+   "note": ""
+  },
+  {
+   "ports": [
+    25,
+    587
+   ],
+   "category": "server",
+   "weight": 5,
+   "service": "SMTP (mail transfer / submission)",
+   "note": ""
+  },
+  {
+   "ports": [
+    143,
+    993
+   ],
+   "category": "server",
+   "weight": 5,
+   "service": "IMAP mail service",
+   "note": ""
+  },
+  {
+   "ports": [
+    110,
+    995
+   ],
+   "category": "server",
+   "weight": 5,
+   "service": "POP3 mail service",
+   "note": ""
+  },
+  {
+   "ports": [
+    1812,
+    1813
+   ],
+   "category": "server",
+   "weight": 5,
+   "service": "RADIUS (NPS / AAA)",
+   "note": "Windows NPS server or a firewall/AP auth backend."
+  },
+  {
+   "ports": [
+    623
+   ],
+   "category": "server",
+   "weight": 6,
+   "service": "IPMI / BMC (iDRAC, iLO, out-of-band mgmt)",
+   "note": "Server lights-out management controller."
+  },
+  {
+   "ports": [
+    5000,
+    5001
+   ],
+   "category": "nas",
+   "weight": 5,
+   "service": "Synology DSM web UI",
+   "note": "5000/5001 are also used by generic web apps - corroborate."
+  },
+  {
+   "ports": [
+    548
+   ],
+   "category": "nas",
+   "weight": 5,
+   "service": "AFP (Apple Filing Protocol)",
+   "note": "NAS or macOS file sharing."
+  },
+  {
+   "ports": [
+    2049
+   ],
+   "category": "nas",
+   "weight": 5,
+   "service": "NFS",
+   "note": "NAS or Unix/Linux server."
+  },
+  {
+   "ports": [
+    111
+   ],
+   "category": "nas",
+   "weight": 5,
+   "service": "rpcbind / portmapper",
+   "note": "Unix/Linux/NAS host."
+  },
+  {
+   "ports": [
+    873
+   ],
+   "category": "nas",
+   "weight": 5,
+   "service": "rsync daemon",
+   "note": ""
+  },
+  {
+   "ports": [
+    3260
+   ],
+   "category": "nas",
+   "weight": 5,
+   "service": "iSCSI target",
+   "note": "NAS/SAN or server storage."
+  },
+  {
+   "ports": [
+    500,
+    4500
+   ],
+   "category": "router",
+   "weight": 5,
+   "service": "IPsec/IKE VPN (IKE / NAT-T)",
+   "note": "VPN gateway - router or firewall."
+  },
+  {
+   "ports": [
+    1723
+   ],
+   "category": "router",
+   "weight": 5,
+   "service": "PPTP VPN",
+   "note": ""
+  },
+  {
+   "ports": [
+    1701
+   ],
+   "category": "router",
+   "weight": 5,
+   "service": "L2TP VPN",
+   "note": ""
+  },
+  {
+   "ports": [
+    1194
+   ],
+   "category": "router",
+   "weight": 5,
+   "service": "OpenVPN",
+   "note": "Router/firewall/VPN server."
+  },
+  {
+   "ports": [
+    179
+   ],
+   "category": "router",
+   "weight": 6,
+   "service": "BGP",
+   "note": "Core/edge router or firewall."
+  },
+  {
+   "ports": [
+    520
+   ],
+   "category": "router",
+   "weight": 5,
+   "service": "RIP routing",
+   "note": ""
+  },
+  {
+   "ports": [
+    8291
+   ],
+   "category": "router",
+   "weight": 8,
+   "service": "MikroTik Winbox",
+   "note": "MikroTik RouterOS device."
+  },
+  {
+   "ports": [
+    8728,
+    8729
+   ],
+   "category": "router",
+   "weight": 6,
+   "service": "MikroTik RouterOS API",
+   "note": ""
+  },
+  {
+   "ports": [
+    10443
+   ],
+   "category": "firewall",
+   "weight": 5,
+   "service": "FortiGate SSL-VPN / HTTPS mgmt",
+   "note": "Fortinet firewall; 10443 is also a generic HTTPS-alt."
+  },
+  {
+   "ports": [
+    161,
+    162
+   ],
+   "category": "switch",
+   "weight": 5,
+   "service": "SNMP (managed network device)",
+   "note": "Appears on switches, routers, APs, printers and UPS - weak on its own, use to confirm 'managed infra'."
+  },
+  {
+   "ports": [
+    23
+   ],
+   "category": "switch",
+   "weight": 5,
+   "service": "Telnet (legacy device mgmt)",
+   "note": "Switches/routers/legacy IoT."
+  },
+  {
+   "ports": [
+    22
+   ],
+   "category": "server",
+   "weight": 5,
+   "service": "SSH",
+   "note": "Generic Unix/Linux/network-device mgmt - server, switch, router or NAS."
+  },
+  {
+   "ports": [
+    830
+   ],
+   "category": "switch",
+   "weight": 5,
+   "service": "NETCONF (network device configuration)",
+   "note": ""
+  },
+  {
+   "ports": [
+    5246,
+    5247
+   ],
+   "category": "ap",
+   "weight": 6,
+   "service": "CAPWAP (wireless AP <-> controller)",
+   "note": "Managed Wi-Fi access point."
+  },
+  {
+   "ports": [
+    1883,
+    8883
+   ],
+   "category": "iot",
+   "weight": 5,
+   "service": "MQTT broker (IoT messaging)",
+   "note": ""
+  },
+  {
+   "ports": [
+    502
+   ],
+   "category": "iot",
+   "weight": 6,
+   "service": "Modbus TCP (industrial/OT)",
+   "note": "PLC / SCADA / industrial controller."
+  },
+  {
+   "ports": [
+    47808
+   ],
+   "category": "iot",
+   "weight": 6,
+   "service": "BACnet/IP (building automation)",
+   "note": "HVAC / BMS controller."
+  },
+  {
+   "ports": [
+    20000
+   ],
+   "category": "iot",
+   "weight": 5,
+   "service": "DNP3 (SCADA / utility)",
+   "note": ""
+  },
+  {
+   "ports": [
+    5353
+   ],
+   "category": "iot",
+   "weight": 5,
+   "service": "mDNS / Bonjour discovery",
+   "note": "Apple devices, printers, IoT."
+  },
+  {
+   "ports": [
+    1900
+   ],
+   "category": "iot",
+   "weight": 5,
+   "service": "SSDP / UPnP discovery",
+   "note": "Media devices, routers, IoT."
+  },
+  {
+   "ports": [
+    3493
+   ],
+   "category": "ups",
+   "weight": 6,
+   "service": "NUT (Network UPS Tools) upsd",
+   "note": "Networked UPS / power device."
+  }
+ ]
+}

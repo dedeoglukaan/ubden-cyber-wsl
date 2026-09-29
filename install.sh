@@ -132,6 +132,7 @@ if [[ -d "$BASE/data/ieee" ]]; then
   done
 fi
 if [[ -f "$BASE/data/default_credentials.json" ]]; then install -m 0644 "$BASE/data/default_credentials.json" "$DEST/data/default_credentials.json"; fi
+if [[ -f "$BASE/data/device_classification.json" ]]; then install -m 0644 "$BASE/data/device_classification.json" "$DEST/data/device_classification.json"; fi
 install -m 0755 "$BASE/start.sh" "$BASE/target_scan.sh" "$BASE/install.sh" "$BASE/desktop-session.sh" "$DEST/"
 install -m 0644 "$BASE/wizard.py" "$BASE/tui.py" "$BASE/analyst_review.py" "$BASE/analyst_workplan.py" "$BASE/assessment_coverage.py" "$BASE/environment_doctor.py" "$BASE/report_insights.py" "$BASE/ai_analyst.py" "$BASE/report_v2.py" "$BASE/device_inventory.py" "$BASE/ieee_registry.py" "$BASE/sql_discovery.py" "$BASE/tool_catalog.py" "$BASE/host_bridge.py" "$BASE/ad_assessment.py" "$BASE/wireless_assessment.py" "$BASE/supplemental_scans.py" "$BASE/credential_assessment.py" "$BASE/report_visuals.py" "$BASE/correlation.py" "$BASE/osint_facts.py" "$BASE/service_probes.py" "$BASE/rootdse_probe.py" "$BASE/tech_fingerprint.py" "$BASE/eol_data.py" "$BASE/case_coverage.py" "$BASE/optional_tools.py" "$BASE/cve_enrich.py" "$BASE/credential_probes.py" "$BASE/netbios_probe.py" "$BASE/web_identify.py" "$BASE/wifi_scan.py" "$BASE/power_manager.py" "$BASE/ai_operator.py" "$BASE/update_default_creds.py" "$BASE/README.md" "$BASE/requirements.txt" "$BASE/review.example.json" "$DEST/"
 install -m 0644 "$BASE/assets/"* "$DEST/assets/"

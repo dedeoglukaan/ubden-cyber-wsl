@@ -202,6 +202,41 @@ class AdAssessmentReadsTests(unittest.TestCase):
         self.assertEqual(result['domain_admins']['count'], 2)
         self.assertIn('eset', result['domain_admins']['members'])
 
+    def test_collect_captures_names_and_membership(self):
+        import types
+        from unittest.mock import patch
+        import ad_assessment
+
+        class E:
+            def __init__(self, d): self.d = d
+            def __contains__(self, k): return k in self.d
+            def __getitem__(self, k):
+                v = self.d[k]
+                return types.SimpleNamespace(value=v, values=v if isinstance(v, list) else [v])
+        seq = [
+            [E({'rootDomainNamingContext': 'DC=x'})],
+            [E({'sAMAccountName': 'alice'}), E({'sAMAccountName': 'bob'})],
+            [E({'sAMAccountName': 'Domain Admins'}), E({'sAMAccountName': 'HR'})],
+            [E({'dNSHostName': 'PC1.x.local'}), E({'dNSHostName': 'PC2.x.local'})],
+            [E({'minPwdLength': 7})],
+            [E({'sAMAccountName': 'Domain Admins', 'member': ['CN=alice,CN=Users,DC=x']})],
+            [E({'sAMAccountName': 'alice', 'displayName': 'Alice A',
+                'memberOf': ['CN=HR,DC=x', 'CN=VPN Users,DC=x']})],
+        ]
+
+        class Conn:
+            entries = []
+            def search(self, *a, **k):
+                self.entries = seq.pop(0) if seq else []
+                return True
+        with patch.dict(sys.modules, {'ldap3': types.SimpleNamespace(BASE=0)}):
+            r = ad_assessment._collect(Conn(), 'DC=x', 'x.local', 'dc', 'alice@x.local')
+        self.assertEqual(r['user_names'], ['alice', 'bob'])
+        self.assertIn('HR', r['group_names'])
+        self.assertEqual(r['computer_names'], ['PC1.x.local', 'PC2.x.local'])
+        self.assertEqual(r['test_account_membership']['account'], 'alice')
+        self.assertIn('VPN Users', r['test_account_membership']['groups'])
+
     def test_falls_back_to_insecure_ldaps_when_strict_fails(self):
         import types
         from unittest.mock import patch
